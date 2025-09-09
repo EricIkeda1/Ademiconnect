@@ -91,13 +91,16 @@ class NavBar extends StatelessWidget {
 
             const Divider(height: 1),
 
-            ListTile(
-              leading: const Icon(Icons.exit_to_app, color: Colors.black),
-              title: const Text(
-                "Sair",
-                style: TextStyle(color: Colors.black),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 37),
+              child: ListTile(
+                leading: const Icon(Icons.exit_to_app, color: Colors.black),
+                title: const Text(
+                  "Sair",
+                  style: TextStyle(color: Colors.black),
+                ),
+                onTap: () => onItemSelected(6),
               ),
-              onTap: () => onItemSelected(6),
             ),
           ],
         ),
