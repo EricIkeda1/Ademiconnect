@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dashboard.dart';
 
 class LoginPage extends StatelessWidget {
   const LoginPage({super.key});
@@ -68,6 +69,10 @@ class LoginPage extends StatelessWidget {
                         ),
                       ),
                       onPressed: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (context) => Dashboard()),
+                        );
                       },
                       child: const Text(
                         "Continuar",

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'telas/login.dart';
+import 'telas/dashboard.dart';
 
 void main() {
   runApp(const MyApp());
@@ -16,7 +17,11 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const LoginPage(),
+      initialRoute: '/login',
+      routes: {
+        '/login': (context) => const LoginPage(),
+        '/dashboard': (context) => const Dashboard(),
+      },
     );
   }
 }
