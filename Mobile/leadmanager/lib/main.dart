@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'telas/login.dart';
-import 'telas/dashboard.dart';
+import 'telas/gestor/home_gestor.dart';
 
 void main() {
   runApp(const MyApp());
@@ -15,12 +15,13 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: "ADEMICON Londrina",
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+        useMaterial3: true,
       ),
       initialRoute: '/login',
       routes: {
         '/login': (context) => const LoginPage(),
-        '/dashboard': (context) => const Dashboard(),
+        '/gestor': (context) => const HomeGestor(),
       },
     );
   }

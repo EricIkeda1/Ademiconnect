@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dashboard.dart';
 
 class LoginPage extends StatelessWidget {
   const LoginPage({super.key});
@@ -19,24 +18,14 @@ class LoginPage extends StatelessWidget {
               fit: BoxFit.cover,
             ),
           ),
-
           Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Column(
-                    children: [
-                      Image.asset(
-                        "assets/Logo.png",
-                        height: 120,
-                      ),
-                    ],
-                  ),
-
+                  Image.asset("assets/Logo.png", height: 120),
                   const SizedBox(height: 40),
-
                   TextField(
                     decoration: InputDecoration(
                       labelText: "Usuário",
@@ -46,7 +35,6 @@ class LoginPage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
-
                   TextField(
                     obscureText: true,
                     decoration: InputDecoration(
@@ -57,30 +45,23 @@ class LoginPage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 24),
-
                   SizedBox(
                     width: double.infinity,
                     height: 48,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.black,
+                        foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
                       onPressed: () {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) => Dashboard()),
-                        );
+                        Navigator.pushReplacementNamed(context, '/gestor');
                       },
                       child: const Text(
                         "Continuar",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
