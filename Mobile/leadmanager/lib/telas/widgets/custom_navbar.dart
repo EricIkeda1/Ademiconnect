@@ -1,16 +1,19 @@
+// lib/telas/widgets/custom_navbar.dart
 import 'package:flutter/material.dart';
 
 class CustomNavbar extends StatelessWidget implements PreferredSizeWidget {
   final String nome;
   final String cargo;
-  final List<Tab> tabs;
+  final List<Tab>? tabs;            // agora opcional
+  final bool tabsNoAppBar;          // controla a posição das abas
   final VoidCallback? onLogout;
 
   const CustomNavbar({
     super.key,
     required this.nome,
     required this.cargo,
-    required this.tabs,
+    this.tabs,
+    this.tabsNoAppBar = true,       // padrão mantém compatibilidade
     this.onLogout,
   });
 
@@ -26,7 +29,7 @@ class CustomNavbar extends StatelessWidget implements PreferredSizeWidget {
           const CircleAvatar(radius: 16, child: Icon(Icons.person, size: 18)),
           const SizedBox(width: 8),
           Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start, 
             children: [
               Text(nome, style: const TextStyle(fontWeight: FontWeight.w600)),
               Text(cargo, style: const TextStyle(fontSize: 12, color: Colors.black54)),
@@ -43,23 +46,26 @@ class CustomNavbar extends StatelessWidget implements PreferredSizeWidget {
           ),
         ),
       ],
-      bottom: TabBar(
-        isScrollable: true,
-        labelPadding: const EdgeInsets.symmetric(horizontal: 14),
-        labelColor: Colors.black,
-        unselectedLabelColor: Colors.black54,
-        indicatorSize: TabBarIndicatorSize.tab,
-        labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-        indicator: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)],
-        ),
-        tabs: tabs,
-      ),
+      bottom: tabsNoAppBar && tabs != null
+          ? TabBar(
+              isScrollable: true,
+              labelPadding: const EdgeInsets.symmetric(horizontal: 14),
+              labelColor: Colors.black,
+              unselectedLabelColor: Colors.black54,
+              indicatorSize: TabBarIndicatorSize.tab,
+              labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+              indicator: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)],
+              ),
+              tabs: tabs!,
+            )
+          : null,
     );
   }
 
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight + 48);
+  Size get preferredSize =>
+      Size.fromHeight(kToolbarHeight + ((tabsNoAppBar && tabs != null) ? 48 : 0));
 }

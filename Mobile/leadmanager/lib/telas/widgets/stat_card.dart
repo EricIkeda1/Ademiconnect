@@ -6,27 +6,37 @@ class StatCard extends StatelessWidget {
   final IconData icon;
   final Color color;
 
-  const StatCard({super.key, required this.title, required this.value, required this.icon, required this.color});
+  const StatCard({
+    super.key,
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 0,
-      color: const Color(0xFFF7F7F7),
+      elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: [
-            CircleAvatar(backgroundColor: color.withOpacity(.15), child: Icon(icon, color: color)),
-            const SizedBox(width: 12),
-            Expanded(
+            CircleAvatar(
+              radius: 14,
+              backgroundColor: color.withOpacity(0.12),
+              child: Icon(icon, color: color, size: 18),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(color: Colors.black54)),
-                  const SizedBox(height: 6),
-                  Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                  Text(title, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis, maxLines: 1),
+                  const SizedBox(height: 4),
+                  Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                 ],
               ),
             ),

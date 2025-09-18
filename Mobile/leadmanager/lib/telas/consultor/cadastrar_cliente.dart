@@ -4,6 +4,7 @@ import '../widgets/trabalho_hoje_card.dart';
 import 'meus_clientes_tab.dart';
 import 'minhas_visitas_tab.dart';
 import 'exportar_dados_tab.dart';
+import 'cadastrar_cliente.dart';
 
 class HomeConsultor extends StatefulWidget {
   const HomeConsultor({super.key});
@@ -17,7 +18,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 4,
+      length: 4, 
       child: Scaffold(
         appBar: const CustomNavbar(
           nome: 'João Silva',
@@ -57,7 +58,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
                                 child: const Icon(
                                   Icons.place,
                                   size: 16,
-                                  color: Color(0xFF3CB371), 
+                                  color: Color(0xFF3CB371),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -104,26 +105,17 @@ class _HomeConsultorState extends State<HomeConsultor> {
                               'quinta-feira, 18 de setembro de 2025',
                             ),
                             trailing: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
                                 color: Colors.black,
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: const Text(
                                 'Hoje',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                ),
+                                style: TextStyle(color: Colors.white, fontSize: 12),
                               ),
                             ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           ),
                         ],
                       ),
@@ -200,7 +192,13 @@ class _HomeConsultorState extends State<HomeConsultor> {
                     ],
                   ),
 
-                  const Center(child: Text('Form de cadastrar cliente aqui')),
+                  ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    children: const [
+                      SizedBox(height: 8),
+                      CadastrarCliente(),
+                    ],
+                  ),
 
                   ListView(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -261,10 +259,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
               const SizedBox(height: 8),
               Text(
                 value,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                ),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
             ],
           ),
