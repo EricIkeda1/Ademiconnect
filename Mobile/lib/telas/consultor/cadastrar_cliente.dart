@@ -1,270 +1,256 @@
 import 'package:flutter/material.dart';
-import '../widgets/custom_navbar.dart';
-import '../widgets/trabalho_hoje_card.dart';
-import 'meus_clientes_tab.dart';
-import 'minhas_visitas_tab.dart';
-import 'exportar_dados_tab.dart';
-import 'cadastrar_cliente.dart';
+import 'package:intl/intl.dart';
 
-class HomeConsultor extends StatefulWidget {
-  const HomeConsultor({super.key});
+class CadastrarCliente extends StatefulWidget {
+  const CadastrarCliente({super.key});
+
   @override
-  State<HomeConsultor> createState() => _HomeConsultorState();
+  State<CadastrarCliente> createState() => _CadastrarClienteState();
 }
 
-class _HomeConsultorState extends State<HomeConsultor> {
-  final List _clientes = [];
+class _CadastrarClienteState extends State<CadastrarCliente> {
+  final _formKey = GlobalKey<FormState>();
+
+  final _nomeEstabelecimentoCtrl = TextEditingController();
+  final _enderecoCtrl = TextEditingController();
+  final _dataVisitaCtrl = TextEditingController();
+  final _nomeClienteCtrl = TextEditingController();
+  final _telefoneCtrl = TextEditingController();
+  final _observacoesCtrl = TextEditingController();
 
   @override
-  Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 4, 
-      child: Scaffold(
-        appBar: const CustomNavbar(
-          nome: 'João Silva',
-          cargo: 'Consultor',
-          tabsNoAppBar: false,
-        ),
-        body: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  const TrabalhoHojeCard(),
-                  const SizedBox(height: 16),
+  void initState() {
+    super.initState();
+    _dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
+  }
 
-                  Card(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 2,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 28,
-                                height: 28,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFEFFAF1),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: const Color(0xFFDCEFE1)),
-                                ),
-                                child: const Icon(
-                                  Icons.place,
-                                  size: 16,
-                                  color: Color(0xFF3CB371),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              const Expanded(
-                                child: Text(
-                                  'Próximas Visitas Programadas',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Ruas designadas pelo gestor para os próximos dias',
-                            style: TextStyle(
-                              color: Colors.black.withOpacity(0.6),
-                              fontSize: 12,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          ListTile(
-                            leading: Container(
-                              width: 36,
-                              height: 36,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF2F5FF),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.black12),
-                              ),
-                              child: const Icon(
-                                Icons.place_outlined,
-                                color: Color(0xFF2F6FED),
-                                size: 20,
-                              ),
-                            ),
-                            title: const Text(
-                              'Avenida Principal, Bairro Comercial - Shopping e Lojas',
-                            ),
-                            subtitle: const Text(
-                              'quinta-feira, 18 de setembro de 2025',
-                            ),
-                            trailing: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.black,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text(
-                                'Hoje',
-                                style: TextStyle(color: Colors.white, fontSize: 12),
-                              ),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+  @override
+  void dispose() {
+    _nomeEstabelecimentoCtrl.dispose();
+    _enderecoCtrl.dispose();
+    _dataVisitaCtrl.dispose();
+    _nomeClienteCtrl.dispose();
+    _telefoneCtrl.dispose();
+    _observacoesCtrl.dispose();
+    super.dispose();
+  }
 
-                  const SizedBox(height: 16),
+  void _salvar() {
+    if (_formKey.currentState?.validate() != true) return;
 
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _statCardIcon(
-                        title: 'Total de Clientes',
-                        value: '0',
-                        icon: Icons.people_alt,
-                        color: Colors.blue,
-                      ),
-                      _statCardIcon(
-                        title: 'Visitas Este Mês',
-                        value: '0',
-                        icon: Icons.place,
-                        color: Colors.green,
-                      ),
-                      _statCardIcon(
-                        title: 'Alertas',
-                        value: '0',
-                        icon: Icons.notifications_active,
-                        color: Colors.orange,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Cliente cadastrado com sucesso!')),
+    );
 
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Material(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                elevation: 2,
-                child: const TabBar(
-                  isScrollable: true,
-                  labelPadding: EdgeInsets.symmetric(horizontal: 14),
-                  labelColor: Colors.black,
-                  unselectedLabelColor: Colors.black54,
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-                  indicator: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.all(Radius.circular(20)),
-                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 2)],
-                  ),
-                  tabs: [
-                    Tab(text: 'Minhas Visitas'),
-                    Tab(text: 'Cadastrar Cliente'),
-                    Tab(text: 'Meus Clientes'),
-                    Tab(text: 'Exportar Dados'),
-                  ],
-                ),
-              ),
-            ),
+    _formKey.currentState?.reset();
+    _nomeEstabelecimentoCtrl.clear();
+    _enderecoCtrl.clear();
+    _nomeClienteCtrl.clear();
+    _telefoneCtrl.clear();
+    _observacoesCtrl.clear();
+    _dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
+  }
 
-            const SizedBox(height: 12),
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 2),
+      helpText: 'Selecione a data da visita',
+      confirmText: 'Confirmar',
+      cancelText: 'Cancelar',
+    );
+    if (picked != null) {
+      _dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(picked);
+      setState(() {});
+    }
+  }
 
-            Expanded(
-              child: TabBarView(
-                children: [
-                  ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    children: const [
-                      SizedBox(height: 8),
-                      MinhasVisitasTab(),
-                    ],
-                  ),
+  String? _required(String? v, {String field = 'Campo'}) {
+    if (v == null || v.trim().isEmpty) return '$field é obrigatório';
+    return null;
+  }
 
-                  ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    children: const [
-                      SizedBox(height: 8),
-                      CadastrarCliente(),
-                    ],
-                  ),
+  String _maskTelefone(String value) {
+    final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+    final b = StringBuffer();
+    for (int i = 0; i < digits.length && i < 11; i++) {
+      final c = digits[i];
+      if (i == 0) b.write('(');
+      if (i == 2) b.write(') ');
+      if (i == 7) b.write('-');
+      b.write(c);
+    }
+    return b.toString();
+  }
 
-                  ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    children: [
-                      const SizedBox(height: 8),
-                      MeusClientesTab(clientes: []),
-                    ],
-                  ),
-
-                  ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    children: const [
-                      SizedBox(height: 8),
-                      ExportarDadosTab(clientes: []),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+  InputDecoration _dec(String label, {String? hint, Widget? suffixIcon}) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      filled: true,
+      fillColor: const Color(0xFFF7F8FA),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
       ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFF9AA7FF)),
+      ),
+      suffixIcon: suffixIcon,
     );
   }
 
-  Widget _statCardIcon({
-    required String title,
-    required String value,
-    required IconData icon,
-    required Color color,
-  }) {
-    return Expanded(
-      child: Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
+  @override
+  Widget build(BuildContext context) {
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+        );
+    final subtle = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Colors.black.withOpacity(0.6),
+        );
+
+    return _CardBase(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Form(
+          key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 14,
-                    backgroundColor: color.withOpacity(0.12),
-                    child: Icon(icon, color: color, size: 18),
+              Text('Cadastrar Novo Cliente', style: titleStyle),
+              const SizedBox(height: 4),
+              Text('Preencha os dados do cliente para cadastro', style: subtle),
+
+              const SizedBox(height: 16),
+
+              Text('Dados Obrigatórios', style: titleStyle),
+              const SizedBox(height: 8),
+
+              TextFormField(
+                controller: _nomeEstabelecimentoCtrl,
+                decoration: _dec(
+                  'Nome do Estabelecimento *',
+                  hint: 'Digite o nome do estabelecimento',
+                ),
+                validator: (v) => _required(v, field: 'Nome do Estabelecimento'),
+              ),
+              const SizedBox(height: 10),
+
+              TextFormField(
+                controller: _enderecoCtrl,
+                decoration: _dec(
+                  'Endereço *',
+                  hint: 'Digite o endereço completo',
+                ),
+                validator: (v) => _required(v, field: 'Endereço'),
+              ),
+              const SizedBox(height: 10),
+
+              TextFormField(
+                controller: _dataVisitaCtrl,
+                readOnly: true,
+                decoration: _dec(
+                  'Data da Visita *',
+                  hint: 'dd/mm/aaaa',
+                  suffixIcon: IconButton(
+                    tooltip: 'Selecionar data',
+                    onPressed: _pickDate,
+                    icon: const Icon(Icons.calendar_today_outlined),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: const TextStyle(fontSize: 12),
-                      overflow: TextOverflow.ellipsis,
+                ),
+                validator: (v) => _required(v, field: 'Data da Visita'),
+                onTap: _pickDate,
+              ),
+
+              const SizedBox(height: 16),
+
+              Text('Dados Opcionais', style: titleStyle),
+              const SizedBox(height: 8),
+
+              TextFormField(
+                controller: _nomeClienteCtrl,
+                decoration: _dec(
+                  'Nome do Cliente',
+                  hint: 'Digite o nome do cliente (opcional)',
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              TextFormField(
+                controller: _telefoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: _dec(
+                  'Telefone',
+                  hint: '(00) 00000-0000',
+                ),
+                onChanged: (v) {
+                  final masked = _maskTelefone(v);
+                  if (masked != v) {
+                    final sel = TextSelection.collapsed(offset: masked.length);
+                    _telefoneCtrl.value = TextEditingValue(
+                      text: masked,
+                      selection: sel,
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+
+              TextFormField(
+                controller: _observacoesCtrl,
+                maxLines: 3,
+                decoration: _dec(
+                  'Observações',
+                  hint: 'Digite observações sobre a visita (opcional)',
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                value,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  onPressed: _salvar,
+                  child: const Text('Cadastrar Cliente'),
+                ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _CardBase extends StatelessWidget {
+  final Widget child;
+  const _CardBase({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 2,
+      color: Colors.white,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: child,
     );
   }
 }
