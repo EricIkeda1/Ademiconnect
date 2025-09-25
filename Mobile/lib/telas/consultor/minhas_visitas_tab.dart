@@ -11,7 +11,6 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = '';
 
-  // Dados
   final _hojeTitulo = 'HOJE - Sua área de trabalho';
   final _hojeSub = 'Rua das Flores, Centro - Comércio Local';
 
@@ -80,7 +79,6 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
       );
     }
 
-    // 1) CARD DE PESQUISA NO TOPO (separado)
     final cardPesquisa = cardWrapper(
       title: 'Pesquisar Rua',
       child: Column(
@@ -121,7 +119,6 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
       ),
     );
 
-    // 2) CARD “HOJE - Sua área de trabalho” (separado)
     final cardHoje = cardWrapper(
       title: 'Ruas de Trabalho',
       child: ListTile(
@@ -139,7 +136,6 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
       ),
     );
 
-    // 3) CARD “Cronograma de Visitas” (filtra pelo texto)
     final cardCronograma = cardWrapper(
       title: 'Cronograma de Visitas',
       child: Column(
@@ -173,7 +169,6 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
       ),
     );
 
-    // ORDEM FINAL: PESQUISA (topo) -> HOJE -> CRONOGRAMA
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

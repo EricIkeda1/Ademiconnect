@@ -10,7 +10,6 @@ class DashboardTab extends StatefulWidget {
 class _DashboardTabState extends State<DashboardTab> {
   final TextEditingController _searchCtrl = TextEditingController();
 
-  // Dados fixos (como no seu exemplo)
   final List<_ConsultorStatus> _consultores = const [
     _ConsultorStatus(
       nome: "João Silva",
@@ -55,7 +54,6 @@ class _DashboardTabState extends State<DashboardTab> {
     super.dispose();
   }
 
-  // Filtra visitas pelo termo no título (nome da rua/local)
   List<_VisitaProg> get _visitasFiltradas {
     if (_query.isEmpty) return _visitas;
     final q = _query.toLowerCase();
@@ -74,19 +72,16 @@ class _DashboardTabState extends State<DashboardTab> {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          // Barra de pesquisa
           _SearchBar(
             controller: _searchCtrl,
             hint: 'Pesquisar nome da rua...',
           ),
           const SizedBox(height: 12),
 
-          // Indicador de disponibilidade (aparece somente quando há texto)
           if (_query.isNotEmpty) _DisponibilidadeChip(disponivel: !_ruaJaProgramada),
 
           const SizedBox(height: 16),
 
-          // Seção: Status dos Consultores (inalterada visualmente)
           _Section(
             title: "Status dos Consultores",
             subtitle: "Situação atual de trabalho de cada consultor",
@@ -106,7 +101,6 @@ class _DashboardTabState extends State<DashboardTab> {
 
           const SizedBox(height: 16),
 
-          // Seção: Visitas Programadas (com filtro)
           _Section(
             title: "Visitas Programadas",
             subtitle: _query.isEmpty
@@ -131,7 +125,6 @@ class _DashboardTabState extends State<DashboardTab> {
   }
 }
 
-// Modelo simples (somente neste arquivo)
 class _ConsultorStatus {
   final String nome;
   final String status;
@@ -154,7 +147,6 @@ class _VisitaProg {
   });
 }
 
-// Barra de pesquisa
 class _SearchBar extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
@@ -192,7 +184,6 @@ class _SearchBar extends StatelessWidget {
   }
 }
 
-// Chip de disponibilidade
 class _DisponibilidadeChip extends StatelessWidget {
   final bool disponivel;
   const _DisponibilidadeChip({required this.disponivel});
@@ -235,7 +226,6 @@ class _DisponibilidadeChip extends StatelessWidget {
   }
 }
 
-// Componentes originais (mantidos)
 class _Section extends StatelessWidget {
   final String title;
   final String subtitle;

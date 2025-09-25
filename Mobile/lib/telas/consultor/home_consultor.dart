@@ -26,7 +26,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
           child: Theme(
             data: Theme.of(context).copyWith(
               appBarTheme: const AppBarTheme(
-                backgroundColor: Color(0xFFD03025), // d03025
+                backgroundColor: Color(0xFFD03025), 
                 surfaceTintColor: Color(0xFFD03025),
                 elevation: 1,
                 centerTitle: false,
@@ -41,13 +41,11 @@ class _HomeConsultorState extends State<HomeConsultor> {
         ),
         body: Column(
           children: [
-            // Padding externo reduzido de 16 para 12
             Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
                 children: [
                   const TrabalhoHojeCard(),
-                  // separação reduzida de 16 para 10
                   const SizedBox(height: 10),
 
                   Card(
@@ -56,7 +54,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
                     ),
                     elevation: 1,
                     child: Padding(
-                      // padding interno reduzido de 8 para 6
                       padding: const EdgeInsets.all(6),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -78,7 +75,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
                                   color: Color(0xFF3CB371),
                                 ),
                               ),
-                              // gap reduzido de 6 para 4
                               const SizedBox(width: 4),
                               const Expanded(
                                 child: Text(
@@ -91,7 +87,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
                               ),
                             ],
                           ),
-                          // mantém 2 para título->descrição
                           const SizedBox(height: 2),
                           Text(
                             'Ruas designadas pelo gestor para os próximos dias',
@@ -100,7 +95,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
                               fontSize: 11,
                             ),
                           ),
-                          // de 6 para 4
                           const SizedBox(height: 4),
                           ListTile(
                             leading: Container(
@@ -137,9 +131,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
                                 style: TextStyle(color: Colors.white, fontSize: 11),
                               ),
                             ),
-                            // contentPadding horizontal reduzido de 6 para 4
                             contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                            // densidade do ListTile mais compacta
                             dense: true,
                             visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
                           ),
@@ -148,7 +140,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
                     ),
                   ),
 
-                  // separação reduzida de 16 para 10
                   const SizedBox(height: 10),
 
                   Row(
@@ -178,7 +169,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
               ),
             ),
 
-            // TabBar com padding lateral reduzido (mantido 16 -> 12)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Material(
@@ -187,7 +177,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
                 elevation: 2,
                 child: const TabBar(
                   isScrollable: true,
-                  // padding do rótulo mais compacto (14 -> 12)
                   labelPadding: EdgeInsets.symmetric(horizontal: 12),
                   labelColor: Colors.black,
                   unselectedLabelColor: Colors.black54,
@@ -208,7 +197,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
               ),
             ),
 
-            // gap de 12 -> 8
             const SizedBox(height: 8),
 
             Expanded(
@@ -265,7 +253,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
         elevation: 1,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         child: Padding(
-          // de 8 para 6
           padding: const EdgeInsets.all(6),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -277,7 +264,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
                     backgroundColor: color.withOpacity(0.12),
                     child: Icon(icon, color: color, size: 16),
                   ),
-                  // de 6 para 4
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
@@ -288,7 +274,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
                   ),
                 ],
               ),
-              // de 6 para 4
               const SizedBox(height: 4),
               Text(
                 value,

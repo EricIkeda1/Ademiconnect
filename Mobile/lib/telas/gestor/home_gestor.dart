@@ -10,16 +10,14 @@ import 'relatorios_tab.dart';
 class HomeGestor extends StatelessWidget {
   const HomeGestor({super.key});
 
-  // Cores solicitadas
-  static const Color kAppBarRed = Color(0xFFD03025); // topo vermelho (d03025)
-  static const Color kNeutralGray = Color(0xFF939598); // cinza do chip "Sair" e do avatar
+  static const Color kAppBarRed = Color(0xFFD03025);
+  static const Color kNeutralGray = Color(0xFF939598); 
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 5,
       child: Scaffold(
-        // Mantém o CustomNavbar e injeta apenas as cores via Theme local
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(kToolbarHeight),
           child: Theme(
@@ -30,11 +28,10 @@ class HomeGestor extends StatelessWidget {
                 elevation: 1,
                 centerTitle: false,
               ),
-              // Estilo do botão "Sair" sem tocar no CustomNavbar
               textButtonTheme: TextButtonThemeData(
                 style: TextButton.styleFrom(
-                  foregroundColor: kNeutralGray, // texto
-                  side: const BorderSide(color: kNeutralGray), // borda
+                  foregroundColor: kNeutralGray, 
+                  side: const BorderSide(color: kNeutralGray), 
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
                   ),
@@ -42,7 +39,6 @@ class HomeGestor extends StatelessWidget {
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 ),
               ),
-              // Ícones dentro do AppBar (ex.: avatar com Icon)
               iconTheme: const IconThemeData(color: kNeutralGray),
             ),
             child: const CustomNavbar(
