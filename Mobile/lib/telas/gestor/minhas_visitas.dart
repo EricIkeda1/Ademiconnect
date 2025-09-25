@@ -1,51 +1,128 @@
 import 'package:flutter/material.dart';
 
-class DashboardTab extends StatelessWidget {
+class DashboardTab extends StatefulWidget {
   const DashboardTab({super.key});
+
+  @override
+  State<DashboardTab> createState() => _DashboardTabState();
+}
+
+class _DashboardTabState extends State<DashboardTab> {
+  final TextEditingController _searchCtrl = TextEditingController();
+
+  // Dados fixos (como no seu exemplo)
+  final List<_ConsultorStatus> _consultores = const [
+    _ConsultorStatus(
+      nome: "João Silva",
+      status: "Trabalhando hoje",
+      local: "Rua das Flores, Centro - Comércio Local",
+    ),
+    _ConsultorStatus(
+      nome: "Pedro Costa",
+      status: "Trabalhando hoje",
+      local: "Rua dos Empresários, Zona Industrial",
+    ),
+  ];
+
+  final List<_VisitaProg> _visitas = const [
+    _VisitaProg(
+      titulo: "Avenida Principal, Bairro Comercial - Shopping e Lojas",
+      consultor: "João Silva",
+      data: "16/09/2025",
+    ),
+    _VisitaProg(
+      titulo: "Boulevard Shopping, Centro da Cidade",
+      consultor: "Pedro Costa",
+      data: "17/09/2025",
+    ),
+  ];
+
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl.addListener(() {
+      setState(() {
+        _query = _searchCtrl.text.trim();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  // Filtra visitas pelo termo no título (nome da rua/local)
+  List<_VisitaProg> get _visitasFiltradas {
+    if (_query.isEmpty) return _visitas;
+    final q = _query.toLowerCase();
+    return _visitas.where((v) => v.titulo.toLowerCase().contains(q)).toList();
+  }
+
+  bool get _ruaJaProgramada {
+    if (_query.isEmpty) return false;
+    final q = _query.toLowerCase();
+    return _visitas.any((v) => v.titulo.toLowerCase().contains(q));
+  }
 
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
-        children: const [
+        children: [
+          // Barra de pesquisa
+          _SearchBar(
+            controller: _searchCtrl,
+            hint: 'Pesquisar nome da rua...',
+          ),
+          const SizedBox(height: 12),
+
+          // Indicador de disponibilidade (aparece somente quando há texto)
+          if (_query.isNotEmpty) _DisponibilidadeChip(disponivel: !_ruaJaProgramada),
+
+          const SizedBox(height: 16),
+
+          // Seção: Status dos Consultores (inalterada visualmente)
           _Section(
             title: "Status dos Consultores",
             subtitle: "Situação atual de trabalho de cada consultor",
             child: Column(
-              children: [
-                _ConsultorStatusTile(
-                  nome: "João Silva",
-                  status: "Trabalhando hoje",
-                  local: "Rua das Flores, Centro - Comércio Local",
-                ),
-                SizedBox(height: 8),
-                _ConsultorStatusTile(
-                  nome: "Pedro Costa",
-                  status: "Trabalhando hoje",
-                  local: "Rua dos Empresários, Zona Industrial",
-                ),
-              ],
+              children: _consultores
+                  .map((c) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _ConsultorStatusTile(
+                          nome: c.nome,
+                          status: c.status,
+                          local: c.local,
+                        ),
+                      ))
+                  .toList(),
             ),
           ),
-          SizedBox(height: 16),
+
+          const SizedBox(height: 16),
+
+          // Seção: Visitas Programadas (com filtro)
           _Section(
             title: "Visitas Programadas",
-            subtitle: "Próximas visitas programadas",
+            subtitle: _query.isEmpty
+                ? "Próximas visitas programadas"
+                : "Resultados para: $_query",
             child: Column(
-              children: [
-                _VisitaTile(
-                  titulo: "Avenida Principal, Bairro Comercial - Shopping e Lojas",
-                  consultor: "João Silva",
-                  data: "16/09/2025",
-                ),
-                SizedBox(height: 8),
-                _VisitaTile(
-                  titulo: "Boulevard Shopping, Centro da Cidade",
-                  consultor: "Pedro Costa",
-                  data: "17/09/2025",
-                ),
-              ],
+              children: _visitasFiltradas
+                  .map((v) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _VisitaTile(
+                          titulo: v.titulo,
+                          consultor: v.consultor,
+                          data: v.data,
+                        ),
+                      ))
+                  .toList(),
             ),
           ),
         ],
@@ -54,6 +131,111 @@ class DashboardTab extends StatelessWidget {
   }
 }
 
+// Modelo simples (somente neste arquivo)
+class _ConsultorStatus {
+  final String nome;
+  final String status;
+  final String local;
+  const _ConsultorStatus({
+    required this.nome,
+    required this.status,
+    required this.local,
+  });
+}
+
+class _VisitaProg {
+  final String titulo;
+  final String consultor;
+  final String data;
+  const _VisitaProg({
+    required this.titulo,
+    required this.consultor,
+    required this.data,
+  });
+}
+
+// Barra de pesquisa
+class _SearchBar extends StatelessWidget {
+  final TextEditingController controller;
+  final String hint;
+  const _SearchBar({required this.controller, this.hint = 'Pesquisar...'});
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: hint,
+        prefixIcon: const Icon(Icons.search),
+        suffixIcon: controller.text.isEmpty
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.clear),
+                onPressed: () => controller.clear(),
+                tooltip: 'Limpar',
+              ),
+        filled: true,
+        fillColor: const Color(0xFFF7F7F7),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.black12),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.black12),
+        ),
+        contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      ),
+      onSubmitted: (_) {},
+    );
+  }
+}
+
+// Chip de disponibilidade
+class _DisponibilidadeChip extends StatelessWidget {
+  final bool disponivel;
+  const _DisponibilidadeChip({required this.disponivel});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = disponivel ? const Color(0xFF2E7D32) : const Color(0xFF6B7280);
+    final bg = disponivel ? const Color(0xFFE8F5E9) : const Color(0xFFF3F4F6);
+    final texto = disponivel ? 'Disponível' : 'Já programada';
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withOpacity(0.5)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              disponivel ? Icons.check_circle : Icons.info_outline,
+              color: color,
+              size: 16,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              texto,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Componentes originais (mantidos)
 class _Section extends StatelessWidget {
   final String title;
   final String subtitle;

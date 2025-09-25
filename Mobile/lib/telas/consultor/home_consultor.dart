@@ -21,10 +21,23 @@ class _HomeConsultorState extends State<HomeConsultor> {
     return DefaultTabController(
       length: 4,
       child: Scaffold(
-        appBar: const CustomNavbar(
-          nome: 'João Silva',
-          cargo: 'Consultor',
-          tabsNoAppBar: false,
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(kToolbarHeight),
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              appBarTheme: const AppBarTheme(
+                backgroundColor: Color(0xFFD03025), // d03025
+                surfaceTintColor: Color(0xFFD03025),
+                elevation: 1,
+                centerTitle: false,
+              ),
+            ),
+            child: const CustomNavbar(
+              nome: 'João Silva',
+              cargo: 'Consultor',
+              tabsNoAppBar: false,
+            ),
+          ),
         ),
         body: Column(
           children: [

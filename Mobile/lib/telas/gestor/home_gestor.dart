@@ -10,15 +10,47 @@ import 'relatorios_tab.dart';
 class HomeGestor extends StatelessWidget {
   const HomeGestor({super.key});
 
+  // Cores solicitadas
+  static const Color kAppBarRed = Color(0xFFD03025); // topo vermelho (d03025)
+  static const Color kNeutralGray = Color(0xFF939598); // cinza do chip "Sair" e do avatar
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 5,
       child: Scaffold(
-        appBar: const CustomNavbar(
-          nome: 'Maria Santos',
-          cargo: 'Gestor',
-          tabsNoAppBar: false,
+        // Mantém o CustomNavbar e injeta apenas as cores via Theme local
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(kToolbarHeight),
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              appBarTheme: const AppBarTheme(
+                backgroundColor: kAppBarRed,
+                surfaceTintColor: kAppBarRed,
+                elevation: 1,
+                centerTitle: false,
+              ),
+              // Estilo do botão "Sair" sem tocar no CustomNavbar
+              textButtonTheme: TextButtonThemeData(
+                style: TextButton.styleFrom(
+                  foregroundColor: kNeutralGray, // texto
+                  side: const BorderSide(color: kNeutralGray), // borda
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                ),
+              ),
+              // Ícones dentro do AppBar (ex.: avatar com Icon)
+              iconTheme: const IconThemeData(color: kNeutralGray),
+            ),
+            child: const CustomNavbar(
+              nome: 'Maria Santos',
+              cargo: 'Gestor',
+              tabsNoAppBar: false,
+            ),
+          ),
         ),
         body: Column(
           children: [
@@ -71,7 +103,6 @@ class HomeGestor extends StatelessWidget {
                 ],
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Material(
@@ -84,8 +115,8 @@ class HomeGestor extends StatelessWidget {
                   labelColor: Colors.black,
                   unselectedLabelColor: Colors.black54,
                   indicatorSize: TabBarIndicatorSize.tab,
-                  labelStyle: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 12),
+                  labelStyle:
+                      const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
                   indicator: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
@@ -103,12 +134,10 @@ class HomeGestor extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(height: 12),
-
-            Expanded(
+            const Expanded(
               child: TabBarView(
-                children: const [
+                children: [
                   DashboardTab(),
                   ConsultoresTab(),
                   DesignarTrabalhoTab(),
