@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Para inputFormatters
-import 'package:mask_text_input_formatter/mask_text_input_formatter.dart'; // Telefone
-import 'package:email_validator/email_validator.dart'; // E-mail
+import 'package:flutter/services.dart'; 
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart'; 
+import 'package:email_validator/email_validator.dart'; 
 
 class ConsultoresTab extends StatefulWidget {
   const ConsultoresTab({super.key});
@@ -13,15 +13,13 @@ class ConsultoresTab extends StatefulWidget {
 class _ConsultoresTabState extends State<ConsultoresTab> {
   final _formKey = GlobalKey<FormState>();
 
-  // Controllers
   final _nomeCtrl = TextEditingController();
   final _telefoneCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _senhaCtrl = TextEditingController();
-  final _matriculaCtrl = TextEditingController(); // opcional
+  final _matriculaCtrl = TextEditingController(); 
   final _fotoCtrl = TextEditingController();
 
-  // Máscara de telefone no padrão brasileiro: (99) 99999-9999
   final _telefoneMask = MaskTextInputFormatter(
     mask: '(##) #####-####',
     filter: {'#': RegExp(r'[0-9]')},
@@ -41,12 +39,10 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
 
   void _submit() {
     if (_formKey.currentState!.validate()) {
-      // Aqui pode integrar com backend/Firebase conforme necessário.
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Consultor cadastrado!')),
       );
 
-      // Reset do formulário e limpeza dos controllers
       _formKey.currentState!.reset();
       _nomeCtrl.clear();
       _telefoneCtrl.clear();
@@ -78,7 +74,6 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
                 const Text("Cadastre novos consultores no sistema", style: TextStyle(color: Colors.black54)),
                 const SizedBox(height: 16),
 
-                // Avatar com iniciais do nome
                 Center(
                   child: CircleAvatar(
                     radius: 28,
@@ -101,7 +96,6 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
 
                 const SizedBox(height: 16),
 
-                // Nome
                 TextFormField(
                   controller: _nomeCtrl,
                   decoration: const InputDecoration(
@@ -114,7 +108,6 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
 
                 const SizedBox(height: 12),
 
-                // Telefone
                 TextFormField(
                   controller: _telefoneCtrl,
                   decoration: const InputDecoration(
@@ -127,7 +120,6 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
                   validator: (v) {
                     final raw = _telefoneMask.getUnmaskedText();
                     if (raw.isEmpty) return "Informe o telefone";
-                    // Validação simples: 11 dígitos (DDD + 9 + número)
                     if (raw.length < 11) return "Telefone inválido";
                     return null;
                   },
@@ -135,7 +127,6 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
 
                 const SizedBox(height: 12),
 
-                // E-mail
                 TextFormField(
                   controller: _emailCtrl,
                   decoration: const InputDecoration(
@@ -153,7 +144,6 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
 
                 const SizedBox(height: 12),
 
-                // Senha
                 TextFormField(
                   controller: _senhaCtrl,
                   obscureText: true,
@@ -170,7 +160,6 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
 
                 const SizedBox(height: 12),
 
-                // Matrícula (opcional)
                 TextFormField(
                   controller: _matriculaCtrl,
                   decoration: const InputDecoration(
@@ -179,12 +168,10 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
                   ),
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  // Sem validator obrigatório: é opcional
                 ),
 
                 const SizedBox(height: 12),
 
-                // URL da foto (opcional) — mantido
                 TextFormField(
                   controller: _fotoCtrl,
                   decoration: const InputDecoration(
