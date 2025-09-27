@@ -114,7 +114,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 12),
                       const Text(
-                        'Use: gestor / 123456 ou consultor / 123456',
+                        'Use: gestor 123456 | consultor 123456',
                         style: TextStyle(color: Colors.black54),
                       ),
                     ],
