@@ -129,7 +129,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
                   children: [
                     MinhasVisitasTab(),
                     CadastrarCliente(onClienteCadastrado: _onClienteCadastrado),
-                    MeusClientesTab(),
+                    MeusClientesTab(onClienteRemovido: _loadStats),
                     ExportarDadosTab(clientes: _clientes),
                   ],
                 ),

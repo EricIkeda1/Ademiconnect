@@ -3,7 +3,9 @@ import '../../services/cliente_service.dart';
 import 'package:flutter/material.dart';
 
 class MeusClientesTab extends StatefulWidget {
-  const MeusClientesTab({super.key});
+  final VoidCallback? onClienteRemovido;
+
+  const MeusClientesTab({super.key, this.onClienteRemovido});
 
   @override
   State<MeusClientesTab> createState() => _MeusClientesTabState();
@@ -160,6 +162,8 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
       try {
         await _clienteService.removeCliente(cliente.id);
         await _refreshClientes();
+        widget.onClienteRemovido?.call(); 
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Cliente excluído com sucesso!')),
