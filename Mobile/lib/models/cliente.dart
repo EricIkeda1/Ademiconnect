@@ -1,7 +1,7 @@
 class Cliente {
   final String estabelecimento;
   final String estado;
-  final String cidade; // 👈 adicionado
+  final String cidade;
   final String endereco;
   final DateTime dataVisita;
   final String? nomeCliente;
