@@ -17,7 +17,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
 
   final _nomeEstabelecimentoCtrl = TextEditingController();
   final _estadoCtrl = TextEditingController();
-  final _cidadeCtrl = TextEditingController(); 
+  final _cidadeCtrl = TextEditingController();
   final _enderecoCtrl = TextEditingController();
   final _dataVisitaCtrl = TextEditingController();
   final _nomeClienteCtrl = TextEditingController();
@@ -50,12 +50,20 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
       final cliente = Cliente(
         estabelecimento: _nomeEstabelecimentoCtrl.text.trim(),
         estado: _estadoCtrl.text.trim(),
-        cidade: _cidadeCtrl.text.trim(), 
+        cidade: _cidadeCtrl.text.trim(),
         endereco: _enderecoCtrl.text.trim(),
         dataVisita: DateFormat('dd/MM/yyyy').parse(_dataVisitaCtrl.text),
-        nomeCliente: _nomeClienteCtrl.text.trim().isEmpty ? null : _nomeClienteCtrl.text.trim(),
-        telefone: _telefoneCtrl.text.trim().isEmpty ? null : _telefoneCtrl.text.trim(),
-        observacoes: _observacoesCtrl.text.trim().isEmpty ? null : _observacoesCtrl.text.trim(),
+        nomeCliente: _nomeClienteCtrl.text.trim().isEmpty
+            ? null
+            : _nomeClienteCtrl.text.trim(),
+        telefone: _telefoneCtrl.text.trim().isEmpty
+            ? null
+            : _telefoneCtrl.text.trim(),
+        observacoes: _observacoesCtrl.text.trim().isEmpty
+            ? null
+            : _observacoesCtrl.text.trim(),
+        consultorResponsavel:
+            "Consultor Teste", // 👈 Substitua pelo nome do consultor logado
       );
 
       await _clienteService.saveCliente(cliente);
@@ -68,12 +76,13 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
         _formKey.currentState?.reset();
         _nomeEstabelecimentoCtrl.clear();
         _estadoCtrl.clear();
-        _cidadeCtrl.clear(); 
+        _cidadeCtrl.clear();
         _enderecoCtrl.clear();
         _nomeClienteCtrl.clear();
         _telefoneCtrl.clear();
         _observacoesCtrl.clear();
-        _dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
+        _dataVisitaCtrl.text =
+            DateFormat('dd/MM/yyyy').format(DateTime.now());
 
         widget.onClienteCadastrado?.call();
       }
@@ -121,13 +130,15 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     return b.toString();
   }
 
-  InputDecoration _obterDecoracaoCampo(String label, {String? hint, Widget? suffixIcon}) {
+  InputDecoration _obterDecoracaoCampo(String label,
+      {String? hint, Widget? suffixIcon}) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
       filled: true,
       fillColor: const Color(0xFFF7F8FA),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
@@ -164,21 +175,19 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
               Text('Cadastrar Novo Cliente', style: titleStyle),
               const SizedBox(height: 4),
               Text('Preencha os dados do cliente para cadastro', style: subtle),
-
               const SizedBox(height: 16),
               Text('Dados Obrigatórios', style: titleStyle),
               const SizedBox(height: 8),
-
               TextFormField(
                 controller: _nomeEstabelecimentoCtrl,
                 decoration: _obterDecoracaoCampo(
                   'Nome do Estabelecimento *',
                   hint: 'Digite o nome do estabelecimento',
                 ),
-                validator: (v) => _validarCampoObrigatorio(v, field: 'Nome do Estabelecimento'),
+                validator: (v) =>
+                    _validarCampoObrigatorio(v, field: 'Nome do Estabelecimento'),
               ),
               const SizedBox(height: 10),
-
               TextFormField(
                 controller: _estadoCtrl,
                 decoration: _obterDecoracaoCampo(
@@ -188,7 +197,6 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                 validator: (v) => _validarCampoObrigatorio(v, field: 'Estado'),
               ),
               const SizedBox(height: 10),
-
               TextFormField(
                 controller: _cidadeCtrl,
                 decoration: _obterDecoracaoCampo(
@@ -198,7 +206,6 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                 validator: (v) => _validarCampoObrigatorio(v, field: 'Cidade'),
               ),
               const SizedBox(height: 10),
-
               TextFormField(
                 controller: _enderecoCtrl,
                 decoration: _obterDecoracaoCampo(
@@ -208,7 +215,6 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                 validator: (v) => _validarCampoObrigatorio(v, field: 'Endereço'),
               ),
               const SizedBox(height: 10),
-
               TextFormField(
                 controller: _dataVisitaCtrl,
                 readOnly: true,
@@ -221,14 +227,13 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                     icon: const Icon(Icons.calendar_today_outlined),
                   ),
                 ),
-                validator: (v) => _validarCampoObrigatorio(v, field: 'Data da Visita'),
+                validator: (v) =>
+                    _validarCampoObrigatorio(v, field: 'Data da Visita'),
                 onTap: _selecionarDataVisita,
               ),
-
               const SizedBox(height: 16),
               Text('Dados Opcionais', style: titleStyle),
               const SizedBox(height: 8),
-
               TextFormField(
                 controller: _nomeClienteCtrl,
                 decoration: _obterDecoracaoCampo(
@@ -237,7 +242,6 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                 ),
               ),
               const SizedBox(height: 10),
-
               TextFormField(
                 controller: _telefoneCtrl,
                 keyboardType: TextInputType.phone,
@@ -257,7 +261,6 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                 },
               ),
               const SizedBox(height: 10),
-
               TextFormField(
                 controller: _observacoesCtrl,
                 maxLines: 3,
@@ -266,7 +269,6 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                   hint: 'Digite observações sobre a visita (opcional)',
                 ),
               ),
-
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
