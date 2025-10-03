@@ -37,7 +37,7 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
     super.dispose();
   }
 
-  void _submit() {
+  void _cadastrarConsultor() {
     if (_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Consultor cadastrado!')),
@@ -187,7 +187,7 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton(
-                    onPressed: _submit,
+                    onPressed: _cadastrarConsultor, 
                     child: const Text("Cadastrar Consultor"),
                   ),
                 ),
