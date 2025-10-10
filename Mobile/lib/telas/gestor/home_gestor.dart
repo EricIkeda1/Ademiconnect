@@ -1,3 +1,5 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../widgets/custom_navbar.dart';
 import '../widgets/stat_card.dart';
@@ -16,8 +18,49 @@ class HomeGestor extends StatefulWidget {
 
 class _HomeGestorState extends State<HomeGestor> {
   double _collapseProgress = 0.0;
+  String _userName = 'Gestor'; // Será substituído pelo nome real
 
   static const double collapseDistance = 60.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData(); // Carrega o nome do gestor
+  }
+
+  /// Carrega o nome do gestor a partir da coleção 'gestor'
+  Future<void> _loadUserData() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      // ✅ Mudança aqui: busca na coleção 'gestor'
+      final doc = await FirebaseFirestore.instance
+          .collection('gestor')
+          .doc(user.uid)
+          .get();
+
+      if (doc.exists) {
+        // Usa o nome cadastrado no Firestore
+        final nome = doc.get('nome') as String? ?? 'Gestor';
+        setState(() {
+          _userName = nome;
+        });
+      } else {
+        // Fallback: tenta extrair do email
+        final fallback = user.email?.split('@').first ?? 'Gestor';
+        setState(() {
+          _userName = fallback;
+        });
+      }
+    } catch (e) {
+      print('❌ Erro ao carregar nome do gestor: $e');
+      final fallback = user.email?.split('@').first ?? 'Gestor';
+      setState(() {
+        _userName = fallback;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +68,7 @@ class _HomeGestorState extends State<HomeGestor> {
       length: 5,
       child: Scaffold(
         appBar: CustomNavbar(
-          nome: 'Maria Santos',
+          nome: _userName, // ✅ Nome dinâmico exibido
           cargo: 'Gestor',
           tabsNoAppBar: false,
           collapseProgress: _collapseProgress,
@@ -91,10 +134,7 @@ class _HomeGestorState extends State<HomeGestor> {
                     labelColor: Colors.black,
                     unselectedLabelColor: Colors.black54,
                     indicatorSize: TabBarIndicatorSize.tab,
-                    labelStyle: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
+                    labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
                     indicator: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20),

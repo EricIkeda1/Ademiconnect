@@ -19,7 +19,6 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
   final _emailCtrl = TextEditingController();
   final _senhaCtrl = TextEditingController();
   final _matriculaCtrl = TextEditingController();
-  final _fotoCtrl = TextEditingController();
 
   final _telefoneMask = MaskTextInputFormatter(
     mask: '(##) #####-####',
@@ -28,6 +27,16 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
   );
 
   bool _loading = false;
+
+  @override
+  void dispose() {
+    _nomeCtrl.dispose();
+    _telefoneCtrl.dispose();
+    _emailCtrl.dispose();
+    _senhaCtrl.dispose();
+    _matriculaCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _cadastrarConsultor() async {
     if (_formKey.currentState!.validate()) {
@@ -42,7 +51,7 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
         print('✅ Usuário criado: ${credential.user!.uid}');
 
         await FirebaseFirestore.instance
-            .collection('usuarios')
+            .collection('gestor')
             .doc(credential.user!.uid)
             .set({
           'nome': _nomeCtrl.text.trim(),
@@ -52,7 +61,6 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
           'gestorId': gestorId,
           'data_criacao': FieldValue.serverTimestamp(),
         });
-        print('✅ Perfil criado em usuarios/${credential.user!.uid}');
 
         await FirebaseFirestore.instance
             .collection('consultores')
@@ -62,11 +70,9 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
           'telefone': _telefoneCtrl.text,
           'email': email,
           'matricula': _matriculaCtrl.text.trim(),
-          'foto': _fotoCtrl.text.trim(),
           'gestorId': gestorId,
           'data_cadastro': FieldValue.serverTimestamp(),
         });
-        print('✅ Dados em consultores/${credential.user!.uid}');
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Consultor cadastrado com sucesso!')),
@@ -110,19 +116,15 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
     _emailCtrl.clear();
     _senhaCtrl.clear();
     _matriculaCtrl.clear();
-    _fotoCtrl.clear();
     setState(() {});
   }
 
-  @override
-  void dispose() {
-    _nomeCtrl.dispose();
-    _telefoneCtrl.dispose();
-    _emailCtrl.dispose();
-    _senhaCtrl.dispose();
-    _matriculaCtrl.dispose();
-    _fotoCtrl.dispose();
-    super.dispose();
+  // Gera as iniciais do nome
+  String get _iniciais {
+    final nome = _nomeCtrl.text.trim();
+    if (nome.isEmpty) return 'CN';
+    final parts = nome.split(' ').where((p) => p.isNotEmpty).take(2).toList();
+    return parts.map((p) => p[0]).join().toUpperCase();
   }
 
   @override
@@ -139,25 +141,22 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Gerenciar Consultores", style: TextStyle(fontWeight: FontWeight.w700)),
+                const Text(
+                  "Gerenciar Consultores",
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 8),
-                const Text("Cadastre novos consultores no sistema", style: TextStyle(color: Colors.black54)),
+                const Text(
+                  "Cadastre novos consultores no sistema",
+                  style: TextStyle(color: Colors.black54),
+                ),
                 const SizedBox(height: 16),
                 Center(
                   child: CircleAvatar(
                     radius: 28,
                     backgroundColor: const Color(0xFFEAEAEA),
                     child: Text(
-                      _nomeCtrl.text.isEmpty
-                          ? "CN"
-                          : _nomeCtrl.text
-                              .trim()
-                              .split(' ')
-                              .where((p) => p.isNotEmpty)
-                              .take(2)
-                              .map((p) => p[0])
-                              .join()
-                              .toUpperCase(),
+                      _iniciais,
                       style: const TextStyle(color: Colors.black),
                     ),
                   ),
@@ -227,15 +226,6 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
                   ),
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _fotoCtrl,
-                  decoration: const InputDecoration(
-                    labelText: "URL da foto (opcional)",
-                    hintText: "https://exemplo.com/foto.jpg",
-                    border: OutlineInputBorder(),
-                  ),
                 ),
                 const SizedBox(height: 16),
                 SizedBox(

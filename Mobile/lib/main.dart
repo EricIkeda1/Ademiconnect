@@ -110,7 +110,7 @@ class HomeRedirector extends StatelessWidget {
   Widget build(BuildContext context) {
     return FutureBuilder(
       future: FirebaseFirestore.instance
-          .collection('usuarios')
+          .collection('gestor')
           .doc(FirebaseAuth.instance.currentUser!.uid)
           .get(),
       builder: (context, snapshot) {

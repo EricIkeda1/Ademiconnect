@@ -1,3 +1,5 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../widgets/custom_navbar.dart';
 import '../widgets/trabalho_hoje_card.dart';
@@ -20,11 +22,47 @@ class _HomeConsultorState extends State<HomeConsultor> {
   int _totalClientes = 0;
   int _totalVisitasHoje = 0;
   List<Cliente> _clientes = [];
+  String _userName = 'Consultor'; // Nome a ser exibido
 
   @override
   void initState() {
     super.initState();
+    _loadUserData();
     _loadStats();
+  }
+
+  /// Carrega o nome do usuário a partir da coleção 'gestor'
+  Future<void> _loadUserData() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      // ✅ Busca em 'gestor', não 'usuarios'
+      final doc = await FirebaseFirestore.instance
+          .collection('gestor')
+          .doc(user.uid)
+          .get();
+
+      if (doc.exists) {
+        // Usa o nome cadastrado pelo gestor
+        final nome = doc.get('nome') as String? ?? user.email?.split('@').first ?? 'Consultor';
+        setState(() {
+          _userName = nome;
+        });
+      } else {
+        // Fallback
+        final fallback = user.email?.split('@').first ?? 'Consultor';
+        setState(() {
+          _userName = fallback;
+        });
+      }
+    } catch (e) {
+      print('❌ Erro ao carregar nome do usuário: $e');
+      final fallback = user.email?.split('@').first ?? 'Consultor';
+      setState(() {
+        _userName = fallback;
+      });
+    }
   }
 
   Future<void> _loadStats() async {
@@ -43,7 +81,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
-    final remainingHeight = screenHeight - kToolbarHeight - 320; 
+    final remainingHeight = screenHeight - kToolbarHeight - 320;
 
     return DefaultTabController(
       length: 4,
@@ -59,8 +97,8 @@ class _HomeConsultorState extends State<HomeConsultor> {
                 centerTitle: false,
               ),
             ),
-            child: const CustomNavbar(
-              nome: 'João Silva',
+            child: CustomNavbar(
+              nome: _userName, // Usa o nome dinâmico
               cargo: 'Consultor',
               tabsNoAppBar: false,
             ),
@@ -108,8 +146,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
                   labelColor: Colors.black,
                   unselectedLabelColor: Colors.black54,
                   indicatorSize: TabBarIndicatorSize.tab,
-                  labelStyle: TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 12),
+                  labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
                   indicator: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.all(Radius.circular(20)),
@@ -143,9 +180,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
 
   Widget _proximasVisitasCard() {
     return Card(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       elevation: 1,
       child: Padding(
         padding: const EdgeInsets.all(6),
@@ -173,10 +208,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
                 const Expanded(
                   child: Text(
                     'Próximas Visitas Programadas',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                 ),
               ],
@@ -184,10 +216,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
             const SizedBox(height: 2),
             Text(
               'Ruas designadas pelo gestor para os próximos dias',
-              style: TextStyle(
-                color: Colors.black.withOpacity(0.6),
-                fontSize: 11,
-              ),
+              style: TextStyle(color: Colors.black.withOpacity(0.6), fontSize: 11),
             ),
             const SizedBox(height: 4),
             ListTile(
@@ -206,24 +235,15 @@ class _HomeConsultorState extends State<HomeConsultor> {
                   size: 16,
                 ),
               ),
-              title: const Text(
-                'Av. Principal, Bairro Comercial',
-                style: TextStyle(fontSize: 13),
-              ),
-              subtitle: const Text(
-                'qui, 18 de setembro de 2025',
-                style: TextStyle(fontSize: 11),
-              ),
+              title: const Text('Av. Principal, Bairro Comercial', style: TextStyle(fontSize: 13)),
+              subtitle: const Text('qui, 18 de setembro de 2025', style: TextStyle(fontSize: 11)),
               trailing: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: Colors.black,
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: const Text(
-                  'Hoje',
-                  style: TextStyle(color: Colors.white, fontSize: 11),
-                ),
+                child: const Text('Hoje', style: TextStyle(color: Colors.white, fontSize: 11)),
               ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
               dense: true,
@@ -270,10 +290,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
               const SizedBox(height: 4),
               Text(
                 value,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
             ],
           ),

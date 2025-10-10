@@ -34,7 +34,7 @@ class _LoginPageState extends State<LoginPage> {
             .signInWithEmailAndPassword(email: email, password: password);
 
         final userDoc = await FirebaseFirestore.instance
-            .collection('usuarios')
+            .collection('gestor')
             .doc(userCredential.user!.uid)
             .get();
 
@@ -174,7 +174,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 8),
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 38.0, right: 7.6), 
+                        padding: const EdgeInsets.only(bottom: 38.0, right: 7.6),
                         child: Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
