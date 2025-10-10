@@ -173,13 +173,16 @@ class _LoginPageState extends State<LoginPage> {
                         onFieldSubmitted: (_) => _login(),
                       ),
                       const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: () {
-                            Navigator.pushNamed(context, '/recuperar');
-                          },
-                          child: const Text('Esqueceu a senha?'),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 38.0, right: 7.6), 
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () {
+                              Navigator.pushNamed(context, '/recuperar');
+                            },
+                            child: const Text('Esqueceu a senha?'),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 24),

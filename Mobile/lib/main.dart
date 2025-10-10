@@ -1,11 +1,13 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart'; 
+import 'package:cloud_firestore/cloud_firestore.dart'; 
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
 import 'telas/login.dart';
 import 'telas/gestor/home_gestor.dart';
 import 'telas/consultor/home_consultor.dart';
-import 'telas/recuperar_senha.dart'; 
+import 'telas/recuperar_senha.dart';
 
 Future<void> loadEnv() async {
   try {
@@ -66,12 +68,97 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'ADEMICON Londrina',
       theme: theme,
-      initialRoute: '/login',
+      home: const AuthGate(),
       routes: {
         '/login': (context) => const LoginPage(),
         '/gestor': (context) => const HomeGestor(),
         '/consultor': (context) => const HomeConsultor(),
-        '/recuperar': (context) => const RecuperarSenhaPage(), 
+        '/recuperar': (context) => const RecuperarSenhaPage(),
+      },
+    );
+  }
+}
+
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasData) {
+          return const HomeRedirector();
+        }
+
+        return const LoginPage();
+      },
+    );
+  }
+}
+
+class HomeRedirector extends StatelessWidget {
+  const HomeRedirector({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder(
+      future: FirebaseFirestore.instance
+          .collection('usuarios')
+          .doc(FirebaseAuth.instance.currentUser!.uid)
+          .get(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Usuário não encontrado no banco de dados.'),
+                  ElevatedButton(
+                    onPressed: () => FirebaseAuth.instance.signOut(),
+                    child: Text('Voltar ao login'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final tipo = snapshot.data!.get('tipo') as String?;
+
+        if (tipo == 'gestor' || tipo == 'supervisor') {
+          return const HomeGestor();
+        } else if (tipo == 'consultor') {
+          return const HomeConsultor();
+        } else {
+          return Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Tipo de usuário não reconhecido: $tipo'),
+                  ElevatedButton(
+                    onPressed: () => FirebaseAuth.instance.signOut(),
+                    child: Text('Sair'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
       },
     );
   }

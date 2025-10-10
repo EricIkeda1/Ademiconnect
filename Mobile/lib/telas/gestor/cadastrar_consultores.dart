@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:email_validator/email_validator.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
-import 'package:flutter/services.dart'; // ✅ Importação corrigida
+import 'package:flutter/services.dart';
 
 class ConsultoresTab extends StatefulWidget {
   const ConsultoresTab({super.key});
@@ -33,37 +33,67 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
     if (_formKey.currentState!.validate()) {
       setState(() => _loading = true);
       try {
-        final email = _emailCtrl.text.trim();
-        final senha = _senhaCtrl.text;
+        final String gestorId = FirebaseAuth.instance.currentUser!.uid;
+        final String email = _emailCtrl.text.trim();
+        final String senha = _senhaCtrl.text;
 
-        final credential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: email,
-          password: senha,
-        );
+        final credential = await FirebaseAuth.instance
+            .createUserWithEmailAndPassword(email: email, password: senha);
+        print('✅ Usuário criado: ${credential.user!.uid}');
 
-        await FirebaseFirestore.instance.collection('consultores').doc(credential.user!.uid).set({
+        await FirebaseFirestore.instance
+            .collection('usuarios')
+            .doc(credential.user!.uid)
+            .set({
+          'nome': _nomeCtrl.text.trim(),
+          'email': email,
+          'tipo': 'consultor',
+          'uid': credential.user!.uid,
+          'gestorId': gestorId,
+          'data_criacao': FieldValue.serverTimestamp(),
+        });
+        print('✅ Perfil criado em usuarios/${credential.user!.uid}');
+
+        await FirebaseFirestore.instance
+            .collection('consultores')
+            .doc(credential.user!.uid)
+            .set({
           'nome': _nomeCtrl.text.trim(),
           'telefone': _telefoneCtrl.text,
           'email': email,
           'matricula': _matriculaCtrl.text.trim(),
           'foto': _fotoCtrl.text.trim(),
-          'uid': credential.user!.uid,
+          'gestorId': gestorId,
           'data_cadastro': FieldValue.serverTimestamp(),
         });
+        print('✅ Dados em consultores/${credential.user!.uid}');
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Consultor cadastrado com sucesso!')),
         );
         _limparCampos();
       } on FirebaseAuthException catch (e) {
+        print('❌ Auth error: $e');
         String mensagem = 'Erro: ${e.message}';
         if (e.code == 'email-already-in-use') {
           mensagem = 'E-mail já cadastrado';
+        } else if (e.code == 'weak-password') {
+          mensagem = 'Senha muito fraca';
         }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(mensagem)),
         );
-      } catch (e) {
+      } on FirebaseException catch (e) {
+        print('❌ Firebase error: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Erro ao salvar no banco. Verifique: conexão, regras do Firestore ou tente novamente.',
+            ),
+          ),
+        );
+      } catch (e, stack) {
+        print('❌ Erro inesperado: $e\n$stack');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Erro: ${e.toString()}')),
         );
