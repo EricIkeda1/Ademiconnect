@@ -71,11 +71,24 @@ class _HomeGestorState extends State<HomeGestor> {
     return DefaultTabController(
       length: 5,
       child: Scaffold(
-        appBar: CustomNavbar(
-          nome: _userName, 
-          cargo: 'Gestor',
-          tabsNoAppBar: false,
-          collapseProgress: _collapseProgress,
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(kToolbarHeight),
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              appBarTheme: const AppBarTheme(
+                backgroundColor: Color(0xFFD03025), // ✅ Mesma cor do consultor
+                surfaceTintColor: Color(0xFFD03025),
+                elevation: 1,
+                centerTitle: false,
+              ),
+            ),
+            child: CustomNavbar(
+              nome: _userName,
+              cargo: 'Gestor',
+              tabsNoAppBar: false,
+              collapseProgress: _collapseProgress,
+            ),
+          ),
         ),
         body: NotificationListener<ScrollNotification>(
           onNotification: (n) {
