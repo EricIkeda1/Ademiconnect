@@ -17,26 +17,42 @@ class StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Container(
+        height: 150,
+        padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 14,
-              backgroundColor: color.withOpacity(0.12),
-              child: Icon(icon, color: color, size: 18),
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 24),
             ),
-            const SizedBox(width: 8),
-            Flexible(
+            const SizedBox(width: 16),
+            Expanded(
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center, 
                 children: [
-                  Text(title, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis, maxLines: 1),
-                  const SizedBox(height: 4),
-                  Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.black54,
+                    ),
+                    maxLines: 2,
+                  ),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
                 ],
               ),
             ),

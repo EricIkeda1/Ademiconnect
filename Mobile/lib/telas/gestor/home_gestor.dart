@@ -68,6 +68,12 @@ class _HomeGestorState extends State<HomeGestor> {
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final consultoresStream = FirebaseFirestore.instance
+        .collection('consultores')
+        .where('gestorId', isEqualTo: user?.uid)
+        .snapshots();
+
     return DefaultTabController(
       length: 5,
       child: Scaffold(
@@ -76,7 +82,7 @@ class _HomeGestorState extends State<HomeGestor> {
           child: Theme(
             data: Theme.of(context).copyWith(
               appBarTheme: const AppBarTheme(
-                backgroundColor: Color(0xFFD03025), // ✅ Mesma cor do consultor
+                backgroundColor: Color(0xFFD03025),
                 surfaceTintColor: Color(0xFFD03025),
                 elevation: 1,
                 centerTitle: false,
@@ -106,39 +112,59 @@ class _HomeGestorState extends State<HomeGestor> {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
-                  child: GridView.count(
-                    crossAxisCount: 2,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 10,
-                    crossAxisSpacing: 10,
-                    childAspectRatio: 2,
-                    children: const [
-                      StatCard(
-                        title: "Cadastros Hoje",
-                        value: "0",
-                        icon: Icons.event_available,
-                        color: Colors.blue,
-                      ),
-                      StatCard(
-                        title: "Cadastros Este Mês",
-                        value: "0",
-                        icon: Icons.stacked_bar_chart,
-                        color: Colors.green,
-                      ),
-                      StatCard(
-                        title: "Cadastros Este Ano",
-                        value: "0",
-                        icon: Icons.insert_chart,
-                        color: Colors.purple,
-                      ),
-                      StatCard(
-                        title: "Consultores Ativos",
-                        value: "2",
-                        icon: Icons.groups,
-                        color: Colors.orange,
-                      ),
-                    ],
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: consultoresStream,
+                    builder: (context, snapshot) {
+                      int count = 0;
+                      if (snapshot.hasData) {
+                        count = snapshot.data!.docs.length;
+                      }
+
+                      return GridView.count(
+                        crossAxisCount: 2,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        mainAxisSpacing: 10,
+                        crossAxisSpacing: 10,
+                        childAspectRatio: 2,
+                        children: const [
+                          StatCard(
+                            title: "Cadastros Hoje",
+                            value: "0",
+                            icon: Icons.event_available,
+                            color: Colors.blue,
+                          ),
+                          StatCard(
+                            title: "Cadastros Este Mês",
+                            value: "0",
+                            icon: Icons.stacked_bar_chart,
+                            color: Colors.green,
+                          ),
+                          StatCard(
+                            title: "Cadastros Este Ano",
+                            value: "0",
+                            icon: Icons.insert_chart,
+                            color: Colors.purple,
+                          ),
+                          StatCard(
+                            title: "Consultor Ativo",
+                            value: "\$count", 
+                            icon: Icons.groups,
+                            color: Colors.orange,
+                          ),
+                        ].map((widget) {
+                          if (widget.title == "Consultor Ativo") {
+                            return StatCard(
+                              title: "Consultor Ativo",
+                              value: "$count",
+                              icon: Icons.groups,
+                              color: Colors.orange,
+                            );
+                          }
+                          return widget;
+                        }).toList(),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -170,10 +196,10 @@ class _HomeGestorState extends State<HomeGestor> {
                 ),
               ),
             ],
-            body: const TabBarView(
-              physics: BouncingScrollPhysics(),
+            body: TabBarView(
+              physics: const BouncingScrollPhysics(),
               children: [
-                DashboardTab(),
+                const DashboardTab(),
                 ConsultoresTab(),
                 DesignarTrabalhoTab(),
                 TodosClientesTab(),

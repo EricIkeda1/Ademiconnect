@@ -146,6 +146,7 @@ class _LoginPageState extends State<LoginPage> {
                     children: [
                       Image.asset("assets/Logo.png", height: 120),
                       const SizedBox(height: 40),
+
                       TextFormField(
                         controller: _emailCtrl,
                         decoration: InputDecoration(
@@ -170,6 +171,7 @@ class _LoginPageState extends State<LoginPage> {
                         },
                       ),
                       const SizedBox(height: 16),
+
                       TextFormField(
                         controller: _passCtrl,
                         obscureText: _obscure,
@@ -191,6 +193,7 @@ class _LoginPageState extends State<LoginPage> {
                         onFieldSubmitted: (_) => _login(),
                       ),
                       const SizedBox(height: 8),
+
                       Padding(
                         padding:
                             const EdgeInsets.only(bottom: 38.0, right: 7.6),
@@ -206,6 +209,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 24),
 
+                      // Botão Entrar com a cor #231F20
                       Transform.translate(
                         offset: const Offset(0, -46),
                         child: SizedBox(
@@ -213,7 +217,8 @@ class _LoginPageState extends State<LoginPage> {
                           height: 48,
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.black,
+                              backgroundColor:
+                                  const Color(0xFF231F20), // cor exata
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
@@ -235,6 +240,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 12),
 
+                      // Texto de instrução
                       Transform.translate(
                         offset: const Offset(0, -40),
                         child: const Text(
