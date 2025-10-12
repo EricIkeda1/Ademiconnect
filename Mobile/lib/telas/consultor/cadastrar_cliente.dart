@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import '../../models/cliente.dart';
 import '../../services/cliente_service.dart';
 
@@ -20,14 +21,22 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
   final _cidadeCtrl = TextEditingController();
   final _enderecoCtrl = TextEditingController();
   final _dataVisitaCtrl = TextEditingController();
+  final _horaVisitaCtrl = TextEditingController();
   final _nomeClienteCtrl = TextEditingController();
   final _telefoneCtrl = TextEditingController();
   final _observacoesCtrl = TextEditingController();
+
+  final _telefoneFormatter = MaskTextInputFormatter(
+    mask: '(##) #####-####',
+    filter: { "#": RegExp(r'\d') },
+    type: MaskAutoCompletionType.lazy,
+  );
 
   @override
   void initState() {
     super.initState();
     _dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
+    _horaVisitaCtrl.text = DateFormat('HH:mm').format(DateTime.now());
   }
 
   @override
@@ -37,6 +46,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     _cidadeCtrl.dispose();
     _enderecoCtrl.dispose();
     _dataVisitaCtrl.dispose();
+    _horaVisitaCtrl.dispose();
     _nomeClienteCtrl.dispose();
     _telefoneCtrl.dispose();
     _observacoesCtrl.dispose();
@@ -47,12 +57,16 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     if (_formKey.currentState?.validate() != true) return;
 
     try {
+      // Combina data + hora em DateTime
+      final dataHora = DateFormat('dd/MM/yyyy HH:mm')
+          .parse('${_dataVisitaCtrl.text} ${_horaVisitaCtrl.text}');
+
       final cliente = Cliente(
         estabelecimento: _nomeEstabelecimentoCtrl.text.trim(),
         estado: _estadoCtrl.text.trim(),
         cidade: _cidadeCtrl.text.trim(),
         endereco: _enderecoCtrl.text.trim(),
-        dataVisita: DateFormat('dd/MM/yyyy').parse(_dataVisitaCtrl.text),
+        dataVisita: dataHora,
         nomeCliente: _nomeClienteCtrl.text.trim().isEmpty
             ? null
             : _nomeClienteCtrl.text.trim(),
@@ -62,8 +76,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
         observacoes: _observacoesCtrl.text.trim().isEmpty
             ? null
             : _observacoesCtrl.text.trim(),
-        consultorResponsavel:
-            "Consultor Teste", 
+        consultorResponsavel: "Consultor Teste",
       );
 
       await _clienteService.saveCliente(cliente);
@@ -81,8 +94,8 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
         _nomeClienteCtrl.clear();
         _telefoneCtrl.clear();
         _observacoesCtrl.clear();
-        _dataVisitaCtrl.text =
-            DateFormat('dd/MM/yyyy').format(DateTime.now());
+        _dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
+        _horaVisitaCtrl.text = DateFormat('HH:mm').format(DateTime.now());
 
         widget.onClienteCadastrado?.call();
       }
@@ -95,19 +108,28 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     }
   }
 
-  Future<void> _selecionarDataVisita() async {
+  Future<void> _selecionarData() async {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
       initialDate: now,
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 2),
-      helpText: 'Selecione a data da visita',
-      confirmText: 'Confirmar',
-      cancelText: 'Cancelar',
     );
     if (picked != null) {
       _dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(picked);
+      setState(() {});
+    }
+  }
+
+  Future<void> _selecionarHora() async {
+    final now = TimeOfDay.now();
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: now,
+    );
+    if (picked != null) {
+      _horaVisitaCtrl.text = picked.format(context);
       setState(() {});
     }
   }
@@ -117,19 +139,6 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     return null;
   }
 
-  String _aplicarMascaraTelefone(String value) {
-    final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
-    final b = StringBuffer();
-    for (int i = 0; i < digits.length && i < 11; i++) {
-      final c = digits[i];
-      if (i == 0) b.write('(');
-      if (i == 2) b.write(') ');
-      if (i == 7) b.write('-');
-      b.write(c);
-    }
-    return b.toString();
-  }
-
   InputDecoration _obterDecoracaoCampo(String label,
       {String? hint, Widget? suffixIcon}) {
     return InputDecoration(
@@ -137,8 +146,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
       hintText: hint,
       filled: true,
       fillColor: const Color(0xFFF7F8FA),
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
@@ -220,16 +228,33 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                 readOnly: true,
                 decoration: _obterDecoracaoCampo(
                   'Data da Visita *',
-                  hint: 'dd/mm/aaaa',
+                  hint: 'dd/MM/yyyy',
                   suffixIcon: IconButton(
                     tooltip: 'Selecionar data',
-                    onPressed: _selecionarDataVisita,
+                    onPressed: _selecionarData,
                     icon: const Icon(Icons.calendar_today_outlined),
                   ),
                 ),
                 validator: (v) =>
                     _validarCampoObrigatorio(v, field: 'Data da Visita'),
-                onTap: _selecionarDataVisita,
+                onTap: _selecionarData,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _horaVisitaCtrl,
+                readOnly: true,
+                decoration: _obterDecoracaoCampo(
+                  'Hora da Visita *',
+                  hint: 'HH:mm',
+                  suffixIcon: IconButton(
+                    tooltip: 'Selecionar hora',
+                    onPressed: _selecionarHora,
+                    icon: const Icon(Icons.access_time),
+                  ),
+                ),
+                validator: (v) =>
+                    _validarCampoObrigatorio(v, field: 'Hora da Visita'),
+                onTap: _selecionarHora,
               ),
               const SizedBox(height: 16),
               Text('Dados Opcionais', style: titleStyle),
@@ -245,20 +270,11 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
               TextFormField(
                 controller: _telefoneCtrl,
                 keyboardType: TextInputType.phone,
+                inputFormatters: [_telefoneFormatter],
                 decoration: _obterDecoracaoCampo(
                   'Telefone',
                   hint: '(00) 00000-0000',
                 ),
-                onChanged: (v) {
-                  final masked = _aplicarMascaraTelefone(v);
-                  if (masked != v) {
-                    final sel = TextSelection.collapsed(offset: masked.length);
-                    _telefoneCtrl.value = TextEditingValue(
-                      text: masked,
-                      selection: sel,
-                    );
-                  }
-                },
               ),
               const SizedBox(height: 10),
               TextFormField(

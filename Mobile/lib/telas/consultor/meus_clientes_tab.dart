@@ -1,6 +1,7 @@
 import '../../models/cliente.dart';
 import '../../services/cliente_service.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class MeusClientesTab extends StatefulWidget {
   final VoidCallback? onClienteRemovido;
@@ -102,8 +103,9 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
   @override
   Widget build(BuildContext context) {
     final clientesFiltrados = _clientes.where((c) {
-      final textoBusca = '${c.estabelecimento} ${c.estado} ${c.cidade} ${c.endereco} ${c.nomeCliente ?? ''}'
-              .toLowerCase(); 
+      final textoBusca =
+          '${c.estabelecimento} ${c.estado} ${c.cidade} ${c.endereco} ${c.nomeCliente ?? ''}'
+              .toLowerCase();
       return textoBusca.contains(_termoBusca.toLowerCase());
     }).toList();
 
@@ -145,7 +147,8 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
                     onReorder: _reordenarClientes,
                     itemBuilder: (context, index) {
                       final c = clientesFiltrados[index];
-                      final dataFormatada = '${c.dataVisita.day.toString().padLeft(2, '0')}/${c.dataVisita.month.toString().padLeft(2, '0')}/${c.dataVisita.year}';
+                      final dataHoraFormatada =
+                          DateFormat('dd/MM/yyyy HH:mm').format(c.dataVisita);
 
                       return Column(
                         key: Key(c.id),
@@ -164,7 +167,7 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
                                   Text('Telefone: ${c.telefone}'),
                                 if (c.observacoes != null)
                                   Text('Obs: ${c.observacoes}'),
-                                Text('Data: $dataFormatada'),
+                                Text('Visita: $dataHoraFormatada'),
                               ],
                             ),
                             isThreeLine: true,
