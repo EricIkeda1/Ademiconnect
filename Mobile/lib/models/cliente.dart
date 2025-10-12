@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Cliente {
   final String id;
@@ -10,7 +10,7 @@ class Cliente {
   final String? nomeCliente;
   final String? telefone;
   final String? observacoes;
-  final String? consultorResponsavel; 
+  final String? consultorResponsavel;
 
   Cliente({
     required this.estabelecimento,
@@ -21,7 +21,7 @@ class Cliente {
     this.nomeCliente,
     this.telefone,
     this.observacoes,
-    this.consultorResponsavel, 
+    this.consultorResponsavel,
     String? id,
   }) : id = id ?? DateTime.now().millisecondsSinceEpoch.toString();
 
@@ -35,7 +35,7 @@ class Cliente {
         'nomeCliente': nomeCliente,
         'telefone': telefone,
         'observacoes': observacoes,
-        'consultorResponsavel': consultorResponsavel, 
+        'consultorResponsavel': consultorResponsavel,
       };
 
   factory Cliente.fromJson(Map<String, dynamic> json) => Cliente(
@@ -48,6 +48,22 @@ class Cliente {
         nomeCliente: json['nomeCliente'],
         telefone: json['telefone'],
         observacoes: json['observacoes'],
-        consultorResponsavel: json['consultorResponsavel'], 
+        consultorResponsavel: json['consultorResponsavel'],
       );
+
+  factory Cliente.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return Cliente(
+      id: doc.id,
+      estabelecimento: data['estabelecimento'] ?? '',
+      estado: data['estado'] ?? '',
+      cidade: data['cidade'] ?? '',
+      endereco: data['endereco'] ?? '',
+      dataVisita: DateTime.tryParse(data['dataVisita'] ?? '') ?? DateTime.now(),
+      nomeCliente: data['nomeCliente'],
+      telefone: data['telefone'],
+      observacoes: data['observacoes'],
+      consultorResponsavel: data['consultorResponsavel'],
+    );
+  }
 }
