@@ -2,13 +2,20 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart'; // Para Platform
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // ✅ Import correto
 import 'firebase_options.dart';
 import 'telas/login.dart';
 import 'telas/gestor/home_gestor.dart';
 import 'telas/consultor/home_consultor.dart';
 import 'telas/recuperar_senha.dart';
-import 'services/notification_service.dart'; // Add this import
+import 'services/notification_service.dart';
+import 'services/cliente_service.dart'; 
+
+late FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin;
+
+late ClienteService clienteService;
 
 Future<void> loadEnv() async {
   try {
@@ -23,8 +30,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   print('✅ 1. Iniciando app: WidgetsBinding OK');
 
-  // Initialize notification service
-  await NotificationService().initialize();
+  flutterLocalNotificationsPlugin = await NotificationService.initialize();
 
   await loadEnv();
 
@@ -52,6 +58,9 @@ void main() async {
     ));
     return;
   }
+
+  clienteService = ClienteService();
+  await clienteService.initialize();
 
   print('✅ 3. Executando MyApp...');
   runApp(const MyApp());

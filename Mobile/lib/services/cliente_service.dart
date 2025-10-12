@@ -1,65 +1,106 @@
-  import 'dart:convert';
-  import 'package:cloud_firestore/cloud_firestore.dart';
-  import 'package:shared_preferences/shared_preferences.dart';
-  import 'package:connectivity_plus/connectivity_plus.dart';
-  import '../models/cliente.dart';
-  import 'notification_service.dart';
+import 'dart:async';
+import 'dart:io';
+import 'dart:convert';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../models/cliente.dart';
+import 'notification_service.dart';
 
-  class ClienteService {
-    final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-    List<Cliente> _clientes = [];
+class ClienteService {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  List<Cliente> _clientes = [];
+  
+  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
 
-    List<Cliente> get clientes => _clientes;
+  List<Cliente> get clientes => _clientes;
+  int get totalClientes => _clientes.length;
 
-    int get totalClientes => _clientes.length;
+  int get totalVisitasHoje {
+    final hoje = DateTime.now();
+    return _clientes
+        .where((c) =>
+            c.dataVisita.year == hoje.year &&
+            c.dataVisita.month == hoje.month &&
+            c.dataVisita.day == hoje.day)
+        .length;
+  }
 
-    int get totalVisitasHoje {
-      final hoje = DateTime.now();
-      return _clientes
-          .where((c) =>
-              c.dataVisita.year == hoje.year &&
-              c.dataVisita.month == hoje.month &&
-              c.dataVisita.day == hoje.day)
-          .length;
-    }
+  Future<void> initialize() async {
+    await loadClientes();
 
-    Future<void> loadClientes() async {
-      final prefs = await SharedPreferences.getInstance();
-      final cachedData = prefs.getString('clientes_cache');
+    _connectivitySubscription = 
+        Connectivity().onConnectivityChanged
+            .map((List<ConnectivityResult> results) => results.isNotEmpty ? results.first : ConnectivityResult.none)
+            .listen((ConnectivityResult result) async {
+      if (result != ConnectivityResult.none) {
+        await syncPendingOperations();
+      }
+    });
+  }
 
-      if (cachedData != null) {
+  void dispose() {
+    _connectivitySubscription?.cancel();
+  }
+
+  Future<void> loadClientes() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cachedData = prefs.getString('clientes_cache');
+    if (cachedData != null) {
+      try {
         final List<dynamic> jsonList = jsonDecode(cachedData);
         _clientes = jsonList.map((e) => Cliente.fromJson(e)).toList();
-      }
-
-      if (await _isOnline()) {
-        final snapshot = await _firestore.collection('clientes').get();
-        _clientes = snapshot.docs.map((doc) => Cliente.fromFirestore(doc)).toList();
-        await _saveToCache();
+      } catch (e) {
+        print('❌ Erro ao carregar cache: $e');
       }
     }
+  }
 
-    Future<void> saveCliente(Cliente cliente) async {
-      _clientes.removeWhere((c) => c.id == cliente.id);
-      _clientes.add(cliente);
-      await _saveToCache();
+  Future<bool> _hasRealInternet() async {
+    final result = await Connectivity().checkConnectivity();
+    if (result == ConnectivityResult.none) return false;
+    try {
+      final lookup = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 3));
+      return lookup.isNotEmpty;
+    } on SocketException {
+      return false;
+    } on TimeoutException {
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
 
-      final isConnected = await _isOnline();
+  Future<void> saveCliente(Cliente cliente) async {
+    _clientes.removeWhere((c) => c.id == cliente.id);
+    _clientes.add(cliente);
+    await _saveToCache();
 
+    final isConnected = await _hasRealInternet();
+
+    try {
       if (isConnected) {
         await _firestore.collection('clientes').doc(cliente.id).set(cliente.toJson());
-        await NotificationService().showSuccessNotification();
+        await NotificationService.showSuccessNotification();
       } else {
         await _savePendingOperation('save', cliente);
-        await NotificationService().showOfflineNotification();
+        await NotificationService.showOfflineNotification();
       }
+    } catch (e) {
+      print('❌ Falha ao salvar cliente: $e');
+      await _savePendingOperation('save', cliente);
+      await NotificationService.showOfflineNotification();
     }
+  }
 
-    Future<void> removeCliente(String id) async {
-      _clientes.removeWhere((c) => c.id == id);
-      await _saveToCache();
+  Future<void> removeCliente(String id) async {
+    _clientes.removeWhere((c) => c.id == id);
+    await _saveToCache();
 
-      if (await _isOnline()) {
+    final isConnected = await _hasRealInternet();
+
+    try {
+      if (isConnected) {
         await _firestore.collection('clientes').doc(id).delete();
       } else {
         await _savePendingOperation('remove', Cliente(
@@ -71,46 +112,63 @@
           dataVisita: DateTime.now(),
         ));
       }
-    }
-
-    Future<void> syncPendingOperations() async {
-      if (!await _isOnline()) return;
-
-      final prefs = await SharedPreferences.getInstance();
-      final pendingData = prefs.getString('pending_ops');
-      if (pendingData == null) return;
-
-      final List<dynamic> pendingOps = jsonDecode(pendingData);
-      for (var op in pendingOps) {
-        final tipo = op['tipo'];
-        final cliente = Cliente.fromJson(op['cliente']);
-
-        if (tipo == 'save') {
-          await _firestore.collection('clientes').doc(cliente.id).set(cliente.toJson());
-        } else if (tipo == 'remove') {
-          await _firestore.collection('clientes').doc(cliente.id).delete();
-        }
-      }
-
-      await prefs.remove('pending_ops');
-    }
-
-    Future<void> _saveToCache() async {
-      final prefs = await SharedPreferences.getInstance();
-      final jsonData = jsonEncode(_clientes.map((c) => c.toJson()).toList());
-      await prefs.setString('clientes_cache', jsonData);
-    }
-
-    Future<void> _savePendingOperation(String tipo, Cliente cliente) async {
-      final prefs = await SharedPreferences.getInstance();
-      final data = prefs.getString('pending_ops');
-      List<dynamic> ops = data != null ? jsonDecode(data) : [];
-      ops.add({'tipo': tipo, 'cliente': cliente.toJson()});
-      await prefs.setString('pending_ops', jsonEncode(ops));
-    }
-
-    Future<bool> _isOnline() async {
-      final result = await Connectivity().checkConnectivity();
-      return result != ConnectivityResult.none;
+    } catch (e) {
+      print('❌ Falha ao remover cliente: $e');
+      await _savePendingOperation('remove', Cliente(
+        id: id,
+        estabelecimento: '',
+        estado: '',
+        cidade: '',
+        endereco: '',
+        dataVisita: DateTime.now(),
+      ));
     }
   }
+
+  Future<void> syncPendingOperations() async {
+    final isConnected = await _hasRealInternet();
+    if (!isConnected) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final pendingData = prefs.getString('pending_ops');
+    if (pendingData == null) return;
+
+    final List<dynamic> pendingOps = jsonDecode(pendingData);
+    print('📤 Sincronizando ${pendingOps.length} operações pendentes...');
+
+    for (var op in pendingOps) {
+      final tipo = op['tipo'] as String;
+      final cliente = Cliente.fromJson(op['cliente']);
+      try {
+        if (tipo == 'save') {
+          await _firestore.collection('clientes').doc(cliente.id).set(cliente.toJson());
+          print('✅ Enviado para Firebase: ${cliente.estabelecimento}');
+        } else if (tipo == 'remove') {
+          await _firestore.collection('clientes').doc(cliente.id).delete();
+          print('✅ Removido no Firebase: ${cliente.id}');
+        }
+      } catch (e) {
+        print('❌ Falha ao sincronizar: $e');
+        return;
+      }
+    }
+
+    await prefs.remove('pending_ops');
+    print('✅ Fila de operações pendentes limpa!');
+  }
+
+  Future<void> _saveToCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonData = jsonEncode(_clientes.map((c) => c.toJson()).toList());
+    await prefs.setString('clientes_cache', jsonData);
+  }
+
+  Future<void> _savePendingOperation(String tipo, Cliente cliente) async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = prefs.getString('pending_ops');
+    final List<dynamic> ops = data != null ? jsonDecode(data) : [];
+    ops.add({'tipo': tipo, 'cliente': cliente.toJson()});
+    await prefs.setString('pending_ops', jsonEncode(ops));
+    print('📁 Operação $tipo salva na fila offline');
+  }
+}
