@@ -2,20 +2,20 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart'; // Para Platform
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // ✅ Import correto
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'firebase_options.dart';
 import 'telas/login.dart';
 import 'telas/gestor/home_gestor.dart';
 import 'telas/consultor/home_consultor.dart';
 import 'telas/recuperar_senha.dart';
 import 'services/notification_service.dart';
-import 'services/cliente_service.dart'; 
+import 'services/cliente_service.dart';
 
-late FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin;
-
-late ClienteService clienteService;
+// Evite late sem garantia de inicialização
+FlutterLocalNotificationsPlugin? flutterLocalNotificationsPlugin;
+ClienteService? clienteService;
 
 Future<void> loadEnv() async {
   try {
@@ -30,7 +30,18 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   print('✅ 1. Iniciando app: WidgetsBinding OK');
 
-  flutterLocalNotificationsPlugin = await NotificationService.initialize();
+  // Inicialize com segurança para web
+  if (!kIsWeb) {
+    try {
+      flutterLocalNotificationsPlugin = await NotificationService.initialize();
+      print('✅ Notificações locais inicializadas.');
+    } on Exception catch (e) {
+      print('⚠️ Falha ao inicializar notificações: $e');
+    }
+  } else {
+    print('ℹ️ Executando na Web. Notificações locais não são suportadas.');
+    flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+  }
 
   await loadEnv();
 
@@ -43,26 +54,21 @@ void main() async {
     );
     print('✅ 2. Firebase inicializado com sucesso!');
   } catch (e, s) {
-    print('❌ ERRO ao inicializar Firebase: $e');
+    print('❌ ERRO FATAL ao inicializar Firebase: $e');
     print('❌ Stack trace: $s');
-    runApp(MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: Text(
-            'Erro: $e\n\nVerifique:\n1. .env na raiz\n2. pubspec.yaml com assets: - .env\n3. web/index.html com Firebase JS',
-            style: TextStyle(color: Colors.red),
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ),
-    ));
+    runApp(ErrorScreen(error: 'Falha ao inicializar Firebase.\nVerifique a configuração.'));
     return;
   }
 
-  clienteService = ClienteService();
-  await clienteService.initialize();
+  try {
+    clienteService = ClienteService();
+    await clienteService!.initialize();
+    print('✅ 3. ClienteService inicializado.');
+  } catch (e) {
+    print('⚠️ Falha ao inicializar ClienteService: $e');
+  }
 
-  print('✅ 3. Executando MyApp...');
+  print('✅ 4. Executando MyApp...');
   runApp(const MyApp());
 }
 
@@ -107,7 +113,7 @@ class AuthGate extends StatelessWidget {
         }
 
         if (snapshot.hasData) {
-          return const HomeRedirector();
+          return const UserTypeRedirector();
         }
 
         return const LoginPage();
@@ -116,49 +122,79 @@ class AuthGate extends StatelessWidget {
   }
 }
 
-class HomeRedirector extends StatelessWidget {
-  const HomeRedirector({super.key});
+class UserTypeRedirector extends StatelessWidget {
+  const UserTypeRedirector({super.key});
 
   @override
   Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-
-      try {
-        final doc = await FirebaseFirestore.instance
-            .collection('gestor')
-            .doc(user.uid)
-            .get();
-
-        if (!doc.exists) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Usuário não encontrado no sistema.')),
+    final user = FirebaseAuth.instance.currentUser!;
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance.collection('gestor').doc(user.uid).get(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
           );
-          FirebaseAuth.instance.signOut();
-          return;
         }
 
-        final tipo = doc.get('tipo') as String?;
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Usuário não encontrado no sistema.')),
+            );
+            FirebaseAuth.instance.signOut();
+          });
+          return const LoginPage();
+        }
 
+        final tipo = snapshot.data!.get('tipo') as String?;
         if (tipo == 'gestor' || tipo == 'supervisor') {
-          Navigator.pushReplacementNamed(context, '/gestor');
+          return const HomeGestor();
         } else if (tipo == 'consultor') {
-          Navigator.pushReplacementNamed(context, '/consultor');
+          return const HomeConsultor();
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Tipo de usuário inválido.')),
-          );
-          FirebaseAuth.instance.signOut();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Tipo de usuário inválido.')),
+            );
+            FirebaseAuth.instance.signOut();
+          });
+          return const LoginPage();
         }
-      } catch (e) {
-        print('❌ Erro no redirecionamento: $e');
-        FirebaseAuth.instance.signOut();
-      }
-    });
+      },
+    );
+  }
+}
 
-    return const Scaffold(
-      body: Center(child: CircularProgressIndicator()),
+class ErrorScreen extends StatelessWidget {
+  final String error;
+
+  const ErrorScreen({super.key, required this.error});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error, color: Colors.red, size: 60),
+              const SizedBox(height: 20),
+              Text(
+                'Erro Crítico',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                error,
+                style: const TextStyle(color: Colors.grey),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
