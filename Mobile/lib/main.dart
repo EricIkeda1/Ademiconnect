@@ -8,6 +8,7 @@ import 'telas/login.dart';
 import 'telas/gestor/home_gestor.dart';
 import 'telas/consultor/home_consultor.dart';
 import 'telas/recuperar_senha.dart';
+import 'services/notification_service.dart'; // Add this import
 
 Future<void> loadEnv() async {
   try {
@@ -21,6 +22,9 @@ Future<void> loadEnv() async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   print('✅ 1. Iniciando app: WidgetsBinding OK');
+
+  // Initialize notification service
+  await NotificationService().initialize();
 
   await loadEnv();
 

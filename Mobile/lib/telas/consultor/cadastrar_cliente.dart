@@ -57,7 +57,6 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     if (_formKey.currentState?.validate() != true) return;
 
     try {
-      // Combina data + hora em DateTime
       final dataHora = DateFormat('dd/MM/yyyy HH:mm')
           .parse('${_dataVisitaCtrl.text} ${_horaVisitaCtrl.text}');
 
@@ -82,21 +81,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
       await _clienteService.saveCliente(cliente);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cliente cadastrado com sucesso!')),
-        );
-
-        _formKey.currentState?.reset();
-        _nomeEstabelecimentoCtrl.clear();
-        _estadoCtrl.clear();
-        _cidadeCtrl.clear();
-        _enderecoCtrl.clear();
-        _nomeClienteCtrl.clear();
-        _telefoneCtrl.clear();
-        _observacoesCtrl.clear();
-        _dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
-        _horaVisitaCtrl.text = DateFormat('HH:mm').format(DateTime.now());
-
+        _limparCampos();
         widget.onClienteCadastrado?.call();
       }
     } catch (e) {
@@ -106,6 +91,20 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
         );
       }
     }
+  }
+
+  void _limparCampos() {
+    _formKey.currentState?.reset();
+    _nomeEstabelecimentoCtrl.clear();
+    _estadoCtrl.clear();
+    _cidadeCtrl.clear();
+    _enderecoCtrl.clear();
+    _nomeClienteCtrl.clear();
+    _telefoneCtrl.clear();
+    _observacoesCtrl.clear();
+    _dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
+    _horaVisitaCtrl.text = DateFormat('HH:mm').format(DateTime.now());
+    setState(() {});
   }
 
   Future<void> _selecionarData() async {
