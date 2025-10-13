@@ -21,8 +21,9 @@ class _HomeConsultorState extends State<HomeConsultor> {
   final ClienteService _clienteService = ClienteService();
   int _totalClientes = 0;
   int _totalVisitasHoje = 0;
+  int _totalAlertas = 0;
   List<Cliente> _clientes = [];
-  String _userName = 'Consultor'; 
+  String _userName = 'Consultor';
 
   @override
   void initState() {
@@ -51,49 +52,67 @@ class _HomeConsultorState extends State<HomeConsultor> {
       if (doc.exists) {
         final nomeCompleto = doc.get('nome') as String? ?? '';
         if (nomeCompleto.isNotEmpty) {
-          final nomeFormatado = _formatarNome(nomeCompleto);
           setState(() {
-            _userName = nomeFormatado;
+            _userName = _formatarNome(nomeCompleto);
           });
           return;
         }
       }
 
-      String? displayName = user.displayName;
+      final displayName = user.displayName;
       if (displayName != null && displayName.isNotEmpty) {
-        final nomeFormatado = _formatarNome(displayName);
         setState(() {
-          _userName = nomeFormatado;
+          _userName = _formatarNome(displayName);
         });
         return;
       }
 
-      String? email = user.email;
-      if (email != null) {
-        final nomeEmail = email.split('@').first;
+      final email = user.email;
+      if (email != null && email.isNotEmpty) {
         setState(() {
-          _userName = nomeEmail;
+          _userName = email.split('@').first;
         });
         return;
       }
 
-      setState(() {
-        _userName = 'Consultor';
-      });
+      setState(() => _userName = 'Consultor');
     } catch (e) {
       print('❌ Erro ao carregar nome do consultor: $e');
-      setState(() {
-        _userName = 'Consultor';
-      });
+      setState(() => _userName = 'Consultor');
     }
   }
 
   Future<void> _loadStats() async {
-    await _clienteService.loadClientes();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final uid = user.uid;
+
+    // Buscar apenas clientes do consultor logado
+    final snapshot = await FirebaseFirestore.instance
+        .collection('clientes')
+        .where('consultorUid', isEqualTo: uid)
+        .get();
+
+    final clientes = snapshot.docs.map((doc) => Cliente.fromFirestore(doc)).toList();
+
+    final hoje = DateTime.now();
+    final visitasHoje = clientes.where((c) {
+      final dataVisita = c.dataVisita;
+      return dataVisita.year == hoje.year &&
+          dataVisita.month == hoje.month &&
+          dataVisita.day == hoje.day;
+    }).length;
+
+    final alertas = clientes.where((c) {
+      final dataVisita = c.dataVisita;
+      return dataVisita.isBefore(hoje);
+    }).length;
+
     setState(() {
-      _clientes = _clienteService.clientes;
-      _totalClientes = _clienteService.totalClientes;
-      _totalVisitasHoje = _clienteService.totalVisitasHoje;
+      _clientes = clientes;
+      _totalClientes = clientes.length;
+      _totalVisitasHoje = visitasHoje;
+      _totalAlertas = alertas;
     });
   }
 
@@ -103,9 +122,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final remainingHeight = screenHeight - kToolbarHeight - 320;
-
     return DefaultTabController(
       length: 4,
       child: Scaffold(
@@ -121,7 +137,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
               ),
             ),
             child: CustomNavbar(
-              nome: _userName, 
+              nome: _userName,
               cargo: 'Consultor',
               tabsNoAppBar: false,
             ),
@@ -152,7 +168,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
                   ),
                   _statCardIcon(
                     title: 'Alertas',
-                    value: '0',
+                    value: _totalAlertas.toString(),
                     icon: Icons.notifications_active,
                     color: Colors.orange,
                   ),
