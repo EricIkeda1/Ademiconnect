@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import '../../models/cliente.dart';
 import '../../services/cliente_service.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 class CadastrarCliente extends StatefulWidget {
   final Function()? onClienteCadastrado;
@@ -16,14 +17,14 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
   final _formKey = GlobalKey<FormState>();
   final _clienteService = ClienteService();
 
+  final _nomeClienteCtrl = TextEditingController();
+  final _telefoneCtrl = TextEditingController();
   final _nomeEstabelecimentoCtrl = TextEditingController();
   final _estadoCtrl = TextEditingController();
   final _cidadeCtrl = TextEditingController();
   final _enderecoCtrl = TextEditingController();
   final _dataVisitaCtrl = TextEditingController();
   final _horaVisitaCtrl = TextEditingController();
-  final _nomeClienteCtrl = TextEditingController();
-  final _telefoneCtrl = TextEditingController();
   final _observacoesCtrl = TextEditingController();
 
   final _telefoneFormatter = MaskTextInputFormatter(
@@ -41,14 +42,14 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
 
   @override
   void dispose() {
+    _nomeClienteCtrl.dispose();
+    _telefoneCtrl.dispose();
     _nomeEstabelecimentoCtrl.dispose();
     _estadoCtrl.dispose();
     _cidadeCtrl.dispose();
     _enderecoCtrl.dispose();
     _dataVisitaCtrl.dispose();
     _horaVisitaCtrl.dispose();
-    _nomeClienteCtrl.dispose();
-    _telefoneCtrl.dispose();
     _observacoesCtrl.dispose();
     super.dispose();
   }
@@ -61,17 +62,13 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
           .parse('${_dataVisitaCtrl.text} ${_horaVisitaCtrl.text}');
 
       final cliente = Cliente(
+        nomeCliente: _nomeClienteCtrl.text.trim(),
+        telefone: _telefoneCtrl.text.trim(),
         estabelecimento: _nomeEstabelecimentoCtrl.text.trim(),
         estado: _estadoCtrl.text.trim(),
         cidade: _cidadeCtrl.text.trim(),
         endereco: _enderecoCtrl.text.trim(),
         dataVisita: dataHora,
-        nomeCliente: _nomeClienteCtrl.text.trim().isEmpty
-            ? null
-            : _nomeClienteCtrl.text.trim(),
-        telefone: _telefoneCtrl.text.trim().isEmpty
-            ? null
-            : _telefoneCtrl.text.trim(),
         observacoes: _observacoesCtrl.text.trim().isEmpty
             ? null
             : _observacoesCtrl.text.trim(),
@@ -95,12 +92,12 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
 
   void _limparCampos() {
     _formKey.currentState?.reset();
+    _nomeClienteCtrl.clear();
+    _telefoneCtrl.clear();
     _nomeEstabelecimentoCtrl.clear();
     _estadoCtrl.clear();
     _cidadeCtrl.clear();
     _enderecoCtrl.clear();
-    _nomeClienteCtrl.clear();
-    _telefoneCtrl.clear();
     _observacoesCtrl.clear();
     _dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
     _horaVisitaCtrl.text = DateFormat('HH:mm').format(DateTime.now());
@@ -111,6 +108,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
+      locale: const Locale('pt', 'BR'), // Data em português
       initialDate: now,
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 2),
@@ -126,6 +124,13 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     final picked = await showTimePicker(
       context: context,
       initialTime: now,
+      builder: (context, child) {
+        return Localizations.override(
+          context: context,
+          locale: const Locale('pt', 'BR'), // Hora em português
+          child: child,
+        );
+      },
     );
     if (picked != null) {
       _horaVisitaCtrl.text = picked.format(context);
@@ -138,8 +143,11 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     return null;
   }
 
-  InputDecoration _obterDecoracaoCampo(String label,
-      {String? hint, Widget? suffixIcon}) {
+  InputDecoration _obterDecoracaoCampo(
+    String label, {
+    String? hint,
+    Widget? suffixIcon,
+  }) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
@@ -157,6 +165,14 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: Color(0xFF9AA7FF)),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Colors.red),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Colors.red),
       ),
       suffixIcon: suffixIcon,
     );
@@ -185,55 +201,68 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
               const SizedBox(height: 16),
               Text('Dados Obrigatórios', style: titleStyle),
               const SizedBox(height: 8),
+              // Campos obrigatórios na ordem solicitada
+              TextFormField(
+                controller: _nomeClienteCtrl,
+                decoration: _obterDecoracaoCampo('Nome do Cliente *',
+                    hint: 'Digite o nome do cliente'),
+                validator: (v) =>
+                    _validarCampoObrigatorio(v, field: 'Nome do Cliente'),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _telefoneCtrl,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [_telefoneFormatter],
+                decoration: _obterDecoracaoCampo('Telefone *',
+                    hint: '(00) 00000-0000'),
+                validator: (v) =>
+                    _validarCampoObrigatorio(v, field: 'Telefone'),
+              ),
+              const SizedBox(height: 10),
               TextFormField(
                 controller: _nomeEstabelecimentoCtrl,
                 decoration: _obterDecoracaoCampo(
-                  'Nome do Estabelecimento *',
-                  hint: 'Digite o nome do estabelecimento',
-                ),
-                validator: (v) =>
-                    _validarCampoObrigatorio(v, field: 'Nome do Estabelecimento'),
+                    'Nome do Estabelecimento *',
+                    hint: 'Digite o nome do estabelecimento'),
+                validator: (v) => _validarCampoObrigatorio(
+                    v, field: 'Nome do Estabelecimento'),
               ),
               const SizedBox(height: 10),
               TextFormField(
                 controller: _estadoCtrl,
-                decoration: _obterDecoracaoCampo(
-                  'Estado *',
-                  hint: 'Digite o estado (ex: SP, RJ...)',
-                ),
-                validator: (v) => _validarCampoObrigatorio(v, field: 'Estado'),
+                decoration: _obterDecoracaoCampo('Estado *',
+                    hint: 'Digite o estado (ex: SP, RJ...)'),
+                validator: (v) =>
+                    _validarCampoObrigatorio(v, field: 'Estado'),
               ),
               const SizedBox(height: 10),
               TextFormField(
                 controller: _cidadeCtrl,
-                decoration: _obterDecoracaoCampo(
-                  'Cidade *',
-                  hint: 'Digite a cidade',
-                ),
-                validator: (v) => _validarCampoObrigatorio(v, field: 'Cidade'),
+                decoration:
+                    _obterDecoracaoCampo('Cidade *', hint: 'Digite a cidade'),
+                validator: (v) =>
+                    _validarCampoObrigatorio(v, field: 'Cidade'),
               ),
               const SizedBox(height: 10),
               TextFormField(
                 controller: _enderecoCtrl,
-                decoration: _obterDecoracaoCampo(
-                  'Endereço *',
-                  hint: 'Digite o endereço completo',
-                ),
-                validator: (v) => _validarCampoObrigatorio(v, field: 'Endereço'),
+                decoration: _obterDecoracaoCampo('Endereço *',
+                    hint: 'Digite o endereço completo'),
+                validator: (v) =>
+                    _validarCampoObrigatorio(v, field: 'Endereço'),
               ),
               const SizedBox(height: 10),
               TextFormField(
                 controller: _dataVisitaCtrl,
                 readOnly: true,
-                decoration: _obterDecoracaoCampo(
-                  'Data da Visita *',
-                  hint: 'dd/MM/yyyy',
-                  suffixIcon: IconButton(
-                    tooltip: 'Selecionar data',
-                    onPressed: _selecionarData,
-                    icon: const Icon(Icons.calendar_today_outlined),
-                  ),
-                ),
+                decoration: _obterDecoracaoCampo('Data da Visita *',
+                    hint: 'dd/MM/yyyy',
+                    suffixIcon: IconButton(
+                      tooltip: 'Selecionar data',
+                      onPressed: _selecionarData,
+                      icon: const Icon(Icons.calendar_today_outlined),
+                    )),
                 validator: (v) =>
                     _validarCampoObrigatorio(v, field: 'Data da Visita'),
                 onTap: _selecionarData,
@@ -242,15 +271,13 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
               TextFormField(
                 controller: _horaVisitaCtrl,
                 readOnly: true,
-                decoration: _obterDecoracaoCampo(
-                  'Hora da Visita *',
-                  hint: 'HH:mm',
-                  suffixIcon: IconButton(
-                    tooltip: 'Selecionar hora',
-                    onPressed: _selecionarHora,
-                    icon: const Icon(Icons.access_time),
-                  ),
-                ),
+                decoration: _obterDecoracaoCampo('Hora da Visita *',
+                    hint: 'HH:mm',
+                    suffixIcon: IconButton(
+                      tooltip: 'Selecionar hora',
+                      onPressed: _selecionarHora,
+                      icon: const Icon(Icons.access_time),
+                    )),
                 validator: (v) =>
                     _validarCampoObrigatorio(v, field: 'Hora da Visita'),
                 onTap: _selecionarHora,
@@ -259,30 +286,10 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
               Text('Dados Opcionais', style: titleStyle),
               const SizedBox(height: 8),
               TextFormField(
-                controller: _nomeClienteCtrl,
-                decoration: _obterDecoracaoCampo(
-                  'Nome do Cliente',
-                  hint: 'Digite o nome do cliente (opcional)',
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _telefoneCtrl,
-                keyboardType: TextInputType.phone,
-                inputFormatters: [_telefoneFormatter],
-                decoration: _obterDecoracaoCampo(
-                  'Telefone',
-                  hint: '(00) 00000-0000',
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
                 controller: _observacoesCtrl,
                 maxLines: 3,
-                decoration: _obterDecoracaoCampo(
-                  'Observações',
-                  hint: 'Digite observações sobre a visita (opcional)',
-                ),
+                decoration: _obterDecoracaoCampo('Observações',
+                    hint: 'Digite observações sobre a visita (opcional)'),
               ),
               const SizedBox(height: 16),
               SizedBox(
@@ -293,8 +300,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                        borderRadius: BorderRadius.circular(8)),
                   ),
                   onPressed: _salvarCliente,
                   child: const Text('Cadastrar Cliente'),
