@@ -6,13 +6,14 @@ class Cliente {
   final String estado;
   final String cidade;
   final String endereco;
-  final String? bairro;   // Novo campo
-  final String? cep;      // Novo campo
+  final String? bairro;
+  final String? cep;
   final DateTime dataVisita;
   final String? nomeCliente;
   final String? telefone;
   final String? observacoes;
   final String? consultorResponsavel;
+  final String consultorUid; // adicionado campo obrigatório
 
   Cliente({
     required this.estabelecimento,
@@ -20,6 +21,7 @@ class Cliente {
     required this.cidade,
     required this.endereco,
     required this.dataVisita,
+    required this.consultorUid,
     this.bairro,
     this.cep,
     this.nomeCliente,
@@ -42,6 +44,7 @@ class Cliente {
         'telefone': telefone,
         'observacoes': observacoes,
         'consultorResponsavel': consultorResponsavel,
+        'consultorUid': consultorUid,
       };
 
   factory Cliente.fromJson(Map<String, dynamic> json) => Cliente(
@@ -57,6 +60,7 @@ class Cliente {
         telefone: json['telefone'],
         observacoes: json['observacoes'],
         consultorResponsavel: json['consultorResponsavel'],
+        consultorUid: json['consultorUid'] ?? 'desconhecido',
       );
 
   factory Cliente.fromFirestore(DocumentSnapshot doc) {
@@ -74,6 +78,7 @@ class Cliente {
       telefone: data['telefone'],
       observacoes: data['observacoes'],
       consultorResponsavel: data['consultorResponsavel'],
+      consultorUid: data['consultorUid'] ?? 'desconhecido',
     );
   }
 }

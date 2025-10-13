@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/cliente.dart';
 import '../../services/cliente_service.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 
 class CadastrarCliente extends StatefulWidget {
   final Function()? onClienteCadastrado;
@@ -32,13 +32,13 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
 
   final _telefoneFormatter = MaskTextInputFormatter(
     mask: '(##) #####-####',
-    filter: { "#": RegExp(r'\d') },
+    filter: {"#": RegExp(r'\d')},
     type: MaskAutoCompletionType.lazy,
   );
 
   final _cepFormatter = MaskTextInputFormatter(
     mask: '#####-###',
-    filter: { "#": RegExp(r'\d') },
+    filter: {"#": RegExp(r'\d')},
     type: MaskAutoCompletionType.lazy,
   );
 
@@ -47,10 +47,12 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     super.initState();
     _dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
     _horaVisitaCtrl.text = DateFormat('HH:mm').format(DateTime.now());
+    _clienteService.initialize();
   }
 
   @override
   void dispose() {
+    _clienteService.dispose();
     _nomeClienteCtrl.dispose();
     _telefoneCtrl.dispose();
     _nomeEstabelecimentoCtrl.dispose();
@@ -65,16 +67,51 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     super.dispose();
   }
 
+  Future<String> _buscarNomeDoConsultorNoFirestore(String uid) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('consultores')
+          .doc(uid)
+          .get();
+      if (doc.exists) {
+        final data = doc.data();
+        if (data != null && data['nome'] != null && (data['nome'] as String).trim().isNotEmpty) {
+          return data['nome'] as String;
+        }
+      }
+    } catch (e) {
+      print('Erro ao buscar nome do consultor no Firestore: $e');
+    }
+    return '';
+  }
+
   Future<void> _salvarCliente() async {
     if (_formKey.currentState?.validate() != true) return;
 
     try {
       final dataHora = DateFormat('dd/MM/yyyy HH:mm')
           .parse('${_dataVisitaCtrl.text} ${_horaVisitaCtrl.text}');
-
       final user = FirebaseAuth.instance.currentUser;
 
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Usuário não autenticado.')),
+        );
+        return;
+      }
+
+      String consultorNome = await _buscarNomeDoConsultorNoFirestore(user.uid);
+
+      if (consultorNome.trim().isEmpty) {
+        consultorNome = user.displayName ?? '';
+      }
+
+      if (consultorNome.trim().isEmpty) {
+        consultorNome = 'Consultor Desconhecido';
+      }
+
       final cliente = Cliente(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
         nomeCliente: _nomeClienteCtrl.text.trim(),
         telefone: _telefoneCtrl.text.trim(),
         estabelecimento: _nomeEstabelecimentoCtrl.text.trim(),
@@ -87,7 +124,8 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
         observacoes: _observacoesCtrl.text.trim().isEmpty
             ? null
             : _observacoesCtrl.text.trim(),
-        consultorResponsavel: user?.displayName ?? 'Consultor Desconhecido',
+        consultorResponsavel: consultorNome,
+        consultorUid: user.uid,
       );
 
       await _clienteService.saveCliente(cliente);
@@ -95,8 +133,12 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
       if (mounted) {
         _limparCampos();
         widget.onClienteCadastrado?.call();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ Cliente cadastrado com sucesso!')),
+        );
       }
-    } catch (e) {
+    } catch (e, st) {
+      print('Erro ao salvar cliente: $e\n$st');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Erro ao cadastrar cliente: $e')),
