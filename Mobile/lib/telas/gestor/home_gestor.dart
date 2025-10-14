@@ -5,7 +5,6 @@ import '../widgets/custom_navbar.dart';
 import '../widgets/stat_card.dart';
 import 'minhas_visitas.dart';
 import 'cadastrar_consultores.dart';
-import 'designar_trabalho_tab.dart';
 import 'todos_clientes_tab.dart';
 import 'relatorios_tab.dart';
 
@@ -75,7 +74,7 @@ class _HomeGestorState extends State<HomeGestor> {
         .snapshots();
 
     return DefaultTabController(
-      length: 5,
+      length: 4, 
       child: Scaffold(
         appBar: PreferredSize(
           preferredSize: const Size.fromHeight(kToolbarHeight),
@@ -148,7 +147,7 @@ class _HomeGestorState extends State<HomeGestor> {
                           ),
                           StatCard(
                             title: "Consultor Ativo",
-                            value: "\$count", 
+                            value: "0", 
                             icon: Icons.groups,
                             color: Colors.orange,
                           ),
@@ -188,7 +187,6 @@ class _HomeGestorState extends State<HomeGestor> {
                     tabs: const [
                       Tab(text: 'Minhas Visitas'),
                       Tab(text: 'Consultores'),
-                      Tab(text: 'Designar Trabalho'),
                       Tab(text: 'Todos os Clientes'),
                       Tab(text: 'Relatórios'),
                     ],
@@ -201,7 +199,6 @@ class _HomeGestorState extends State<HomeGestor> {
               children: [
                 const DashboardTab(),
                 ConsultoresTab(),
-                DesignarTrabalhoTab(),
                 TodosClientesTab(),
                 RelatoriosTab(),
               ],

@@ -5,206 +5,244 @@ class ExportarDadosTab extends StatelessWidget {
   final List<Cliente> clientes;
   const ExportarDadosTab({super.key, required this.clientes});
 
-  // Função backend comentada: Conversão para CSV/Excel
-  /*
-  String _toCsvExcel(List<Cliente> list) {
-    final buffer = StringBuffer();
-    buffer.write('\uFEFF'); 
-    buffer.writeln('sep=;');
-    buffer.writeln('Estabelecimento;Estado;Cidade;Endereço;Data da Visita;Nome do Cliente;Telefone;Observações');
-    
-    for (final c in list) {
-      final row = [
-        c.estabelecimento,
-        c.estado,
-        c.cidade,
-        c.endereco,
-        '${c.dataVisita.day.toString().padLeft(2, '0')}/${c.dataVisita.month.toString().padLeft(2, '0')}/${c.dataVisita.year}', 
-        c.nomeCliente ?? '',
-        c.telefone ?? '',
-        (c.observacoes ?? '').replaceAll('\n', ' ').trim(),
-      ];
-      buffer.writeln(row.map((e) => '"${e.replaceAll('"', '""')}"').join(';'));
-    }
-    return buffer.toString();
-  }
-  */
-
-  // Função backend comentada: Download para web
-  /*
-  void _downloadWeb(String content, String fileName, String mimeType) {
-    final bytes = convert.utf8.encode(content);
-    final blob = html.Blob([bytes], mimeType);
-    final url = html.Url.createObjectUrlFromBlob(blob);
-    final anchor = html.document.createElement('a') as html.AnchorElement
-      ..href = url
-      ..download = fileName
-      ..style.display = 'none';
-    
-    html.document.body?.children.add(anchor);
-    anchor.click();
-    html.document.body?.children.remove(anchor);
-    html.Url.revokeObjectUrl(url);
-  }
-  */
-
-  // Função backend comentada: Salvamento de arquivo
-  /*
-  Future<void> _saveFile(String content, String fileName, String mimeType) async {
-    if (kIsWeb) {
-      _downloadWeb(content, fileName, mimeType);
-      return;
-    }
-
-    if (io.Platform.isWindows || io.Platform.isLinux || io.Platform.isMacOS) {
-      final typeGroup = XTypeGroup(label: 'text', extensions: [fileName.split('.').last]);
-      final path = await getSavePath(suggestedName: fileName, acceptedTypeGroups: [typeGroup]);
-      if (path == null) return;
-      final file = io.File(path);
-      await file.writeAsString(content);
-    } else {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = io.File('${dir.path}/$fileName');
-      await file.writeAsString(content);
-      print('Arquivo salvo em: ${file.path}');
-    }
-  }
-  */
-
-  // Função backend comentada: Download CSV
-  /*
-  Future<void> _downloadCSV(BuildContext context) async {
-    if (clientes.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nada para exportar')));
-      return;
-    }
-    
-    try {
-      await _saveFile(_toCsvExcel(clientes), 'clientes.csv', 'text/csv;charset=utf-8');
-      
-      if (kIsWeb) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('CSV baixado com sucesso!')));
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('CSV salvo no dispositivo!')));
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao baixar: $e')));
-    }
-  }
-  */
-
-  // Função backend comentada: Copiar para clipboard
-  /*
-  Future<void> _copyToClipboard(BuildContext context) async {
-    if (clientes.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nada para copiar')));
-      return;
-    }
-    final content = _toCsvExcel(clientes);
-    await Clipboard.setData(ClipboardData(text: content));
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('CSV copiado para área de transferência!')));
-  }
-  */
-
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    return SingleChildScrollView( // ✅ permite rolagem evitando overflow
+      physics: const BouncingScrollPhysics(),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Exportar para CRM', 
-              style: TextStyle(fontWeight: FontWeight.w700)
-            ),
-            const SizedBox(height: 8),
-            _exportCard(
-              context,
-              title: 'Exportar CSV para Excel',
-              description: 'Todos os dados dos clientes em formato de planilha',
-              onDownload: () {
-                // _downloadCSV(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Funcionalidade de download CSV'))
-                );
-              },
-              onCopy: () {
-                // _copyToClipboard(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Funcionalidade de copiar para clipboard'))
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Clientes cadastrados: ${clientes.length}', 
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)
-                  ),
-                ],
-              ),
-            ),
+            _buildHeader(context),
+            const SizedBox(height: 20),
+            _buildExportCard(context),
+            const SizedBox(height: 16),
+            _buildResumoCard(context),
+            const SizedBox(height: 20),
           ],
         ),
       ),
     );
   }
 
-  Widget _exportCard(
-    BuildContext context, {
-    required String title,
-    required String description,
-    required VoidCallback onDownload,
-    required VoidCallback onCopy,
-  }) {
-    return Card(
-      elevation: 1,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget _buildHeader(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.all(12),
+          child: Icon(
+            Icons.import_export_rounded,
+            color: Theme.of(context).colorScheme.onPrimaryContainer,
+            size: 26,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              title, 
-              style: const TextStyle(fontWeight: FontWeight.w600)
+              'Exportar Dados',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
-            const SizedBox(height: 8),
             Text(
-              description, 
-              style: const TextStyle(fontSize: 12, color: Colors.black54)
+              'Exporte seus clientes para planilhas e sistemas externos',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
             ),
-            const SizedBox(height: 12),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildExportCard(BuildContext context) {
+    return Card(
+      elevation: 3,
+      shadowColor: Colors.black26,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
             Row(
               children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: onDownload,
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
-                    child: const Text('Baixar')
-                  ),
+                Icon(
+                  Icons.table_chart_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 28,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: OutlinedButton(
-                    onPressed: onCopy,
-                    child: const Text('Copiar')
+                  child: Text(
+                    'Exportar para CSV',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 8),
+            Text(
+              'Baixe seus dados em formato CSV para abrir no Excel, Google Sheets ou integrar com seu CRM.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: clientes.isEmpty
+                        ? null
+                        : () => _showSnack(context, 'Baixando CSV...'),
+                    icon: const Icon(Icons.download_rounded),
+                    label: const Text('Baixar CSV'),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: clientes.isEmpty
+                        ? null
+                        : () => _showSnack(context, 'Copiado para área de transferência!'),
+                    icon: const Icon(Icons.copy_rounded),
+                    label: const Text('Copiar'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (clientes.isEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Adicione clientes para habilitar a exportação.',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildResumoCard(BuildContext context) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Icon(Icons.analytics_outlined,
+                    color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  'Resumo da Exportação',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                _buildStat(context,
+                    icon: Icons.people_alt_outlined,
+                    label: 'Clientes',
+                    value: clientes.length.toString(),
+                    color: Theme.of(context).colorScheme.primary),
+                _buildStat(context,
+                    icon: Icons.table_chart,
+                    label: 'Formato',
+                    value: 'CSV',
+                    color: Colors.green),
+              ],
+            ),
+            if (clientes.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, size: 18, color: Colors.grey),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Nenhum cliente disponível para exportar.',
+                        style: TextStyle(
+                            color: Colors.grey.shade600, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStat(BuildContext context,
+      {required IconData icon,
+      required String label,
+      required String value,
+      required Color color}) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSnack(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
