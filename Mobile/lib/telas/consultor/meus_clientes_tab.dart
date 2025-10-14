@@ -50,7 +50,10 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao carregar clientes: $e')),
+          SnackBar(
+            content: Text('Erro ao carregar clientes: $e'),
+            backgroundColor: Colors.red.shade700,
+          ),
         );
       }
     }
@@ -72,7 +75,10 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ordem dos clientes atualizada!')),
+        const SnackBar(
+          content: Text('Ordem dos clientes atualizada!'),
+          backgroundColor: Colors.green,
+        ),
       );
     }
   }
@@ -114,9 +120,9 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Cliente excluído com sucesso!'),
-              backgroundColor: Colors.green.shade700,
+            const SnackBar(
+              content: Text('Cliente excluído com sucesso!'),
+              backgroundColor: Colors.green,
             ),
           );
         }
@@ -143,198 +149,316 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
   Widget build(BuildContext context) {
     final clientesFiltrados = _clientes.where((c) {
       final textoBusca =
-          '${c.estabelecimento} ${c.estado} ${c.cidade} ${c.endereco} ${c.nomeCliente ?? ''}'
+          '${c.estabelecimento} ${c.estado} ${c.cidade} ${c.endereco} ${c.nomeCliente ?? ''} ${c.telefone ?? ''}'
               .toLowerCase();
       return textoBusca.contains(_termoBusca.toLowerCase());
     }).toList();
 
-    return RefreshIndicator(
-      onRefresh: _atualizarListaClientes,
-      child: Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        elevation: 2,
-        margin: const EdgeInsets.all(16),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.people_rounded,
-                    color: Theme.of(context).colorScheme.primary,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Meus Clientes',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              
-              TextField(
-                decoration: InputDecoration(
-                  prefixIcon: Icon(Icons.search, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                  hintText: 'Buscar por estabelecimento, estado, cidade, endereço ou cliente...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                ),
-                onChanged: (v) => setState(() => _termoBusca = v),
-              ),
-              const SizedBox(height: 16),
-
-              if (_isLoading)
-                const Expanded(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('Carregando clientes...'),
-                      ],
+    return Scaffold(
+      body: RefreshIndicator(
+        onRefresh: _atualizarListaClientes,
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.people_rounded,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                        size: 28,
+                      ),
                     ),
-                  ),
-                )
-              
-              else if (clientesFiltrados.isEmpty)
-                Expanded(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.people_outline_rounded,
-                          size: 64,
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _termoBusca.isEmpty 
-                              ? 'Nenhum cliente cadastrado por você ainda.'
-                              : 'Nenhum cliente encontrado para a busca.',
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                              ),
-                          textAlign: TextAlign.center,
-                        ),
-                        if (_termoBusca.isEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              'Adicione seu primeiro cliente para começar.',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Meus Clientes',
+                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: Theme.of(context).colorScheme.onSurface,
+                                ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Gerencie e organize seus clientes',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            SliverToBoxAdapter(
+              child: Card(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 2,
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        decoration: InputDecoration(
+                          prefixIcon: Icon(
+                            Icons.search_rounded, 
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                          suffixIcon: _termoBusca.isNotEmpty
+                              ? IconButton(
+                                  icon: Icon(
+                                    Icons.clear_rounded, 
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   ),
-                              textAlign: TextAlign.center,
+                                  onPressed: () => setState(() => _termoBusca = ''),
+                                )
+                              : null,
+                          hintText: 'Buscar por estabelecimento, cidade, cliente...',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                              color: Theme.of(context).colorScheme.outline,
                             ),
                           ),
-                      ],
-                    ),
-                  ),
-                )
-              
-              else
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Text(
-                          '${clientesFiltrados.length} cliente${clientesFiltrados.length == 1 ? '' : 's'} encontrado${clientesFiltrados.length == 1 ? '' : 's'}',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          filled: true,
+                          fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
                         ),
+                        onChanged: (v) => setState(() => _termoBusca = v),
                       ),
-                      
-                      Expanded(
-                        child: ReorderableListView.builder(
-                          itemCount: clientesFiltrados.length,
-                          onReorder: _reordenarClientes,
-                          itemBuilder: (context, index) {
-                            final c = clientesFiltrados[index];
-                            final dataHoraFormatada =
-                                DateFormat('dd/MM/yyyy HH:mm').format(c.dataVisita);
-                            final isExpanded = _expandedStates[c.id] ?? false;
+                      const SizedBox(height: 20),
 
-                            return Card(
-                              key: Key(c.id),
-                              margin: const EdgeInsets.only(bottom: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              elevation: 2,
-                              child: ExpansionTile(
-                                key: Key('${c.id}_tile'),
-                                leading: Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.primaryContainer,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Icons.drag_handle,
-                                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                                    size: 20,
-                                  ),
-                                ),
-                                title: Text(
-                                  c.estabelecimento,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                subtitle: !isExpanded ? _buildPreviewInfo(c, context) : null,
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: Icon(
-                                        Icons.delete_outline,
-                                        color: Theme.of(context).colorScheme.error,
-                                      ),
-                                      onPressed: () => _confirmarExclusaoCliente(c),
-                                    ),
-                                    Icon(
-                                      isExpanded 
-                                          ? Icons.expand_less_rounded
-                                          : Icons.expand_more_rounded,
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                    ),
-                                  ],
-                                ),
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: _buildDetailedInfo(c, dataHoraFormatada, context),
-                                  ),
-                                ],
-                                onExpansionChanged: (expanded) => _toggleExpansion(c.id),
-                                tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-                                childrenPadding: EdgeInsets.zero,
-                              ),
-                            );
-                          },
+                      if (!_isLoading && _clientes.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: FilledButton.tonalIcon(
+                              onPressed: _atualizarListaClientes,
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: const Text('Atualizar Lista'),
+                            ),
+                          ),
                         ),
-                      ),
+
+                      if (_isLoading)
+                        _buildLoadingState()
+                      else if (clientesFiltrados.isEmpty)
+                        _buildEmptyState()
+                      else
+                        _buildClientesList(clientesFiltrados),
                     ],
                   ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return SizedBox(
+      height: 200,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                Icons.people_outline_rounded,
+                size: 40,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              _termoBusca.isEmpty 
+                  ? 'Nenhum cliente cadastrado'
+                  : 'Nenhum cliente encontrado',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            if (_termoBusca.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  'Adicione seu primeiro cliente para começar',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return const SizedBox(
+      height: 200,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Carregando clientes...'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClientesList(List<Cliente> clientesFiltrados) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Contador e instrução
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${clientesFiltrados.length} cliente${clientesFiltrados.length == 1 ? '' : 's'}',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              if (clientesFiltrados.length > 1)
+                Row(
+                  children: [
+                    Icon(
+                      Icons.drag_handle,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Arraste para reordenar',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
+                            fontStyle: FontStyle.italic,
+                          ),
+                    ),
+                  ],
                 ),
             ],
           ),
         ),
-      ),
+        
+        Container(
+          height: MediaQuery.of(context).size.height * 0.5, 
+          child: ReorderableListView.builder(
+            physics: const ClampingScrollPhysics(),
+            padding: EdgeInsets.zero,
+            itemCount: clientesFiltrados.length,
+            onReorder: _reordenarClientes,
+            itemBuilder: (context, index) {
+              final c = clientesFiltrados[index];
+              final dataHoraFormatada = DateFormat('dd/MM/yyyy HH:mm').format(c.dataVisita);
+              final isExpanded = _expandedStates[c.id] ?? false;
+
+              return Card(
+                key: Key(c.id),
+                margin: const EdgeInsets.only(bottom: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 1,
+                child: ExpansionTile(
+                  key: Key('${c.id}_tile'),
+                  initiallyExpanded: isExpanded,
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.drag_handle,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      size: 18,
+                    ),
+                  ),
+                  title: Text(
+                    c.estabelecimento,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                    ),
+                  ),
+                  subtitle: !isExpanded ? _buildPreviewInfo(c, context) : null,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          Icons.delete_outline,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        onPressed: () => _confirmarExclusaoCliente(c),
+                        tooltip: 'Excluir cliente',
+                      ),
+                      Icon(
+                        isExpanded 
+                            ? Icons.expand_less_rounded
+                            : Icons.expand_more_rounded,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: _buildDetailedInfo(c, dataHoraFormatada, context),
+                    ),
+                  ],
+                  onExpansionChanged: (expanded) {
+                    Future.delayed(const Duration(milliseconds: 100), () {
+                      if (mounted) {
+                        _toggleExpansion(c.id);
+                      }
+                    });
+                  },
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+                  childrenPadding: EdgeInsets.zero,
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -347,14 +471,16 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
           children: [
             Icon(
               Icons.location_on_outlined,
-              size: 12,
+              size: 14,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 6),
             Expanded(
               child: Text(
                 '${c.cidade} - ${c.estado}',
-                style: Theme.of(context).textTheme.bodySmall,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -364,7 +490,7 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
         Text(
           c.endereco,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8),
               ),
           overflow: TextOverflow.ellipsis,
         ),
@@ -389,7 +515,7 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
           context: context,
         ),
         
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         
         if (c.nomeCliente != null)
           _buildInfoRow(
@@ -407,7 +533,7 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
             context: context,
           ),
         
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         
         _buildInfoRow(
           icon: Icons.calendar_today_outlined,
@@ -420,31 +546,38 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
                     Icons.note_outlined,
-                    size: 16,
+                    size: 18,
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'Observações',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                 fontWeight: FontWeight.w600,
                                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          c.observacoes!,
-                          style: Theme.of(context).textTheme.bodyMedium,
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            c.observacoes!,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
                         ),
                       ],
                     ),
@@ -464,28 +597,28 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
     required BuildContext context,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
             icon,
-            size: 16,
+            size: 18,
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Text(
                   content,
                   style: Theme.of(context).textTheme.bodyMedium,

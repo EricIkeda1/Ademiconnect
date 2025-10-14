@@ -42,6 +42,8 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     type: MaskAutoCompletionType.lazy,
   );
 
+  bool _isLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -87,6 +89,8 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
 
   Future<void> _salvarCliente() async {
     if (_formKey.currentState?.validate() != true) return;
+
+    setState(() => _isLoading = true);
 
     try {
       final dataHora = DateFormat('dd/MM/yyyy HH:mm')
@@ -134,15 +138,29 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
         _limparCampos();
         widget.onClienteCadastrado?.call();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Cliente cadastrado com sucesso!')),
+          SnackBar(
+            content: const Text('Cliente cadastrado com sucesso!'),
+            backgroundColor: Colors.green.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
         );
       }
     } catch (e, st) {
       print('Erro ao salvar cliente: $e\n$st');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao cadastrar cliente: $e')),
+          SnackBar(
+            content: Text('Erro ao cadastrar cliente: $e'),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -171,6 +189,20 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
       initialDate: now,
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 2),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Theme.of(context).colorScheme.primary,
+              onPrimary: Colors.white,
+              surface: Theme.of(context).colorScheme.surface,
+              onSurface: Theme.of(context).colorScheme.onSurface,
+            ),
+            dialogBackgroundColor: Theme.of(context).colorScheme.surface,
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null) {
       _dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(picked);
@@ -184,10 +216,21 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
       context: context,
       initialTime: now,
       builder: (context, child) {
-        return Localizations.override(
-          context: context,
-          locale: const Locale('pt', 'BR'),
-          child: child,
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Theme.of(context).colorScheme.primary,
+              onPrimary: Colors.white,
+              surface: Theme.of(context).colorScheme.surface,
+              onSurface: Theme.of(context).colorScheme.onSurface,
+            ),
+            dialogBackgroundColor: Theme.of(context).colorScheme.surface,
+          ),
+          child: Localizations.override(
+            context: context,
+            locale: const Locale('pt', 'BR'),
+            child: child!,
+          ),
         );
       },
     );
@@ -202,201 +245,397 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     return null;
   }
 
+  String? _validarCampoOpcional(String? v) {
+    return null; 
+  }
+
   InputDecoration _obterDecoracaoCampo(
     String label, {
     String? hint,
     Widget? suffixIcon,
+    bool isObrigatorio = true,
   }) {
     return InputDecoration(
-      labelText: label,
+      labelText: '$label${isObrigatorio ? ' *' : ''}',
       hintText: hint,
       filled: true,
-      fillColor: const Color(0xFFF7F8FA),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Theme.of(context).colorScheme.outline),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Theme.of(context).colorScheme.outline),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFF9AA7FF)),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Colors.red),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Colors.red),
-      ),
-      suffixIcon: suffixIcon,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w700,
-        );
-    final subtle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: Colors.black.withOpacity(0.6),
-        );
-
-    return _CardBase(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(12),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Cadastrar Novo Cliente', style: titleStyle),
-              const SizedBox(height: 4),
-              Text('Preencha os dados do cliente para cadastro', style: subtle),
-              const SizedBox(height: 16),
-              Text('Dados Obrigatórios', style: titleStyle),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _nomeClienteCtrl,
-                decoration: _obterDecoracaoCampo('Nome do Cliente *',
-                    hint: 'Digite o nome do cliente'),
-                validator: (v) =>
-                    _validarCampoObrigatorio(v, field: 'Nome do Cliente'),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _telefoneCtrl,
-                keyboardType: TextInputType.phone,
-                inputFormatters: [_telefoneFormatter],
-                decoration: _obterDecoracaoCampo('Telefone *',
-                    hint: '(00) 00000-0000'),
-                validator: (v) =>
-                    _validarCampoObrigatorio(v, field: 'Telefone'),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _nomeEstabelecimentoCtrl,
-                decoration: _obterDecoracaoCampo(
-                    'Nome do Estabelecimento *',
-                    hint: 'Digite o nome do estabelecimento'),
-                validator: (v) => _validarCampoObrigatorio(
-                    v, field: 'Nome do Estabelecimento'),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _estadoCtrl,
-                decoration: _obterDecoracaoCampo('Estado *',
-                    hint: 'Digite o estado'),
-                validator: (v) =>
-                    _validarCampoObrigatorio(v, field: 'Estado'),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _cidadeCtrl,
-                decoration:
-                    _obterDecoracaoCampo('Cidade *', hint: 'Digite a cidade'),
-                validator: (v) =>
-                    _validarCampoObrigatorio(v, field: 'Cidade'),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _enderecoCtrl,
-                decoration: _obterDecoracaoCampo('Endereço *',
-                    hint: 'Digite o endereço completo'),
-                validator: (v) =>
-                    _validarCampoObrigatorio(v, field: 'Endereço'),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _bairroCtrl,
-                decoration: _obterDecoracaoCampo('Bairro',
-                    hint: 'Digite o bairro do cliente'),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _cepCtrl,
-                keyboardType: TextInputType.number,
-                inputFormatters: [_cepFormatter],
-                decoration: _obterDecoracaoCampo('CEP', hint: 'Digite o CEP'),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _dataVisitaCtrl,
-                readOnly: true,
-                decoration: _obterDecoracaoCampo('Data da Visita *',
-                    hint: 'dd/MM/yyyy',
-                    suffixIcon: IconButton(
-                      tooltip: 'Selecionar data',
-                      onPressed: _selecionarData,
-                      icon: const Icon(Icons.calendar_today_outlined),
-                    )),
-                validator: (v) =>
-                    _validarCampoObrigatorio(v, field: 'Data da Visita'),
-                onTap: _selecionarData,
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _horaVisitaCtrl,
-                readOnly: true,
-                decoration: _obterDecoracaoCampo('Hora da Visita *',
-                    hint: 'HH:mm',
-                    suffixIcon: IconButton(
-                      tooltip: 'Selecionar hora',
-                      onPressed: _selecionarHora,
-                      icon: const Icon(Icons.access_time),
-                    )),
-                validator: (v) =>
-                    _validarCampoObrigatorio(v, field: 'Hora da Visita'),
-                onTap: _selecionarHora,
-              ),
-              const SizedBox(height: 16),
-              Text('Dados Opcionais', style: titleStyle),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _observacoesCtrl,
-                maxLines: 3,
-                decoration: _obterDecoracaoCampo('Observações',
-                    hint: 'Digite observações sobre a visita (opcional)'),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                  ),
-                  onPressed: _salvarCliente,
-                  child: const Text('Cadastrar Cliente'),
-                ),
-              ),
-            ],
-          ),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: Theme.of(context).colorScheme.primary,
+          width: 2,
         ),
       ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Theme.of(context).colorScheme.error),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: Theme.of(context).colorScheme.error,
+          width: 2,
+        ),
+      ),
+      suffixIcon: suffixIcon,
+      labelStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+      hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
+          ),
     );
   }
-}
 
-class _CardBase extends StatelessWidget {
-  final Widget child;
-  const _CardBase({required this.child});
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.person_add_rounded,
+              color: Theme.of(context).colorScheme.onPrimaryContainer,
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Cadastrar Cliente',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Preencha os dados do cliente',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title, {String? subtitle}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+        ),
+        if (subtitle != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+        ],
+        const SizedBox(height: 16),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      color: Colors.white,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: child,
+    return Scaffold(
+      body: RefreshIndicator(
+        onRefresh: () async {
+          _limparCampos();
+        },
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: _buildHeader(),
+            ),
+
+            SliverToBoxAdapter(
+              child: Card(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 2,
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildSectionTitle(
+                          'Dados Obrigatórios',
+                          subtitle: 'Campos marcados com * são obrigatórios',
+                        ),
+
+                        TextFormField(
+                          controller: _nomeClienteCtrl,
+                          decoration: _obterDecoracaoCampo(
+                            'Nome do Cliente',
+                            hint: 'Digite o nome completo do cliente',
+                          ),
+                          validator: (v) =>
+                              _validarCampoObrigatorio(v, field: 'Nome do Cliente'),
+                        ),
+                        const SizedBox(height: 12),
+
+                        TextFormField(
+                          controller: _telefoneCtrl,
+                          keyboardType: TextInputType.phone,
+                          inputFormatters: [_telefoneFormatter],
+                          decoration: _obterDecoracaoCampo(
+                            'Telefone',
+                            hint: '(00) 00000-0000',
+                          ),
+                          validator: (v) =>
+                              _validarCampoObrigatorio(v, field: 'Telefone'),
+                        ),
+                        const SizedBox(height: 12),
+
+                        TextFormField(
+                          controller: _nomeEstabelecimentoCtrl,
+                          decoration: _obterDecoracaoCampo(
+                            'Nome do Estabelecimento',
+                            hint: 'Digite o nome do estabelecimento',
+                          ),
+                          validator: (v) => _validarCampoObrigatorio(
+                              v, field: 'Nome do Estabelecimento'),
+                        ),
+                        const SizedBox(height: 12),
+
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: TextFormField(
+                                controller: _estadoCtrl,
+                                decoration: _obterDecoracaoCampo(
+                                  'Estado',
+                                  hint: 'UF',
+                                ),
+                                validator: (v) =>
+                                    _validarCampoObrigatorio(v, field: 'Estado'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 3,
+                              child: TextFormField(
+                                controller: _cidadeCtrl,
+                                decoration: _obterDecoracaoCampo(
+                                  'Cidade',
+                                  hint: 'Nome da cidade',
+                                ),
+                                validator: (v) =>
+                                    _validarCampoObrigatorio(v, field: 'Cidade'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        TextFormField(
+                          controller: _enderecoCtrl,
+                          decoration: _obterDecoracaoCampo(
+                            'Endereço',
+                            hint: 'Digite o endereço completo',
+                          ),
+                          validator: (v) =>
+                              _validarCampoObrigatorio(v, field: 'Endereço'),
+                        ),
+                        const SizedBox(height: 12),
+
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: TextFormField(
+                                controller: _bairroCtrl,
+                                decoration: _obterDecoracaoCampo(
+                                  'Bairro',
+                                  hint: 'Bairro',
+                                  isObrigatorio: false, 
+                                ),
+                                validator: _validarCampoOpcional, 
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 2,
+                              child: TextFormField(
+                                controller: _cepCtrl,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [_cepFormatter],
+                                decoration: _obterDecoracaoCampo(
+                                  'CEP',
+                                  hint: '00000-000',
+                                  isObrigatorio: false, 
+                                ),
+                                validator: _validarCampoOpcional, 
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: _dataVisitaCtrl,
+                                readOnly: true,
+                                decoration: _obterDecoracaoCampo(
+                                  'Data da Visita',
+                                  hint: 'dd/MM/yyyy',
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      Icons.calendar_today_outlined,
+                                      color: Theme.of(context).colorScheme.primary,
+                                    ),
+                                    onPressed: _selecionarData,
+                                  ),
+                                ),
+                                validator: (v) =>
+                                    _validarCampoObrigatorio(v, field: 'Data da Visita'),
+                                onTap: _selecionarData,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                controller: _horaVisitaCtrl,
+                                readOnly: true,
+                                decoration: _obterDecoracaoCampo(
+                                  'Hora da Visita',
+                                  hint: 'HH:mm',
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      Icons.access_time_rounded,
+                                      color: Theme.of(context).colorScheme.primary,
+                                    ),
+                                    onPressed: _selecionarHora,
+                                  ),
+                                ),
+                                validator: (v) =>
+                                    _validarCampoObrigatorio(v, field: 'Hora da Visita'),
+                                onTap: _selecionarHora,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        _buildSectionTitle(
+                          'Dados Opcionais',
+                          subtitle: 'Preencha conforme necessário',
+                        ),
+
+                        TextFormField(
+                          controller: _observacoesCtrl,
+                          maxLines: 4,
+                          decoration: _obterDecoracaoCampo(
+                            'Observações',
+                            hint: 'Digite observações sobre a visita...',
+                            isObrigatorio: false,
+                          ),
+                          validator: _validarCampoOpcional,
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  side: BorderSide(
+                                    color: Theme.of(context).colorScheme.outline,
+                                  ),
+                                ),
+                                onPressed: _limparCampos,
+                                child: Text(
+                                  'Limpar',
+                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                        color: Theme.of(context).colorScheme.onSurface,
+                                      ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: FilledButton(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Theme.of(context).colorScheme.primary,
+                                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                onPressed: _isLoading ? null : _salvarCliente,
+                                child: _isLoading
+                                    ? SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Theme.of(context).colorScheme.onPrimary,
+                                        ),
+                                      )
+                                    : Text(
+                                        'Cadastrar',
+                                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                              color: Theme.of(context).colorScheme.onPrimary,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

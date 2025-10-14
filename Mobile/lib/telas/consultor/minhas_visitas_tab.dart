@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class MinhasVisitasTab extends StatefulWidget {
   const MinhasVisitasTab({super.key});
@@ -10,39 +14,16 @@ class MinhasVisitasTab extends StatefulWidget {
 class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = '';
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  final _hojeTitulo = 'HOJE - Sua área de trabalho';
-  final _hojeSub = 'Rua das Flores, Centro - Comércio Local';
-
-  final List<_VisitaItem> _cronograma = const [
-    _VisitaItem(
-      icone: Icons.flag_outlined,
-      titulo: 'Rua das Flores, Centro - Comércio Local',
-      subtitulo: 'segunda-feira, 15 de setembro de 2025',
-      chipTexto: 'HOJE',
-      chipBg: Colors.black,
-      chipFg: Colors.white,
-    ),
-    _VisitaItem(
-      icone: Icons.event_note_outlined,
-      titulo: 'Avenida Principal, Bairro Comercial - Shopping e Lojas',
-      subtitulo: 'terça-feira, 16 de setembro de 2025',
-      chipTexto: 'AGENDADO',
-      chipBg: Color(0x3328A745),
-      chipFg: Colors.green,
-    ),
-  ];
-
-  List<_VisitaItem> get _cronogramaFiltrado {
-    if (_query.isEmpty) return _cronograma;
-    final q = _query.toLowerCase();
-    return _cronograma.where((v) => v.titulo.toLowerCase().contains(q)).toList();
-  }
-
-  bool get _ruaJaProgramada {
-    if (_query.isEmpty) return false;
-    final q = _query.toLowerCase();
-    return _cronograma.any((v) => v.titulo.toLowerCase().contains(q));
+  User? get _currentUser {
+    try {
+      return _auth.currentUser;
+    } catch (e) {
+      print('Erro ao obter currentUser: $e');
+      return null;
+    }
   }
 
   @override
@@ -57,187 +38,764 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+  Stream<QuerySnapshot> get _meusClientesStream {
+    final user = _currentUser;
+    if (user == null) {
+      return const Stream<QuerySnapshot>.empty();
+    }
+    
+    return _firestore
+        .collection('clientes')
+        .where('consultorUid', isEqualTo: user.uid)
+        .snapshots();
+  }
 
-    Widget cardWrapper({required String title, required Widget child}) {
-      return Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 12),
-              child,
-            ],
+  Future<void> _abrirNoGPS(String endereco) async {
+    final encodedEndereco = Uri.encodeComponent(endereco);
+    
+    final urls = {
+      'Google Maps': 'https://www.google.com/maps/search/?api=1&query=$encodedEndereco',
+      'Waze': 'https://waze.com/ul?q=$encodedEndereco&navigate=yes',
+      'Apple Maps': 'https://maps.apple.com/?q=$encodedEndereco',
+    };
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Abrir no GPS'),
+        content: const Text('Escolha o aplicativo de navegação:'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
           ),
+          ...urls.entries.map((entry) => TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _launchUrl(entry.value);
+            },
+            child: Text(entry.key),
+          )).toList(),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _launchUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Não foi possível abrir o aplicativo'),
+          backgroundColor: Colors.red,
         ),
       );
     }
+  }
 
-    final cardPesquisa = cardWrapper(
-      title: 'Pesquisar Rua',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextField(
-            controller: _searchCtrl,
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              hintText: 'Pesquisar nome da rua...',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _query.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: _searchCtrl.clear,
-                      tooltip: 'Limpar',
-                    ),
-              filled: true,
-              fillColor: const Color(0xFFF7F7F7),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Colors.black12),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Colors.black12),
-              ),
-              contentPadding:
-                  const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-            ),
-          ),
-          if (_query.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            _DisponibilidadeChip(disponivel: !_ruaJaProgramada),
-          ],
-        ],
+  InputDecoration _obterDecoracaoCampo(
+    String label, {
+    String? hint,
+    Widget? suffixIcon,
+    bool isObrigatorio = false,
+  }) {
+    return InputDecoration(
+      labelText: '$label${isObrigatorio ? ' *' : ''}',
+      hintText: hint,
+      filled: true,
+      fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Theme.of(context).colorScheme.outline),
       ),
-    );
-
-    final cardHoje = cardWrapper(
-      title: 'Ruas de Trabalho',
-      child: ListTile(
-        leading: Icon(Icons.location_on, color: cs.primary),
-        title: Text(_hojeTitulo),
-        subtitle: Text(_hojeSub),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: cs.primary.withOpacity(0.10),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: const Text('PRIORIDADE'),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Theme.of(context).colorScheme.outline),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: Theme.of(context).colorScheme.primary,
+          width: 2,
         ),
       ),
+      suffixIcon: suffixIcon,
+      labelStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+      hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
+          ),
     );
+  }
 
-    final cardCronograma = cardWrapper(
-      title: 'Cronograma de Visitas',
-      child: Column(
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+      child: Row(
         children: [
-          ..._cronogramaFiltrado.map((v) {
-            return Column(
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.calendar_today_rounded,
+              color: Theme.of(context).colorScheme.onPrimaryContainer,
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ListTile(
-                  leading: Icon(v.icone),
-                  title: Text(v.titulo),
-                  subtitle: Text(v.subtitulo),
-                  trailing: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: v.chipBg,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      v.chipTexto,
-                      style: TextStyle(
-                          color: v.chipFg, fontWeight: FontWeight.w600),
-                    ),
-                  ),
+                Text(
+                  'Minhas Visitas',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                 ),
-                if (v != _cronogramaFiltrado.last) const Divider(height: 0),
+                const SizedBox(height: 4),
+                Text(
+                  'Gerencie seu cronograma de visitas',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
               ],
-            );
-          }),
+            ),
+          ),
         ],
       ),
     );
+  }
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
+  Widget _buildSectionTitle(String title, {String? subtitle}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        cardPesquisa,
-        const SizedBox(height: 12),
-        cardHoje,
-        const SizedBox(height: 12),
-        cardCronograma,
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+        ),
+        if (subtitle != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+        ],
+        const SizedBox(height: 16),
       ],
     );
   }
-}
 
-class _VisitaItem {
-  final IconData icone;
-  final String titulo;
-  final String subtitulo;
-  final String chipTexto;
-  final Color chipBg;
-  final Color chipFg;
+  Widget _buildCard({required String title, required Widget child}) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 2,
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionTitle(title),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
 
-  const _VisitaItem({
-    required this.icone,
-    required this.titulo,
-    required this.subtitulo,
-    required this.chipTexto,
-    required this.chipBg,
-    required this.chipFg,
-  });
-}
+  Widget _buildVisitaItem(DocumentSnapshot doc) {
+    final cs = Theme.of(context).colorScheme;
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+    
+    final endereco = data['endereco'] ?? 'Endereço não informado';
+    final estabelecimento = data['estabelecimento'] ?? 'Estabelecimento não informado';
+    final dataVisitaStr = data['dataVisita']?.toString();
+    final cidade = data['cidade'] ?? '';
+    final estado = data['estado'] ?? '';
+    
+    final dataFormatada = _formatarDataVisita(dataVisitaStr);
+    final statusInfo = _determinarStatus(dataVisitaStr);
 
-class _DisponibilidadeChip extends StatelessWidget {
-  final bool disponivel;
-  const _DisponibilidadeChip({required this.disponivel});
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: cs.primaryContainer.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              statusInfo['icone'],
+              size: 20,
+              color: cs.onPrimaryContainer,
+            ),
+          ),
+          const SizedBox(width: 12),
+          
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusInfo['corFundo'],
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    statusInfo['texto'],
+                    style: TextStyle(
+                      color: statusInfo['corTexto'],
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                
+                Text(
+                  estabelecimento,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w500,
+                        color: cs.onSurface,
+                      ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                
+                Text(
+                  '$endereco, $cidade - $estado',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                
+                Text(
+                  dataFormatada,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant.withOpacity(0.7),
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    final color =
-        disponivel ? const Color(0xFF2E7D32) : const Color(0xFF6B7280);
-    final bg = disponivel ? const Color(0xFFE8F5E9) : const Color(0xFFF3F4F6);
-    final texto = disponivel ? 'Disponível' : 'Já programada';
+  Widget _buildRuaTrabalhoHoje() {
+    final cs = Theme.of(context).colorScheme;
 
-    return Align(
-      alignment: Alignment.centerLeft,
+    return StreamBuilder<QuerySnapshot>(
+      stream: _meusClientesStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildRuaTrabalhoPlaceholder(cs, 'Carregando...', 'Buscando dados do banco');
+        }
+
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return _buildRuaTrabalhoPlaceholder(cs, 'Nenhuma visita hoje', 'Cadastre clientes para ver as visitas aqui');
+        }
+
+        final clientes = snapshot.data!.docs;
+        final hoje = DateTime.now();
+        final hojeInicio = DateTime(hoje.year, hoje.month, hoje.day);
+        final hojeFim = DateTime(hoje.year, hoje.month, hoje.day, 23, 59, 59);
+
+        DocumentSnapshot? clienteHoje;
+
+        for (final doc in clientes) {
+          final data = doc.data() as Map<String, dynamic>;
+          final dataVisitaStr = data['dataVisita']?.toString();
+          
+          if (dataVisitaStr != null) {
+            try {
+              final dataVisita = DateTime.parse(dataVisitaStr);
+              if (dataVisita.isAfter(hojeInicio) && dataVisita.isBefore(hojeFim)) {
+                clienteHoje = doc;
+                break;
+              }
+            } catch (e) {
+              continue;
+            }
+          }
+        }
+
+        if (clienteHoje == null) {
+          return _buildRuaTrabalhoPlaceholder(cs, 'Nenhuma visita para hoje', 'As visitas de hoje aparecerão aqui');
+        }
+
+        final data = clienteHoje.data() as Map<String, dynamic>;
+        final estabelecimento = data['estabelecimento'] ?? 'Estabelecimento';
+        final endereco = data['endereco'] ?? 'Endereço';
+        final cidade = data['cidade'] ?? '';
+        final estado = data['estado'] ?? '';
+
+        final enderecoCompleto = '$endereco, $cidade - $estado';
+
+        return GestureDetector(
+          onTap: () => _abrirNoGPS(enderecoCompleto),
+          child: _buildRuaTrabalhoReal(
+            cs, 
+            estabelecimento, 
+            enderecoCompleto
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRuaTrabalhoPlaceholder(ColorScheme cs, String titulo, String subtitulo) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surfaceVariant.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: cs.outline.withOpacity(0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: cs.surfaceVariant,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              Icons.info_outline,
+              color: cs.onSurfaceVariant,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  titulo,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w500,
+                        color: cs.onSurface,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitulo,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRuaTrabalhoReal(ColorScheme cs, String estabelecimento, String localizacao) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withOpacity(0.5)),
+          color: cs.primaryContainer.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: cs.primaryContainer.withOpacity(0.3),
+          ),
         ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              disponivel ? Icons.check_circle : Icons.info_outline,
-              color: color,
-              size: 16,
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: cs.primary,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.flag_rounded,
+                color: cs.onPrimary,
+                size: 20,
+              ),
             ),
-            const SizedBox(width: 6),
-            Text(
-              texto,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w600,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'HOJE - $estabelecimento',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: cs.onSurface,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    localizacao,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Toque para abrir no GPS',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: cs.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: cs.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: cs.primary.withOpacity(0.3)),
+              ),
+              child: Text(
+                'PRIORIDADE',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: cs.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  String _formatarDataVisita(String? dataVisitaStr) {
+    if (dataVisitaStr == null || dataVisitaStr.isEmpty) return 'Data não informada';
+    
+    try {
+      final dataVisita = DateTime.parse(dataVisitaStr);
+      
+      final hoje = DateTime.now();
+      final amanha = DateTime(hoje.year, hoje.month, hoje.day + 1);
+      
+      if (dataVisita.year == hoje.year && dataVisita.month == hoje.month && dataVisita.day == hoje.day) {
+        return 'Hoje às ${DateFormat('HH:mm', 'pt_BR').format(dataVisita)}';
+      } else if (dataVisita.year == amanha.year && dataVisita.month == amanha.month && dataVisita.day == amanha.day) {
+        return 'Amanhã às ${DateFormat('HH:mm', 'pt_BR').format(dataVisita)}';
+      } else {
+        final format = dataVisita.year == hoje.year
+            ? 'EEE, d MMMM' 
+            : 'EEE, d MMMM y';
+        
+        return '${_capitalize(DateFormat(format, 'pt_BR').format(dataVisita))} às ${DateFormat('HH:mm', 'pt_BR').format(dataVisita)}';
+      }
+    } catch (e) {
+      return 'Data inválida';
+    }
+  }
+
+  Map<String, dynamic> _determinarStatus(String? dataVisitaStr) {
+    final cs = Theme.of(context).colorScheme;
+    
+    if (dataVisitaStr == null || dataVisitaStr.isEmpty) {
+      return {
+        'icone': Icons.event_note_outlined,
+        'texto': 'AGENDADO',
+        'corFundo': const Color(0x3328A745),
+        'corTexto': Colors.green,
+      };
+    }
+    
+    try {
+      final dataVisita = DateTime.parse(dataVisitaStr);
+      final hoje = DateTime.now();
+      final hojeInicio = DateTime(hoje.year, hoje.month, hoje.day);
+      final hojeFim = DateTime(hoje.year, hoje.month, hoje.day, 23, 59, 59);
+      
+      if (dataVisita.isAfter(hojeInicio) && dataVisita.isBefore(hojeFim)) {
+        return {
+          'icone': Icons.flag_outlined,
+          'texto': 'HOJE',
+          'corFundo': Colors.black,
+          'corTexto': Colors.white,
+        };
+      } else if (dataVisita.isBefore(hoje)) {
+        return {
+          'icone': Icons.check_circle_outline,
+          'texto': 'REALIZADA',
+          'corFundo': cs.primaryContainer,
+          'corTexto': cs.onPrimaryContainer,
+        };
+      } else {
+        return {
+          'icone': Icons.event_note_outlined,
+          'texto': 'AGENDADO',
+          'corFundo': const Color(0x3328A745),
+          'corTexto': Colors.green,
+        };
+      }
+    } catch (e) {
+      return {
+        'icone': Icons.event_note_outlined,
+        'texto': 'AGENDADO',
+        'corFundo': const Color(0x3328A745),
+        'corTexto': Colors.green,
+      };
+    }
+  }
+
+  String _capitalize(String text) {
+    if (text.isEmpty) return text;
+    return text[0].toUpperCase() + text.substring(1);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: _buildHeader(),
+          ),
+
+          SliverToBoxAdapter(
+            child: _buildCard(
+              title: 'Pesquisar Visitas',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: _searchCtrl,
+                    textInputAction: TextInputAction.search,
+                    decoration: _obterDecoracaoCampo(
+                      'Estabelecimento ou endereço',
+                      hint: 'Digite para pesquisar visitas...',
+                      suffixIcon: _query.isEmpty
+                          ? const Icon(Icons.search)
+                          : IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: _searchCtrl.clear,
+                              tooltip: 'Limpar',
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          SliverToBoxAdapter(
+            child: _buildCard(
+              title: 'Rua de Trabalho - Hoje',
+              child: _buildRuaTrabalhoHoje(),
+            ),
+          ),
+
+          SliverToBoxAdapter(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _meusClientesStream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return _buildCard(
+                    title: 'Próximas Visitas',
+                    child: Column(
+                      children: List.generate(3, (index) => Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surfaceVariant,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: 80,
+                                    height: 20,
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.surfaceVariant,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Container(
+                                    width: double.infinity,
+                                    height: 16,
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.surfaceVariant,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
+                    ),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return _buildCard(
+                    title: 'Próximas Visitas',
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.errorContainer.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Erro ao carregar visitas',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return _buildCard(
+                    title: 'Próximas Visitas',
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.calendar_today_outlined,
+                            size: 48,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Nenhuma visita agendada',
+                            style: Theme.of(context).textTheme.bodyLarge,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Cadastre clientes para ver as visitas aqui',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                final clientes = snapshot.data!.docs;
+                final clientesFiltrados = _query.isEmpty
+                    ? clientes
+                    : clientes.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final estabelecimento = data['estabelecimento']?.toString().toLowerCase() ?? '';
+                        final endereco = data['endereco']?.toString().toLowerCase() ?? '';
+                        final query = _query.toLowerCase();
+                        return estabelecimento.contains(query) || endereco.contains(query);
+                      }).toList();
+
+                if (clientesFiltrados.isEmpty) {
+                  return _buildCard(
+                    title: 'Próximas Visitas',
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.search_off_outlined,
+                            size: 48,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Nenhuma visita encontrada',
+                            style: Theme.of(context).textTheme.bodyLarge,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Tente ajustar os termos da pesquisa',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                return _buildCard(
+                  title: 'Próximas Visitas (${clientesFiltrados.length})',
+                  child: Column(
+                    children: clientesFiltrados.map(_buildVisitaItem).toList(),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          const SliverToBoxAdapter(
+            child: SizedBox(height: 20),
+          ),
+        ],
       ),
     );
   }

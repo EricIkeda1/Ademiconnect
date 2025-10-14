@@ -7,7 +7,7 @@ class ExportarDadosTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView( // ✅ permite rolagem evitando overflow
+    return SingleChildScrollView( 
       physics: const BouncingScrollPhysics(),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -51,7 +51,7 @@ class ExportarDadosTab extends StatelessWidget {
                   ),
             ),
             Text(
-              'Exporte seus clientes para planilhas e sistemas externos',
+              'Exporte seus clientes para planilhas.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
