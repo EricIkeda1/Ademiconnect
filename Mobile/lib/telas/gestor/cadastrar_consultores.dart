@@ -1,136 +1,186 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/material.dart';
+import 'package:email_validator/email_validator.dart';
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
+import 'package:flutter/services.dart';
 
-class MinhasVisitasTab extends StatefulWidget {
-  const MinhasVisitasTab({super.key});
+class ConsultoresTab extends StatefulWidget {
+  const ConsultoresTab({super.key});
 
   @override
-  State<MinhasVisitasTab> createState() => _MinhasVisitasTabState();
+  State<ConsultoresTab> createState() => _ConsultoresTabState();
 }
 
-class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
-  final TextEditingController _searchCtrl = TextEditingController();
-  String _query = '';
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  List<String> _consultoresIds = [];
+class _ConsultoresTabState extends State<ConsultoresTab> {
+  final _formKey = GlobalKey<FormState>();
+  final _nomeCtrl = TextEditingController();
+  final _telefoneCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _senhaCtrl = TextEditingController();
+  final _matriculaCtrl = TextEditingController();
 
-  @override
-  void initState() {
-    super.initState();
-    _searchCtrl.addListener(() => setState(() => _query = _searchCtrl.text.trim()));
-    _carregarConsultores();
-  }
+  final _telefoneMask = MaskTextInputFormatter(
+    mask: '(##) #####-####',
+    filter: {'#': RegExp(r'[0-9]')},
+    type: MaskAutoCompletionType.eager,
+  );
+
+  bool _loading = false;
 
   @override
   void dispose() {
-    _searchCtrl.dispose();
+    _nomeCtrl.dispose();
+    _telefoneCtrl.dispose();
+    _emailCtrl.dispose();
+    _senhaCtrl.dispose();
+    _matriculaCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _carregarConsultores() async {
-    final gestorUid = _auth.currentUser?.uid;
-    if (gestorUid == null) return;
+  Future<void> _cadastrarConsultor() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() => _loading = true);
+      try {
+        final String gestorId = FirebaseAuth.instance.currentUser!.uid;
+        final String email = _emailCtrl.text.trim();
+        final String senha = _senhaCtrl.text;
 
-    try {
-      final consultoresSnapshot = await _firestore
-          .collection('consultores')
-          .where('gestorId', isEqualTo: gestorUid)
-          .get();
+        final gestorDoc = await FirebaseFirestore.instance
+            .collection('gestor')
+            .doc(gestorId)
+            .get();
 
-      setState(() {
-        _consultoresIds = consultoresSnapshot.docs.map((doc) => doc.id).toList();
-      });
-    } catch (e) {
-      print('Erro ao carregar consultores: $e');
-    }
-  }
+        if (gestorDoc.exists) {
+          final String gestorEmail = gestorDoc.get('email') as String? ?? '';
+          if (email.toLowerCase() == gestorEmail.toLowerCase()) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Você não pode cadastrar um consultor com seu próprio e-mail.'),
+                backgroundColor: Colors.red.shade700,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            );
+            setState(() => _loading = false);
+            return;
+          }
+        }
 
-  Stream<QuerySnapshot> get _todosClientesStream {
-    if (_consultoresIds.isEmpty) {
-      return const Stream<QuerySnapshot>.empty();
-    }
-    
-    return _firestore
-        .collection('clientes')
-        .where('consultorId', whereIn: _consultoresIds)
-        .snapshots();
-  }
+        final consultoresSnapshot = await FirebaseFirestore.instance
+            .collection('consultores')
+            .where('email', isEqualTo: email)
+            .limit(1)
+            .get();
 
-  Future<Map<String, String>> _getNomesConsultores() async {
-    final Map<String, String> nomes = {};
-    
-    if (_consultoresIds.isEmpty) return nomes;
+        if (consultoresSnapshot.docs.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Este e-mail já está cadastrado como consultor.'),
+              backgroundColor: Colors.red.shade700,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          );
+          setState(() => _loading = false);
+          return;
+        }
 
-    try {
-      final consultoresSnapshot = await _firestore
-          .collection('consultores')
-          .where(FieldPath.documentId, whereIn: _consultoresIds)
-          .get();
+        final credential = await FirebaseAuth.instance
+            .createUserWithEmailAndPassword(email: email, password: senha);
+        print('✅ Usuário criado: ${credential.user!.uid}');
 
-      for (final doc in consultoresSnapshot.docs) {
-        nomes[doc.id] = doc.get('nome') as String? ?? 'Consultor';
-      }
-    } catch (e) {
-      print('Erro ao carregar nomes dos consultores: $e');
-    }
+        await FirebaseFirestore.instance
+            .collection('consultores')
+            .doc(credential.user!.uid)
+            .set({
+          'nome': _nomeCtrl.text.trim(),
+          'telefone': _telefoneCtrl.text,
+          'email': email,
+          'matricula': _matriculaCtrl.text.trim(),
+          'gestorId': gestorId,
+          'tipo': 'consultor',
+          'uid': credential.user!.uid,
+          'data_cadastro': FieldValue.serverTimestamp(),
+        });
 
-    return nomes;
-  }
+        print('✅ Consultor salvo em /consultores/${credential.user!.uid}');
 
-  Future<void> _abrirNoGPS(String endereco) async {
-    final encodedEndereco = Uri.encodeComponent(endereco);
-    
-    final urls = {
-      'Google Maps': 'https://www.google.com/maps/search/?api=1&query=$encodedEndereco',
-      'Waze': 'https://waze.com/ul?q=$encodedEndereco&navigate=yes',
-      'Apple Maps': 'https://maps.apple.com/?q=$encodedEndereco',
-    };
-
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Abrir no GPS'),
-        content: const Text('Escolha o aplicativo de navegação:'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Consultor cadastrado com sucesso!'),
+            backgroundColor: Colors.green.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-          ...urls.entries.map((entry) => TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _launchUrl(entry.value);
-            },
-            child: Text(entry.key),
-          )).toList(),
-        ],
-      ),
-    );
+        );
+        _limparCampos();
+      } on FirebaseAuthException catch (e) {
+        print('❌ Auth error: $e');
+        String mensagem = 'Erro: ${e.message}';
+        if (e.code == 'email-already-in-use') {
+          mensagem = 'E-mail já cadastrado no Firebase';
+        } else if (e.code == 'weak-password') {
+          mensagem = 'Senha muito fraca';
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(mensagem),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      } on FirebaseException catch (e) {
+        print('❌ Firebase error: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Erro ao salvar no banco. Verifique: conexão, regras do Firestore ou tente novamente.',
+            ),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      } catch (e, stack) {
+        print('❌ Erro inesperado: $e\n$stack');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro: ${e.toString()}'),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      } finally {
+        setState(() => _loading = false);
+      }
+    }
   }
 
-  Future<void> _launchUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Não foi possível abrir o aplicativo'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
+  void _limparCampos() {
+    _formKey.currentState!.reset();
+    _nomeCtrl.clear();
+    _telefoneCtrl.clear();
+    _emailCtrl.clear();
+    _senhaCtrl.clear();
+    _matriculaCtrl.clear();
+    setState(() {});
+  }
+
+  String get _iniciais {
+    final nome = _nomeCtrl.text.trim();
+    if (nome.isEmpty) return 'CN';
+    final parts = nome.split(' ').where((p) => p.isNotEmpty).take(2).toList();
+    return parts.map((p) => p[0]).join().toUpperCase();
   }
 
   InputDecoration _obterDecoracaoCampo(
     String label, {
     String? hint,
     Widget? suffixIcon,
-    bool isObrigatorio = false,
+    bool isObrigatorio = true,
   }) {
     return InputDecoration(
       labelText: '$label${isObrigatorio ? ' *' : ''}',
@@ -153,6 +203,17 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
           width: 2,
         ),
       ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Theme.of(context).colorScheme.error),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: Theme.of(context).colorScheme.error,
+          width: 2,
+        ),
+      ),
       suffixIcon: suffixIcon,
       labelStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -161,6 +222,15 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
             color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
           ),
     );
+  }
+
+  String? _validarCampoObrigatorio(String? v, {String field = 'Campo'}) {
+    if (v == null || v.trim().isEmpty) return '$field é obrigatório';
+    return null;
+  }
+
+  String? _validarCampoOpcional(String? v) {
+    return null;
   }
 
   Widget _buildHeader() {
@@ -176,7 +246,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
-              Icons.calendar_today_rounded,
+              Icons.group_add_rounded,
               color: Theme.of(context).colorScheme.onPrimaryContainer,
               size: 28,
             ),
@@ -187,7 +257,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Visitas da Equipe',
+                  'Cadastrar Consultor',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                         color: Theme.of(context).colorScheme.onSurface,
@@ -195,7 +265,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Acompanhe as visitas de todos os consultores',
+                  'Cadastre novos consultores para gerenciar clientes',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
@@ -233,669 +303,235 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
     );
   }
 
-  Widget _buildCard({required String title, required Widget child}) {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 2,
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSectionTitle(title),
-            child,
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVisitaItem(DocumentSnapshot doc, Map<String, String> nomesConsultores) {
-    final cs = Theme.of(context).colorScheme;
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    
-    final endereco = data['endereco'] ?? 'Endereço não informado';
-    final estabelecimento = data['estabelecimento'] ?? 'Estabelecimento não informado';
-    final dataVisitaStr = data['dataVisita']?.toString();
-    final cidade = data['cidade'] ?? '';
-    final estado = data['estado'] ?? '';
-    final consultorId = data['consultorId'] ?? '';
-    final consultorNome = nomesConsultores[consultorId] ?? 'Consultor não encontrado';
-    
-    final dataFormatada = _formatarDataVisita(dataVisitaStr);
-    final statusInfo = _determinarStatus(dataVisitaStr);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: cs.primaryContainer.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              statusInfo['icone'],
-              size: 20,
-              color: cs.onPrimaryContainer,
-            ),
-          ),
-          const SizedBox(width: 12),
-          
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: statusInfo['corFundo'],
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        statusInfo['texto'],
-                        style: TextStyle(
-                          color: statusInfo['corTexto'],
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: cs.secondaryContainer.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        consultorNome,
-                        style: TextStyle(
-                          color: cs.onSecondaryContainer,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                
-                Text(
-                  estabelecimento,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w500,
-                        color: cs.onSurface,
-                      ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                
-                Text(
-                  '$endereco, $cidade - $estado',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                
-                Row(
-                  children: [
-                    Text(
-                      dataFormatada,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: cs.onSurfaceVariant.withOpacity(0.7),
-                          ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: Icon(Icons.navigation, size: 18, color: cs.primary),
-                      onPressed: () => _abrirNoGPS('$endereco, $cidade - $estado'),
-                      tooltip: 'Abrir no GPS',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildVisitasHoje(Map<String, String> nomesConsultores) {
-    final cs = Theme.of(context).colorScheme;
-
-    return StreamBuilder<QuerySnapshot>(
-      stream: _todosClientesStream,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildVisitasPlaceholder(cs, 'Carregando...', 'Buscando visitas de hoje');
-        }
-
-        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return _buildVisitasPlaceholder(cs, 'Nenhuma visita hoje', 'Não há visitas agendadas para hoje');
-        }
-
-        final clientes = snapshot.data!.docs;
-        final hoje = DateTime.now();
-        final hojeInicio = DateTime(hoje.year, hoje.month, hoje.day);
-        final hojeFim = DateTime(hoje.year, hoje.month, hoje.day, 23, 59, 59);
-
-        final visitasHoje = clientes.where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          final dataVisitaStr = data['dataVisita']?.toString();
-          
-          if (dataVisitaStr != null) {
-            try {
-              final dataVisita = DateTime.parse(dataVisitaStr);
-              return dataVisita.isAfter(hojeInicio) && dataVisita.isBefore(hojeFim);
-            } catch (e) {
-              return false;
-            }
-          }
-          return false;
-        }).toList();
-
-        if (visitasHoje.isEmpty) {
-          return _buildVisitasPlaceholder(cs, 'Nenhuma visita hoje', 'Não há visitas agendadas para hoje');
-        }
-
-        return Column(
-          children: visitasHoje.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            final estabelecimento = data['estabelecimento'] ?? 'Estabelecimento';
-            final endereco = data['endereco'] ?? 'Endereço';
-            final cidade = data['cidade'] ?? '';
-            final estado = data['estado'] ?? '';
-            final consultorId = data['consultorId'] ?? '';
-            final consultorNome = nomesConsultores[consultorId] ?? 'Consultor';
-
-            final enderecoCompleto = '$endereco, $cidade - $estado';
-
-            return GestureDetector(
-              onTap: () => _abrirNoGPS(enderecoCompleto),
-              child: _buildVisitaHojeReal(
-                cs, 
-                estabelecimento, 
-                enderecoCompleto,
-                consultorNome,
-              ),
-            );
-          }).toList(),
-        );
-      },
-    );
-  }
-
-  Widget _buildVisitasPlaceholder(ColorScheme cs, String titulo, String subtitulo) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surfaceVariant.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: cs.outline.withOpacity(0.2),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: cs.surfaceVariant,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              Icons.info_outline,
-              color: cs.onSurfaceVariant,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  titulo,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w500,
-                        color: cs.onSurface,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitulo,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildVisitaHojeReal(ColorScheme cs, String estabelecimento, String localizacao, String consultorNome) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: cs.primaryContainer.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: cs.primaryContainer.withOpacity(0.3),
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: cs.primary,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                Icons.flag_rounded,
-                color: cs.onPrimary,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        'HOJE - ',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: cs.onSurface,
-                            ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          estabelecimento,
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: cs.onSurface,
-                              ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    localizacao,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: cs.onSurfaceVariant,
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(Icons.person, size: 14, color: cs.onSurfaceVariant),
-                      const SizedBox(width: 4),
-                      Text(
-                        consultorNome,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: cs.onSurfaceVariant,
-                            ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        'Toque para abrir no GPS',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: cs.primary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _formatarDataVisita(String? dataVisitaStr) {
-    if (dataVisitaStr == null || dataVisitaStr.isEmpty) return 'Data não informada';
-    
-    try {
-      final dataVisita = DateTime.parse(dataVisitaStr);
-      
-      final hoje = DateTime.now();
-      final amanha = DateTime(hoje.year, hoje.month, hoje.day + 1);
-      
-      if (dataVisita.year == hoje.year && dataVisita.month == hoje.month && dataVisita.day == hoje.day) {
-        return 'Hoje às ${DateFormat('HH:mm', 'pt_BR').format(dataVisita)}';
-      } else if (dataVisita.year == amanha.year && dataVisita.month == amanha.month && dataVisita.day == amanha.day) {
-        return 'Amanhã às ${DateFormat('HH:mm', 'pt_BR').format(dataVisita)}';
-      } else {
-        final format = dataVisita.year == hoje.year
-            ? 'EEE, d MMMM' 
-            : 'EEE, d MMMM y';
-        
-        return '${_capitalize(DateFormat(format, 'pt_BR').format(dataVisita))} às ${DateFormat('HH:mm', 'pt_BR').format(dataVisita)}';
-      }
-    } catch (e) {
-      return 'Data inválida';
-    }
-  }
-
-  Map<String, dynamic> _determinarStatus(String? dataVisitaStr) {
-    final cs = Theme.of(context).colorScheme;
-    
-    if (dataVisitaStr == null || dataVisitaStr.isEmpty) {
-      return {
-        'icone': Icons.event_note_outlined,
-        'texto': 'AGENDADO',
-        'corFundo': const Color(0x3328A745),
-        'corTexto': Colors.green,
-      };
-    }
-    
-    try {
-      final dataVisita = DateTime.parse(dataVisitaStr);
-      final hoje = DateTime.now();
-      final hojeInicio = DateTime(hoje.year, hoje.month, hoje.day);
-      final hojeFim = DateTime(hoje.year, hoje.month, hoje.day, 23, 59, 59);
-      
-      if (dataVisita.isAfter(hojeInicio) && dataVisita.isBefore(hojeFim)) {
-        return {
-          'icone': Icons.flag_outlined,
-          'texto': 'HOJE',
-          'corFundo': Colors.black,
-          'corTexto': Colors.white,
-        };
-      } else if (dataVisita.isBefore(hoje)) {
-        return {
-          'icone': Icons.check_circle_outline,
-          'texto': 'REALIZADA',
-          'corFundo': cs.primaryContainer,
-          'corTexto': cs.onPrimaryContainer,
-        };
-      } else {
-        return {
-          'icone': Icons.event_note_outlined,
-          'texto': 'AGENDADO',
-          'corFundo': const Color(0x3328A745),
-          'corTexto': Colors.green,
-        };
-      }
-    } catch (e) {
-      return {
-        'icone': Icons.event_note_outlined,
-        'texto': 'AGENDADO',
-        'corFundo': const Color(0x3328A745),
-        'corTexto': Colors.green,
-      };
-    }
-  }
-
-  String _capitalize(String text) {
-    if (text.isEmpty) return text;
-    return text[0].toUpperCase() + text.substring(1);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: _buildHeader(),
-          ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          _limparCampos();
+        },
+        child: CustomScrollView(
+          slivers: [
+            // Header
+            SliverToBoxAdapter(
+              child: _buildHeader(),
+            ),
 
-          SliverToBoxAdapter(
-            child: _buildCard(
-              title: 'Pesquisar Visitas',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextField(
-                    controller: _searchCtrl,
-                    textInputAction: TextInputAction.search,
-                    decoration: _obterDecoracaoCampo(
-                      'Estabelecimento, endereço ou consultor',
-                      hint: 'Digite para pesquisar visitas...',
-                      suffixIcon: _query.isEmpty
-                          ? const Icon(Icons.search)
-                          : IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: _searchCtrl.clear,
-                              tooltip: 'Limpar',
+            // Formulário
+            SliverToBoxAdapter(
+              child: Card(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 2,
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Avatar do consultor
+                        Center(
+                          child: Column(
+                            children: [
+                              Container(
+                                width: 64,
+                                height: 64,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.primaryContainer,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    _iniciais,
+                                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                          color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                        ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Iniciais do Consultor',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Seção de Dados Pessoais
+                        _buildSectionTitle(
+                          'Dados Pessoais',
+                          subtitle: 'Informações básicas do consultor',
+                        ),
+
+                        TextFormField(
+                          controller: _nomeCtrl,
+                          decoration: _obterDecoracaoCampo(
+                            'Nome Completo',
+                            hint: 'Digite o nome completo do consultor',
+                          ),
+                          validator: (v) =>
+                              _validarCampoObrigatorio(v, field: 'Nome completo'),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                        const SizedBox(height: 12),
+
+                        TextFormField(
+                          controller: _telefoneCtrl,
+                          decoration: _obterDecoracaoCampo(
+                            'Telefone',
+                            hint: '(00) 00000-0000',
+                          ),
+                          keyboardType: TextInputType.phone,
+                          inputFormatters: [_telefoneMask],
+                          validator: (v) {
+                            final raw = _telefoneMask.getUnmaskedText();
+                            if (raw.isEmpty) return "Informe o telefone";
+                            if (raw.length < 11) return "Telefone inválido";
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Seção de Acesso
+                        _buildSectionTitle(
+                          'Acesso ao Sistema',
+                          subtitle: 'Credenciais para login',
+                        ),
+
+                        TextFormField(
+                          controller: _emailCtrl,
+                          decoration: _obterDecoracaoCampo(
+                            'E-mail',
+                            hint: 'consultor@empresa.com',
+                          ),
+                          keyboardType: TextInputType.emailAddress,
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return "Informe o e-mail";
+                            if (!EmailValidator.validate(v.trim())) return "E-mail inválido";
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+
+                        TextFormField(
+                          controller: _senhaCtrl,
+                          obscureText: true,
+                          decoration: _obterDecoracaoCampo(
+                            'Senha',
+                            hint: 'Mínimo 6 caracteres',
+                          ),
+                          validator: (v) {
+                            if (v == null || v.isEmpty) return "Informe a senha";
+                            if (v.length < 6) return "Mínimo 6 caracteres";
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Seção de Dados Adicionais
+                        _buildSectionTitle(
+                          'Dados Adicionais',
+                          subtitle: 'Informações complementares',
+                        ),
+
+                        TextFormField(
+                          controller: _matriculaCtrl,
+                          decoration: _obterDecoracaoCampo(
+                            'Número da Matrícula',
+                            hint: 'Digite o número da matrícula',
+                            isObrigatorio: false,
+                          ),
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          validator: _validarCampoOpcional,
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Botões de ação
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  side: BorderSide(
+                                    color: Theme.of(context).colorScheme.outline,
+                                  ),
+                                ),
+                                onPressed: _limparCampos,
+                                child: Text(
+                                  'Limpar',
+                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                        color: Theme.of(context).colorScheme.onSurface,
+                                      ),
+                                ),
+                              ),
                             ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: FilledButton(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Theme.of(context).colorScheme.primary,
+                                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                onPressed: _loading ? null : _cadastrarConsultor,
+                                child: _loading
+                                    ? SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Theme.of(context).colorScheme.onPrimary,
+                                        ),
+                                      )
+                                    : Text(
+                                        'Cadastrar Consultor',
+                                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                              color: Theme.of(context).colorScheme.onPrimary,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: Text(
+                            '',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
-          ),
-
-          SliverToBoxAdapter(
-            child: FutureBuilder<Map<String, String>>(
-              future: _getNomesConsultores(),
-              builder: (context, snapshot) {
-                final nomesConsultores = snapshot.data ?? {};
-                return _buildCard(
-                  title: 'Visitas de Hoje - Equipe',
-                  child: _buildVisitasHoje(nomesConsultores),
-                );
-              },
-            ),
-          ),
-
-          SliverToBoxAdapter(
-            child: FutureBuilder<Map<String, String>>(
-              future: _getNomesConsultores(),
-              builder: (context, snapshot) {
-                final nomesConsultores = snapshot.data ?? {};
-
-                return StreamBuilder<QuerySnapshot>(
-                  stream: _todosClientesStream,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return _buildCard(
-                        title: 'Todas as Visitas',
-                        child: Column(
-                          children: List.generate(3, (index) => Container(
-                            margin: const EdgeInsets.only(bottom: 16),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.surfaceVariant,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Container(
-                                        width: 80,
-                                        height: 20,
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context).colorScheme.surfaceVariant,
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Container(
-                                        width: double.infinity,
-                                        height: 16,
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context).colorScheme.surfaceVariant,
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )),
-                        ),
-                      );
-                    }
-
-                    if (snapshot.hasError) {
-                      return _buildCard(
-                        title: 'Todas as Visitas',
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.errorContainer.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.error_outline,
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  'Erro ao carregar visitas',
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                        color: Theme.of(context).colorScheme.error,
-                                      ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }
-
-                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      return _buildCard(
-                        title: 'Todas as Visitas',
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Column(
-                            children: [
-                              Icon(
-                                Icons.calendar_today_outlined,
-                                size: 48,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'Nenhuma visita agendada',
-                                style: Theme.of(context).textTheme.bodyLarge,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Os consultores ainda não cadastraram clientes',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }
-
-                    final clientes = snapshot.data!.docs;
-                    final clientesFiltrados = _query.isEmpty
-                        ? clientes
-                        : clientes.where((doc) {
-                            final data = doc.data() as Map<String, dynamic>;
-                            final estabelecimento = data['estabelecimento']?.toString().toLowerCase() ?? '';
-                            final endereco = data['endereco']?.toString().toLowerCase() ?? '';
-                            final consultorId = data['consultorId'] ?? '';
-                            final consultorNome = nomesConsultores[consultorId]?.toLowerCase() ?? '';
-                            final query = _query.toLowerCase();
-                            
-                            return estabelecimento.contains(query) || 
-                                   endereco.contains(query) ||
-                                   consultorNome.contains(query);
-                          }).toList();
-
-                    if (clientesFiltrados.isEmpty) {
-                      return _buildCard(
-                        title: 'Todas as Visitas',
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Column(
-                            children: [
-                              Icon(
-                                Icons.search_off_outlined,
-                                size: 48,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'Nenhuma visita encontrada',
-                                style: Theme.of(context).textTheme.bodyLarge,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Tente ajustar os termos da pesquisa',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }
-
-                    return _buildCard(
-                      title: 'Todas as Visitas (${clientesFiltrados.length})',
-                      child: Column(
-                        children: clientesFiltrados.map((doc) => _buildVisitaItem(doc, nomesConsultores)).toList(),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-
-          const SliverToBoxAdapter(
-            child: SizedBox(height: 20),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

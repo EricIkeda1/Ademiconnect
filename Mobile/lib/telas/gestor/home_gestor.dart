@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../widgets/custom_navbar.dart';
 import '../widgets/stat_card.dart';
 import 'minhas_visitas.dart';
+import 'cadastrar_consultores.dart';
 import 'todos_clientes_tab.dart';
 import 'relatorios_tab.dart';
 
@@ -196,45 +197,13 @@ class _HomeGestorState extends State<HomeGestor> {
             body: TabBarView(
               physics: const BouncingScrollPhysics(),
               children: [
-                DashboardTab(), 
-                ConsultoresTab(),   
-                TodosClientesTab(), 
-                RelatoriosTab(),    
+                const DashboardTab(),
+                ConsultoresTab(),
+                TodosClientesTab(),
+                RelatoriosTab(),
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class ConsultoresTab extends StatelessWidget {
-  const ConsultoresTab({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.groups,
-              size: 64,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Consultores',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Gerencie sua equipe de consultores',
-              style: TextStyle(color: Colors.grey),
-            ),
-          ],
         ),
       ),
     );

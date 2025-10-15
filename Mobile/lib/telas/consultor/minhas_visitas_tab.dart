@@ -309,198 +309,6 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
     );
   }
 
-  Widget _buildRuaTrabalhoHoje() {
-    final cs = Theme.of(context).colorScheme;
-
-    return StreamBuilder<QuerySnapshot>(
-      stream: _meusClientesStream,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildRuaTrabalhoPlaceholder(cs, 'Carregando...', 'Buscando dados do banco');
-        }
-
-        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return _buildRuaTrabalhoPlaceholder(cs, 'Nenhuma visita hoje', 'Cadastre clientes para ver as visitas aqui');
-        }
-
-        final clientes = snapshot.data!.docs;
-        final hoje = DateTime.now();
-        final hojeInicio = DateTime(hoje.year, hoje.month, hoje.day);
-        final hojeFim = DateTime(hoje.year, hoje.month, hoje.day, 23, 59, 59);
-
-        DocumentSnapshot? clienteHoje;
-
-        for (final doc in clientes) {
-          final data = doc.data() as Map<String, dynamic>;
-          final dataVisitaStr = data['dataVisita']?.toString();
-          
-          if (dataVisitaStr != null) {
-            try {
-              final dataVisita = DateTime.parse(dataVisitaStr);
-              if (dataVisita.isAfter(hojeInicio) && dataVisita.isBefore(hojeFim)) {
-                clienteHoje = doc;
-                break;
-              }
-            } catch (e) {
-              continue;
-            }
-          }
-        }
-
-        if (clienteHoje == null) {
-          return _buildRuaTrabalhoPlaceholder(cs, 'Nenhuma visita para hoje', 'As visitas de hoje aparecerão aqui');
-        }
-
-        final data = clienteHoje.data() as Map<String, dynamic>;
-        final estabelecimento = data['estabelecimento'] ?? 'Estabelecimento';
-        final endereco = data['endereco'] ?? 'Endereço';
-        final cidade = data['cidade'] ?? '';
-        final estado = data['estado'] ?? '';
-
-        final enderecoCompleto = '$endereco, $cidade - $estado';
-
-        return GestureDetector(
-          onTap: () => _abrirNoGPS(enderecoCompleto),
-          child: _buildRuaTrabalhoReal(
-            cs, 
-            estabelecimento, 
-            enderecoCompleto
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildRuaTrabalhoPlaceholder(ColorScheme cs, String titulo, String subtitulo) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surfaceVariant.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: cs.outline.withOpacity(0.2),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: cs.surfaceVariant,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(
-              Icons.info_outline,
-              color: cs.onSurfaceVariant,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  titulo,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w500,
-                        color: cs.onSurface,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitulo,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRuaTrabalhoReal(ColorScheme cs, String estabelecimento, String localizacao) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: cs.primaryContainer.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: cs.primaryContainer.withOpacity(0.3),
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: cs.primary,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                Icons.flag_rounded,
-                color: cs.onPrimary,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'HOJE - $estabelecimento',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: cs.onSurface,
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    localizacao,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: cs.onSurfaceVariant,
-                        ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Toque para abrir no GPS',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: cs.primary,
-                          fontWeight: FontWeight.w500,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: cs.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: cs.primary.withOpacity(0.3)),
-              ),
-              child: Text(
-                'PRIORIDADE',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: cs.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   String _formatarDataVisita(String? dataVisitaStr) {
     if (dataVisitaStr == null || dataVisitaStr.isEmpty) return 'Data não informada';
     
@@ -553,7 +361,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
         };
       } else if (dataVisita.isBefore(hoje)) {
         return {
-          'icone': Icons.check_circle_outline,
+          'icone': Icons.check_circle_outlined,
           'texto': 'REALIZADA',
           'corFundo': cs.primaryContainer,
           'corTexto': cs.onPrimaryContainer,
@@ -616,12 +424,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
             ),
           ),
 
-          SliverToBoxAdapter(
-            child: _buildCard(
-              title: 'Rua de Trabalho - Hoje',
-              child: _buildRuaTrabalhoHoje(),
-            ),
-          ),
+          // REMOVIDO: Seção "Rua de Trabalho - Hoje" foi movida para home_consultor.dart
 
           SliverToBoxAdapter(
             child: StreamBuilder<QuerySnapshot>(
