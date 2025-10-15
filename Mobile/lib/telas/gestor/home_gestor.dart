@@ -18,6 +18,9 @@ class HomeGestor extends StatefulWidget {
 class _HomeGestorState extends State<HomeGestor> {
   double _collapseProgress = 0.0;
   String _userName = 'Gestor';
+  int _totalConsultores = 0;
+  int _totalClientes = 0;
+  int _consultoresAtivos = 0;
 
   static const double collapseDistance = 60.0;
 
@@ -25,6 +28,7 @@ class _HomeGestorState extends State<HomeGestor> {
   void initState() {
     super.initState();
     _loadUserData();
+    _loadStats();
   }
 
   Future<void> _loadUserData() async {
@@ -58,6 +62,55 @@ class _HomeGestorState extends State<HomeGestor> {
     }
   }
 
+  Future<void> _loadStats() async {
+    final gestorUid = FirebaseAuth.instance.currentUser?.uid;
+    if (gestorUid == null) return;
+
+    try {
+      // Carrega consultores do gestor
+      final consultoresSnapshot = await FirebaseFirestore.instance
+          .collection('consultores')
+          .where('gestorId', isEqualTo: gestorUid)
+          .get();
+
+      final consultoresIds = consultoresSnapshot.docs.map((doc) => doc.id).toList();
+      final totalConsultores = consultoresIds.length;
+
+      // Carrega total de clientes
+      int totalClientes = 0;
+      if (consultoresIds.isNotEmpty) {
+        final clientesSnapshot = await FirebaseFirestore.instance
+            .collection('clientes')
+            .where('consultorId', whereIn: consultoresIds)
+            .get();
+        totalClientes = clientesSnapshot.docs.length;
+      }
+
+      // Consultores ativos (que têm pelo menos 1 cliente)
+      int consultoresAtivos = 0;
+      if (consultoresIds.isNotEmpty) {
+        for (final consultorId in consultoresIds) {
+          final clientesConsultor = await FirebaseFirestore.instance
+              .collection('clientes')
+              .where('consultorId', isEqualTo: consultorId)
+              .limit(1)
+              .get();
+          if (clientesConsultor.docs.isNotEmpty) {
+            consultoresAtivos++;
+          }
+        }
+      }
+
+      setState(() {
+        _totalConsultores = totalConsultores;
+        _totalClientes = totalClientes;
+        _consultoresAtivos = consultoresAtivos;
+      });
+    } catch (e) {
+      print('❌ Erro ao carregar stats: $e');
+    }
+  }
+
   String _formatarNome(String nome) {
     final partes = nome.trim().split(' ').where((p) => p.isNotEmpty).toList();
     if (partes.isEmpty) return 'Gestor';
@@ -67,12 +120,6 @@ class _HomeGestorState extends State<HomeGestor> {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    final consultoresStream = FirebaseFirestore.instance
-        .collection('consultores')
-        .where('gestorId', isEqualTo: user?.uid)
-        .snapshots();
-
     return DefaultTabController(
       length: 4, 
       child: Scaffold(
@@ -111,59 +158,41 @@ class _HomeGestorState extends State<HomeGestor> {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: consultoresStream,
-                    builder: (context, snapshot) {
-                      int count = 0;
-                      if (snapshot.hasData) {
-                        count = snapshot.data!.docs.length;
-                      }
-
-                      return GridView.count(
-                        crossAxisCount: 2,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        childAspectRatio: 2,
-                        children: const [
-                          StatCard(
-                            title: "Cadastros Hoje",
-                            value: "0",
-                            icon: Icons.event_available,
-                            color: Colors.blue,
-                          ),
-                          StatCard(
-                            title: "Cadastros Este Mês",
-                            value: "0",
-                            icon: Icons.stacked_bar_chart,
-                            color: Colors.green,
-                          ),
-                          StatCard(
-                            title: "Cadastros Este Ano",
-                            value: "0",
-                            icon: Icons.insert_chart,
-                            color: Colors.purple,
-                          ),
-                          StatCard(
-                            title: "Consultor Ativo",
-                            value: "0", 
-                            icon: Icons.groups,
-                            color: Colors.orange,
-                          ),
-                        ].map((widget) {
-                          if (widget.title == "Consultor Ativo") {
-                            return StatCard(
-                              title: "Consultor Ativo",
-                              value: "$count",
-                              icon: Icons.groups,
-                              color: Colors.orange,
-                            );
-                          }
-                          return widget;
-                        }).toList(),
-                      );
-                    },
+                  child: GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    childAspectRatio: 2,
+                    children: [
+                      StatCard(
+                        title: "Total Consultores",
+                        value: _totalConsultores.toString(),
+                        icon: Icons.groups,
+                        color: Colors.blue,
+                      ),
+                      StatCard(
+                        title: "Total Clientes",
+                        value: _totalClientes.toString(),
+                        icon: Icons.people_outline,
+                        color: Colors.green,
+                      ),
+                      StatCard(
+                        title: "Consultores Ativos",
+                        value: _consultoresAtivos.toString(),
+                        icon: Icons.assignment_ind,
+                        color: Colors.orange,
+                      ),
+                      StatCard(
+                        title: "Taxa de Atividade",
+                        value: _totalConsultores > 0 
+                            ? "${((_consultoresAtivos / _totalConsultores) * 100).toStringAsFixed(0)}%" 
+                            : "0%",
+                        icon: Icons.trending_up,
+                        color: Colors.purple,
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -185,8 +214,8 @@ class _HomeGestorState extends State<HomeGestor> {
                       ],
                     ),
                     tabs: const [
-                      Tab(text: 'Minhas Visitas'),
-                      Tab(text: 'Consultores'),
+                      Tab(text: 'Visitas dos Consultores'),
+                      Tab(text: 'Cadastrar Consultores'),
                       Tab(text: 'Todos os Clientes'),
                       Tab(text: 'Relatórios'),
                     ],
