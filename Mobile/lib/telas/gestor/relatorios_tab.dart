@@ -1,6 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
 class RelatoriosTab extends StatefulWidget {
@@ -21,23 +20,27 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
   }
 
   Future<void> _carregarDados() async {
-    final gestorUid = FirebaseAuth.instance.currentUser?.uid ?? '';
-    if (gestorUid.isEmpty) return;
+    final gestorId = Supabase.instance.client.auth.currentSession?.user.id;
+    if (gestorId == null) return;
+
+    setState(() => _isLoading = true);
 
     try {
-      // Carrega consultores do gestor
-      final consultoresSnapshot = await FirebaseFirestore.instance
-          .collection('consultores')
-          .where('gestorId', isEqualTo: gestorUid)
-          .get();
+      // 1. Busca consultores do gestor
+      // Correção: use 'gestor_id' (snake_case) em vez de 'gestorId'
+      final consultores = await Supabase.instance.client
+          .from('consultores')
+          .select('id')
+          .eq('gestor_id', gestorId); // Correção: campo em snake_case
 
       setState(() {
         _consultoresIds.clear();
-        _consultoresIds.addAll(consultoresSnapshot.docs.map((doc) => doc.id).toList());
+        _consultoresIds.addAll((consultores as List)
+            .map((c) => (c as Map<String, dynamic>)['id'].toString()));
         _isLoading = false;
       });
-    } catch (e) {
-      print('Erro ao carregar dados: $e');
+    } catch (error) {
+      print('Erro ao carregar dados: $error');
       setState(() => _isLoading = false);
     }
   }
@@ -53,10 +56,8 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
 
   DateTime? _parseData(dynamic data) {
     if (data == null) return null;
-    
-    if (data is Timestamp) {
-      return data.toDate();
-    } else if (data is String) {
+
+    if (data is String) {
       try {
         return DateTime.parse(data);
       } catch (e) {
@@ -359,102 +360,106 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
     for (final consultorId in _consultoresIds) {
       try {
         // Busca dados do consultor
-        final consultorDoc = await FirebaseFirestore.instance
-            .collection('consultores')
-            .doc(consultorId)
-            .get();
+        // Correção: use 'nome' (snake_case) em vez de 'nome'
+        final consultor = await Supabase.instance.client
+            .from('consultores')
+            .select('nome')
+            .eq('id', consultorId)
+            .single();
 
-        if (consultorDoc.exists) {
-          final nome = consultorDoc.get('nome') as String? ?? 'Sem nome';
+        final nome = (consultor['nome'] as String?) ?? 'Sem nome';
 
-          // Busca clientes do consultor - usando 'consultorId'
-          final clientesSnapshot = await FirebaseFirestore.instance
-              .collection('clientes')
-              .where('consultorId', isEqualTo: consultorId)
-              .get();
+        // Busca clientes do consultor
+        // Correção: use 'consultor_uid' (snake_case) em vez de 'consultorUid'
+        final clientes = await Supabase.instance.client
+            .from('clientes')
+            .select('*')
+            .eq('consultor_uid', consultorId); // Correção: campo em snake_case
 
-          int total = clientesSnapshot.docs.length;
-          int mes = clientesSnapshot.docs.where((doc) {
-            final dataCadastro = doc.get('data_cadastro');
-            final DateTime? data = _parseData(dataCadastro);
-            return data != null && data.isAfter(inicioMes);
-          }).length;
+        final List<dynamic> clientesList = clientes as List;
 
-          stats.add(
-            Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Center(
-                      child: Text(
-                        _iniciais(nome),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onPrimaryContainer,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          nome,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$total cadastros totais',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '$mes este mês',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ],
+        int total = clientesList.length;
+        int mes = clientesList.where((cliente) {
+          // Correção: use 'data_cadastro' (snake_case) em vez de 'dataCadastro'
+          final dataCadastro = cliente['data_cadastro'] as String?;
+          final DateTime? data = _parseData(dataCadastro);
+          return data != null && data.isAfter(inicioMes);
+        }).length;
+
+        stats.add(
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
               ),
             ),
-          );
-        }
-      } catch (e) {
-        print('Erro ao carregar stats do consultor $consultorId: $e');
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: Text(
+                      _iniciais(nome),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        nome,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$total cadastros totais',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '$mes este mês',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      } catch (error) {
+        print('Erro ao carregar stats do consultor $consultorId: $error');
       }
     }
 
@@ -465,34 +470,25 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
     final List<Widget> atividades = [];
 
     try {
-      // SOLUÇÃO ALTERNATIVA: Busca todos os clientes e filtra manualmente
-      // Isso evita a necessidade de índice composto
-      final clientesSnapshot = await FirebaseFirestore.instance
-          .collection('clientes')
-          .get();
+      // Busca clientes dos consultores do gestor, ordenados por data_cadastro
+      // Correções:
+      // 1. Use 'contains' no lugar de 'in_'
+      // 2. Use 'consultor_uid' (snake_case) em vez de 'consultorUid'
+      // 3. Use 'data_cadastro' (snake_case) em vez de 'dataCadastro'
+      final clientes = await Supabase.instance.client
+          .from('clientes')
+          .select('*')
+          .contains('consultor_uid', _consultoresIds) // Correção: contains em vez de in_
+          .order('data_cadastro', ascending: false) // Correção: campo em snake_case
+          .limit(10);
 
-      // Filtra apenas os clientes dos consultores do gestor
-      final clientesFiltrados = clientesSnapshot.docs.where((doc) {
-        final consultorId = doc.get('consultorId') as String?;
-        return consultorId != null && _consultoresIds.contains(consultorId);
-      }).toList();
+      final List<dynamic> clientesList = clientes as List;
 
-      // Ordena manualmente por data_cadastro
-      clientesFiltrados.sort((a, b) {
-        final dataA = _parseData(a.get('data_cadastro'));
-        final dataB = _parseData(b.get('data_cadastro'));
-        if (dataA == null) return 1;
-        if (dataB == null) return -1;
-        return dataB.compareTo(dataA); // Ordem decrescente
-      });
-
-      // Pega os 10 mais recentes
-      final clientesRecentes = clientesFiltrados.take(10).toList();
-
-      for (final doc in clientesRecentes) {
-        final nomeCliente = doc.get('nome') as String? ?? 'Cliente';
-        final bairro = doc.get('bairro') as String? ?? 'sem bairro';
-        final dataCadastro = doc.get('data_cadastro');
+      for (final cliente in clientesList) {
+        final nomeCliente = (cliente['nome'] as String?) ?? 'Cliente';
+        final bairro = (cliente['bairro'] as String?) ?? 'sem bairro';
+        // Correção: use 'data_cadastro' (snake_case) em vez de 'dataCadastro'
+        final dataCadastro = cliente['data_cadastro'] as String?;
         final DateTime? data = _parseData(dataCadastro);
         final dataFormatada = data != null
             ? DateFormat('dd/MM HH:mm').format(data)
@@ -560,8 +556,8 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
           ),
         );
       }
-    } catch (e) {
-      print('Erro ao carregar atividades: $e');
+    } catch (error) {
+      print('Erro ao carregar atividades: $error');
     }
 
     return atividades;

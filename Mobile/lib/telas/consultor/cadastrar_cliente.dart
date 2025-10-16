@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/cliente.dart';
 import '../../services/cliente_service.dart';
 
@@ -17,6 +16,7 @@ class CadastrarCliente extends StatefulWidget {
 class _CadastrarClienteState extends State<CadastrarCliente> {
   final _formKey = GlobalKey<FormState>();
   final _clienteService = ClienteService();
+  final _client = Supabase.instance.client;
 
   final _nomeClienteCtrl = TextEditingController();
   final _telefoneCtrl = TextEditingController();
@@ -69,20 +69,22 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     super.dispose();
   }
 
-  Future<String> _buscarNomeDoConsultorNoFirestore(String uid) async {
+  Future<String> _buscarNomeDoConsultor(String uid) async {
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('consultores')
-          .doc(uid)
-          .get();
-      if (doc.exists) {
-        final data = doc.data();
-        if (data != null && data['nome'] != null && (data['nome'] as String).trim().isNotEmpty) {
-          return data['nome'] as String;
-        }
+      final row = await _client
+          .from('consultores')
+          .select('nome, email')
+          .eq('id', uid)
+          .maybeSingle();
+
+      if (row != null) {
+        final nome = (row['nome'] as String?)?.trim() ?? '';
+        if (nome.isNotEmpty) return nome;
+        final email = (row['email'] as String?)?.trim() ?? '';
+        if (email.isNotEmpty) return email.split('@').first;
       }
     } catch (e) {
-      print('Erro ao buscar nome do consultor no Firestore: $e');
+      debugPrint('Erro ao buscar nome do consultor no Supabase: $e');
     }
     return '';
   }
@@ -93,10 +95,12 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     setState(() => _isLoading = true);
 
     try {
-      final dataHora = DateFormat('dd/MM/yyyy HH:mm')
-          .parse('${_dataVisitaCtrl.text} ${_horaVisitaCtrl.text}');
-      final user = FirebaseAuth.instance.currentUser;
+      // Monta datetime a partir dos campos
+      final dataStr = _dataVisitaCtrl.text;
+      final horaStr = _horaVisitaCtrl.text;
+      final dataHora = DateFormat('dd/MM/yyyy HH:mm').parse('$dataStr $horaStr');
 
+      final user = _client.auth.currentSession?.user;
       if (user == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Usuário não autenticado.')),
@@ -104,14 +108,10 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
         return;
       }
 
-      String consultorNome = await _buscarNomeDoConsultorNoFirestore(user.uid);
-
+      // Busca nome do consultor no Supabase
+      String consultorNome = await _buscarNomeDoConsultor(user.id);
       if (consultorNome.trim().isEmpty) {
-        consultorNome = user.displayName ?? '';
-      }
-
-      if (consultorNome.trim().isEmpty) {
-        consultorNome = 'Consultor Desconhecido';
+        consultorNome = user.email?.split('@').first ?? 'Consultor Desconhecido';
       }
 
       final cliente = Cliente(
@@ -129,7 +129,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
             ? null
             : _observacoesCtrl.text.trim(),
         consultorResponsavel: consultorNome,
-        consultorUid: user.uid,
+        consultorUid: user.id,
       );
 
       await _clienteService.saveCliente(cliente);
@@ -147,7 +147,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
         );
       }
     } catch (e, st) {
-      print('Erro ao salvar cliente: $e\n$st');
+      debugPrint('Erro ao salvar cliente: $e\n$st');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -235,7 +235,9 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
       },
     );
     if (picked != null) {
-      _horaVisitaCtrl.text = picked.format(context);
+      final now = DateTime.now();
+      final dt = DateTime(now.year, now.month, now.day, picked.hour, picked.minute);
+      _horaVisitaCtrl.text = DateFormat('HH:mm').format(dt);
       setState(() {});
     }
   }

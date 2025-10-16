@@ -1,632 +1,439 @@
-import '../../models/cliente.dart';
-import '../../services/cliente_service.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+// Renomeado para MeusClientesTab já que está no arquivo meus_clientes_tab.dart
 class MeusClientesTab extends StatefulWidget {
-  final VoidCallback? onClienteRemovido;
+  final Function onClienteRemovido;
 
-  const MeusClientesTab({super.key, this.onClienteRemovido});
+  const MeusClientesTab({super.key, required this.onClienteRemovido});
 
   @override
   State<MeusClientesTab> createState() => _MeusClientesTabState();
 }
 
 class _MeusClientesTabState extends State<MeusClientesTab> {
-  final ClienteService _clienteService = ClienteService();
-  final List<Cliente> _clientes = [];
-  String _termoBusca = '';
-  String? _meuUid;
-  bool _isLoading = true;
-  final Map<String, bool> _expandedStates = {};
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _query = '';
+  final SupabaseClient _client = Supabase.instance.client;
 
   @override
   void initState() {
     super.initState();
-    _meuUid = FirebaseAuth.instance.currentUser?.uid;
-    _carregarClientes();
+    _searchCtrl.addListener(() => setState(() => _query = _searchCtrl.text.trim()));
   }
 
-  Future<void> _carregarClientes() async {
-    if (_meuUid == null) {
-      setState(() => _isLoading = false);
-      return;
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Stream<List<Map<String, dynamic>>> get _meusClientesStream {
+    final user = _client.auth.currentSession?.user;
+    if (user == null) {
+      return const Stream<List<Map<String, dynamic>>>.empty();
     }
 
-    try {
-      await _clienteService.loadClientes();
-      setState(() {
-        _clientes.clear();
-        _clientes.addAll(
-          _clienteService.clientes.where((c) => c.consultorUid == _meuUid).toList(),
-        );
-        for (var cliente in _clientes) {
-          _expandedStates[cliente.id] = false;
-        }
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao carregar clientes: $e'),
-            backgroundColor: Colors.red.shade700,
+    return _client
+        .from('clientes')
+        .select('*')
+        .eq('consultor_uid', user.id)
+        .order('data_visita', ascending: true)
+        .asStream();
+  }
+
+  Future<void> _abrirNoGPS(String endereco) async {
+    final encodedEndereco = Uri.encodeComponent(endereco);
+
+    final urls = {
+      'Google Maps': 'https://www.google.com/maps/search/?api=1&query=$encodedEndereco',
+      'Waze': 'https://waze.com/ul?q=$encodedEndereco&navigate=yes',
+      'Apple Maps': 'https://maps.apple.com/?q=$encodedEndereco',
+    };
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Abrir no GPS'),
+        content: const Text('Escolha o aplicativo de navegação:'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
           ),
-        );
-      }
-    }
+          ...urls.entries.map((entry) => TextButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await _launchUrl(entry.value);
+                },
+                child: Text(entry.key),
+              )).toList(),
+        ],
+      ),
+    );
   }
 
-  Future<void> _atualizarListaClientes() async {
-    await _carregarClientes();
-  }
-
-  Future<void> _reordenarClientes(int oldIndex, int newIndex) async {
-    if (oldIndex < newIndex) newIndex -= 1;
-
-    setState(() {
-      final Cliente item = _clientes.removeAt(oldIndex);
-      _clientes.insert(newIndex, item);
-    });
-
-    await _salvarOrdemClientes();
-
-    if (mounted) {
+  Future<void> _launchUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Ordem dos clientes atualizada!'),
-          backgroundColor: Colors.green,
+        SnackBar(
+          content: Text('Não foi possível abrir o aplicativo'),
+          backgroundColor: Colors.red,
         ),
       );
     }
   }
 
-  Future<void> _salvarOrdemClientes() async {
-    for (final cliente in _clientes) {
-      await _clienteService.saveCliente(cliente);
-    }
-  }
-
-  Future<void> _confirmarExclusaoCliente(Cliente cliente) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Excluir Cliente'),
-        content: Text('Tem certeza que deseja excluir ${cliente.estabelecimento}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text(
-              'Excluir',
-              style: TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      try {
-        await _clienteService.removeCliente(cliente.id);
-        _expandedStates.remove(cliente.id);
-        await _atualizarListaClientes();
-        widget.onClienteRemovido?.call();
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Cliente excluído com sucesso!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Erro ao excluir cliente: $e'),
-              backgroundColor: Colors.red.shade700,
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  void _toggleExpansion(String clienteId) {
-    setState(() {
-      _expandedStates[clienteId] = !(_expandedStates[clienteId] ?? false);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final clientesFiltrados = _clientes.where((c) {
-      final textoBusca =
-          '${c.estabelecimento} ${c.estado} ${c.cidade} ${c.endereco} ${c.nomeCliente ?? ''} ${c.telefone ?? ''}'
-              .toLowerCase();
-      return textoBusca.contains(_termoBusca.toLowerCase());
-    }).toList();
-
-    return Scaffold(
-      body: RefreshIndicator(
-        onRefresh: _atualizarListaClientes,
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        Icons.people_rounded,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Meus Clientes',
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  color: Theme.of(context).colorScheme.onSurface,
-                                ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Gerencie e organize seus clientes',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            SliverToBoxAdapter(
-              child: Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                elevation: 2,
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TextField(
-                        decoration: InputDecoration(
-                          prefixIcon: Icon(
-                            Icons.search_rounded, 
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                          suffixIcon: _termoBusca.isNotEmpty
-                              ? IconButton(
-                                  icon: Icon(
-                                    Icons.clear_rounded, 
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  ),
-                                  onPressed: () => setState(() => _termoBusca = ''),
-                                )
-                              : null,
-                          hintText: 'Buscar por estabelecimento, cidade, cliente...',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: Theme.of(context).colorScheme.outline,
-                            ),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          filled: true,
-                          fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
-                        ),
-                        onChanged: (v) => setState(() => _termoBusca = v),
-                      ),
-                      const SizedBox(height: 20),
-
-                      if (!_isLoading && _clientes.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: FilledButton.tonalIcon(
-                              onPressed: _atualizarListaClientes,
-                              icon: const Icon(Icons.refresh_rounded),
-                              label: const Text('Atualizar Lista'),
-                            ),
-                          ),
-                        ),
-
-                      if (_isLoading)
-                        _buildLoadingState()
-                      else if (clientesFiltrados.isEmpty)
-                        _buildEmptyState()
-                      else
-                        _buildClientesList(clientesFiltrados),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return SizedBox(
-      height: 200,
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(
-                Icons.people_outline_rounded,
-                size: 40,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              _termoBusca.isEmpty 
-                  ? 'Nenhum cliente cadastrado'
-                  : 'Nenhum cliente encontrado',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            if (_termoBusca.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(
-                  'Adicione seu primeiro cliente para começar',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoadingState() {
-    return const SizedBox(
-      height: 200,
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Carregando clientes...'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildClientesList(List<Cliente> clientesFiltrados) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Contador e instrução
-        Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '${clientesFiltrados.length} cliente${clientesFiltrados.length == 1 ? '' : 's'}',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-              if (clientesFiltrados.length > 1)
-                Row(
-                  children: [
-                    Icon(
-                      Icons.drag_handle,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Arraste para reordenar',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
-                            fontStyle: FontStyle.italic,
-                          ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-        
-        Container(
-          height: MediaQuery.of(context).size.height * 0.5, 
-          child: ReorderableListView.builder(
-            physics: const ClampingScrollPhysics(),
-            padding: EdgeInsets.zero,
-            itemCount: clientesFiltrados.length,
-            onReorder: _reordenarClientes,
-            itemBuilder: (context, index) {
-              final c = clientesFiltrados[index];
-              final dataHoraFormatada = DateFormat('dd/MM/yyyy HH:mm').format(c.dataVisita);
-              final isExpanded = _expandedStates[c.id] ?? false;
-
-              return Card(
-                key: Key(c.id),
-                margin: const EdgeInsets.only(bottom: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 1,
-                child: ExpansionTile(
-                  key: Key('${c.id}_tile'),
-                  initiallyExpanded: isExpanded,
-                  leading: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.8),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      Icons.drag_handle,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      size: 18,
-                    ),
-                  ),
-                  title: Text(
-                    c.estabelecimento,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
-                  ),
-                  subtitle: !isExpanded ? _buildPreviewInfo(c, context) : null,
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: Icon(
-                          Icons.delete_outline,
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                        onPressed: () => _confirmarExclusaoCliente(c),
-                        tooltip: 'Excluir cliente',
-                      ),
-                      Icon(
-                        isExpanded 
-                            ? Icons.expand_less_rounded
-                            : Icons.expand_more_rounded,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ],
-                  ),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: _buildDetailedInfo(c, dataHoraFormatada, context),
-                    ),
-                  ],
-                  onExpansionChanged: (expanded) {
-                    Future.delayed(const Duration(milliseconds: 100), () {
-                      if (mounted) {
-                        _toggleExpansion(c.id);
-                      }
-                    });
-                  },
-                  tilePadding: const EdgeInsets.symmetric(horizontal: 12),
-                  childrenPadding: EdgeInsets.zero,
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPreviewInfo(Cliente c, BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 4),
-        Row(
-          children: [
-            Icon(
-              Icons.location_on_outlined,
-              size: 14,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                '${c.cidade} - ${c.estado}',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 2),
-        Text(
-          c.endereco,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8),
-              ),
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDetailedInfo(Cliente c, String dataHoraFormatada, BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildInfoRow(
-          icon: Icons.location_on_outlined,
-          title: 'Localização',
-          content: '${c.cidade} - ${c.estado}',
-          context: context,
-        ),
-        _buildInfoRow(
-          icon: Icons.place_outlined,
-          title: 'Endereço',
-          content: c.endereco,
-          context: context,
-        ),
-        
-        const SizedBox(height: 12),
-        
-        if (c.nomeCliente != null)
-          _buildInfoRow(
-            icon: Icons.person_outline,
-            title: 'Cliente',
-            content: c.nomeCliente!,
-            context: context,
-          ),
-        
-        if (c.telefone != null)
-          _buildInfoRow(
-            icon: Icons.phone_outlined,
-            title: 'Telefone',
-            content: c.telefone!,
-            context: context,
-          ),
-        
-        const SizedBox(height: 12),
-        
-        _buildInfoRow(
-          icon: Icons.calendar_today_outlined,
-          title: 'Data da Visita',
-          content: dataHoraFormatada,
-          context: context,
-        ),
-        
-        if (c.observacoes != null && c.observacoes!.isNotEmpty)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.note_outlined,
-                    size: 18,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Observações',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
-                        ),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            c.observacoes!,
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-      ],
-    );
-  }
-
-  Widget _buildInfoRow({
-    required IconData icon,
-    required String title,
-    required String content,
-    required BuildContext context,
+  InputDecoration _obterDecoracaoCampo(
+    String label, {
+    String? hint,
+    Widget? suffixIcon,
+    bool isObrigatorio = false,
   }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            icon,
-            size: 18,
+    return InputDecoration(
+      labelText: '$label${isObrigatorio ? ' *' : ''}',
+      hintText: hint,
+      filled: true,
+      fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Theme.of(context).colorScheme.outline),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Theme.of(context).colorScheme.outline),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: Theme.of(context).colorScheme.primary,
+          width: 2,
+        ),
+      ),
+      suffixIcon: suffixIcon,
+      labelStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
-          const SizedBox(width: 10),
+      hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
+          ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.people_outline_rounded,
+              color: Theme.of(context).colorScheme.onPrimaryContainer,
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  'Meus Clientes',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  content,
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  'Gerencie sua lista de clientes',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: Column(
+        children: [
+          Icon(
+            Icons.people_outline_rounded,
+            size: 64,
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Nenhum cliente cadastrado',
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Cadastre seus primeiros clientes',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: _buildHeader(),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: TextField(
+                controller: _searchCtrl,
+                textInputAction: TextInputAction.search,
+                decoration: _obterDecoracaoCampo(
+                  'Buscar clientes',
+                  hint: 'Digite para pesquisar...',
+                  suffixIcon: _query.isEmpty
+                      ? const Icon(Icons.search)
+                      : IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: _searchCtrl.clear,
+                          tooltip: 'Limpar',
+                        ),
+                ),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+              stream: _meusClientesStream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  return Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text('Erro: ${snapshot.error}'),
+                  );
+                }
+
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: _buildEmptyState(),
+                  );
+                }
+
+                final clientes = snapshot.data!;
+                final clientesFiltrados = _query.isEmpty
+                    ? clientes
+                    : clientes.where((cliente) {
+                        final estabelecimento = (cliente['estabelecimento']?.toString().toLowerCase() ?? '');
+                        final endereco = (cliente['endereco']?.toString().toLowerCase() ?? '');
+                        final bairro = (cliente['bairro']?.toString().toLowerCase() ?? '');
+                        final cidade = (cliente['cidade']?.toString().toLowerCase() ?? '');
+                        final query = _query.toLowerCase();
+                        return estabelecimento.contains(query) ||
+                            endereco.contains(query) ||
+                            bairro.contains(query) ||
+                            cidade.contains(query);
+                      }).toList();
+
+                if (clientesFiltrados.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.search_off_outlined,
+                          size: 48,
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Nenhum cliente encontrado',
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final cliente = clientesFiltrados[index];
+                      return _buildClienteItem(cliente);
+                    },
+                    childCount: clientesFiltrados.length,
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClienteItem(Map<String, dynamic> cliente) {
+    final String estabelecimento = cliente['estabelecimento'] ?? 'Cliente';
+    final String endereco = '${cliente['endereco'] ?? ''}, ${cliente['bairro'] ?? ''}';
+    final String cidade = '${cliente['cidade'] ?? ''} - ${cliente['estado'] ?? ''}';
+    final String? dataVisitaStr = cliente['data_visita'] as String?;
+    final DateTime? dataVisita = dataVisitaStr != null ? DateTime.tryParse(dataVisitaStr) : null;
+
+    final bool visitaPassada = dataVisita != null && dataVisita.isBefore(DateTime.now());
+    final bool visitaHoje = dataVisita != null &&
+        dataVisita.year == DateTime.now().year &&
+        dataVisita.month == DateTime.now().month &&
+        dataVisita.day == DateTime.now().day;
+
+    String dataFormatada = 'Data não informada';
+    if (dataVisita != null) {
+      final formatter = DateFormat('dd/MM/yyyy');
+      dataFormatada = 'Próxima visita: ${formatter.format(dataVisita)}';
+    }
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: InkWell(
+        onTap: () {
+          // Adicione ação de clique se necessário
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: visitaPassada
+                      ? Colors.grey.shade200
+                      : visitaHoje
+                          ? Colors.red.shade50
+                          : Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  visitaPassada ? Icons.check_circle : visitaHoje ? Icons.flag : Icons.schedule,
+                  color: visitaPassada ? Colors.grey : visitaHoje ? Colors.red : Colors.blue,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      estabelecimento,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      endereco,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    Text(
+                      cidade,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      dataFormatada,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: dataVisita == null
+                            ? Colors.grey
+                            : visitaPassada
+                                ? Colors.grey
+                                : visitaHoje
+                                    ? Colors.red
+                                    : Colors.blue,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                onPressed: () async {
+                  final confirmar = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Confirmar exclusão'),
+                      content: Text('Tem certeza que deseja excluir $estabelecimento?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancelar'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Excluir', style: TextStyle(color: Colors.red)),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirmar == true) {
+                    try {
+                      await _client.from('clientes').delete().eq('id', cliente['id']);
+
+                      widget.onClienteRemovido();
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Cliente excluído com sucesso'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Erro ao excluir cliente: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

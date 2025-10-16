@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -14,17 +13,7 @@ class MinhasVisitasTab extends StatefulWidget {
 class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = '';
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-
-  User? get _currentUser {
-    try {
-      return _auth.currentUser;
-    } catch (e) {
-      print('Erro ao obter currentUser: $e');
-      return null;
-    }
-  }
+  final SupabaseClient _client = Supabase.instance.client;
 
   @override
   void initState() {
@@ -38,16 +27,18 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
     super.dispose();
   }
 
-  Stream<QuerySnapshot> get _meusClientesStream {
-    final user = _currentUser;
+  Stream<List<Map<String, dynamic>>> get _meusClientesStream {
+    final user = _client.auth.currentSession?.user;
     if (user == null) {
-      return const Stream<QuerySnapshot>.empty();
+      return const Stream<List<Map<String, dynamic>>>.empty();
     }
     
-    return _firestore
-        .collection('clientes')
-        .where('consultorUid', isEqualTo: user.uid)
-        .snapshots();
+    return _client
+        .from('clientes')
+        .select('*')
+        .eq('consultor_uid', user.id)
+        .order('data_visita', ascending: true)
+        .asStream();
   }
 
   Future<void> _abrirNoGPS(String endereco) async {
@@ -220,15 +211,15 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
     );
   }
 
-  Widget _buildVisitaItem(DocumentSnapshot doc) {
+  Widget _buildVisitaItem(Map<String, dynamic> cliente) {
     final cs = Theme.of(context).colorScheme;
-    final data = doc.data() as Map<String, dynamic>? ?? {};
     
-    final endereco = data['endereco'] ?? 'Endereço não informado';
-    final estabelecimento = data['estabelecimento'] ?? 'Estabelecimento não informado';
-    final dataVisitaStr = data['dataVisita']?.toString();
-    final cidade = data['cidade'] ?? '';
-    final estado = data['estado'] ?? '';
+    final endereco = cliente['endereco'] ?? 'Endereço não informado';
+    final estabelecimento = cliente['estabelecimento'] ?? 'Estabelecimento não informado';
+    
+    final dataVisitaStr = cliente['data_visita'] as String?;
+    final cidade = cliente['cidade'] ?? '';
+    final estado = cliente['estado'] ?? '';
     
     final dataFormatada = _formatarDataVisita(dataVisitaStr);
     final statusInfo = _determinarStatus(dataVisitaStr);
@@ -424,10 +415,8 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
             ),
           ),
 
-          // REMOVIDO: Seção "Rua de Trabalho - Hoje" foi movida para home_consultor.dart
-
           SliverToBoxAdapter(
-            child: StreamBuilder<QuerySnapshot>(
+            child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: _meusClientesStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -496,7 +485,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Erro ao carregar visitas',
+                              'Erro ao carregar visitas: ${snapshot.error}',
                               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                     color: Theme.of(context).colorScheme.error,
                                   ),
@@ -508,7 +497,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
                   );
                 }
 
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return _buildCard(
                     title: 'Próximas Visitas',
                     child: Container(
@@ -541,13 +530,12 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
                   );
                 }
 
-                final clientes = snapshot.data!.docs;
+                final clientes = snapshot.data!;
                 final clientesFiltrados = _query.isEmpty
                     ? clientes
-                    : clientes.where((doc) {
-                        final data = doc.data() as Map<String, dynamic>;
-                        final estabelecimento = data['estabelecimento']?.toString().toLowerCase() ?? '';
-                        final endereco = data['endereco']?.toString().toLowerCase() ?? '';
+                    : clientes.where((cliente) {
+                        final estabelecimento = (cliente['estabelecimento']?.toString().toLowerCase() ?? '');
+                        final endereco = (cliente['endereco']?.toString().toLowerCase() ?? '');
                         final query = _query.toLowerCase();
                         return estabelecimento.contains(query) || endereco.contains(query);
                       }).toList();
@@ -588,7 +576,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
                 return _buildCard(
                   title: 'Próximas Visitas (${clientesFiltrados.length})',
                   child: Column(
-                    children: clientesFiltrados.map(_buildVisitaItem).toList(),
+                    children: clientesFiltrados.map((cliente) => _buildVisitaItem(cliente)).toList(),
                   ),
                 );
               },
@@ -602,4 +590,5 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
       ),
     );
   }
+
 }

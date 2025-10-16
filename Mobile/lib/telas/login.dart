@@ -1,6 +1,6 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -16,6 +16,15 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscure = true;
   bool _loading = false;
 
+  final SupabaseClient _client = Supabase.instance.client;
+  late final AuthService _authService;
+
+  @override
+  void initState() {
+    super.initState();
+    _authService = AuthService(_client);
+  }
+
   @override
   void dispose() {
     _emailCtrl.dispose();
@@ -26,83 +35,107 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _loading = true);
+    if (mounted) {
+      setState(() => _loading = true);
+    }
 
     try {
-      final email = _emailCtrl.text.trim();
+      final email = _emailCtrl.text.trim().toLowerCase();
       final password = _passCtrl.text;
 
-      QuerySnapshot gestorQuery = await FirebaseFirestore.instance
-          .collection('gestor')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
+      // 1. Primeiro autentica no Supabase Auth
+      final authResponse = await _client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
 
-      QuerySnapshot consultorQuery = await FirebaseFirestore.instance
-          .collection('consultores')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
+      if (authResponse.session == null) {
+        throw Exception('Falha na autenticação');
+      }
 
-      String? tipo;
-      String route = '';
+      // Força atualização da sessão para garantir dados sincronizados
+      await _client.auth.refreshSession();
 
-      if (gestorQuery.docs.isNotEmpty) {
-        tipo = gestorQuery.docs.first.get('tipo') as String?;
-      } else if (consultorQuery.docs.isNotEmpty) {
-        tipo = 'consultor';
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'Usuário não encontrado no sistema. Contate o administrador.'),
-          ),
-        );
-        setState(() => _loading = false);
+      // 2. Depois verifica se o usuário existe nas tabelas do aplicativo
+      Map<String, dynamic>? gestor;
+      Map<String, dynamic>? consultor;
+
+      try {
+        gestor = await _client
+            .from('gestor')
+            .select('tipo')
+            .eq('email', email)
+            .maybeSingle();
+      } catch (e) {
+        gestor = null;
+      }
+
+      if (gestor == null) {
+        try {
+          consultor = await _client
+              .from('consultores')
+              .select('uid')
+              .eq('email', email)
+              .maybeSingle();
+        } catch (e) {
+          consultor = null;
+        }
+      }
+
+      // 3. Se não existe em nenhuma tabela, força logout e mostra erro
+      if (gestor == null && consultor == null) {
+        await _client.auth.signOut();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Usuário não encontrado no sistema. Contate o administrador.'),
+            ),
+          );
+          setState(() => _loading = false);
+        }
         return;
       }
 
-      await FirebaseAuth.instance
-          .signInWithEmailAndPassword(email: email, password: password);
-
-      if (tipo == 'gestor' || tipo == 'supervisor') {
-        route = '/gestor';
-      } else if (tipo == 'consultor') {
+      // 4. Decide rota pelo tipo
+      String route;
+      if (gestor != null) {
+        final tipo = (gestor['tipo'] as String?) ?? 'gestor';
+        route = (tipo == 'gestor' || tipo == 'supervisor') ? '/gestor' : '/consultor';
+      } else {
         route = '/consultor';
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Tipo de usuário inválido.')),
-        );
-        setState(() => _loading = false);
-        return;
       }
 
-      Navigator.pushReplacementNamed(context, route);
-    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, route);
+      }
+    } on AuthException catch (e) {
       String mensagem = 'Erro ao fazer login';
       switch (e.code) {
-        case 'user-not-found':
+        case 'invalid_credentials':
+          mensagem = 'E-mail ou senha incorretos';
+          break;
+        case 'user_not_found':
           mensagem = 'Usuário não encontrado';
           break;
-        case 'wrong-password':
-          mensagem = 'Senha incorreta';
+        case 'email_not_confirmed':
+          mensagem = 'E-mail não confirmado. Verifique sua caixa de entrada.';
           break;
-        case 'invalid-email':
-          mensagem = 'Email inválido';
-          break;
-        case 'network-request-failed':
-          mensagem = 'Sem conexão com a internet';
-          break;
+        default:
+          mensagem = e.message;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(mensagem)),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensagem)));
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro: ${e.toString()}')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro: ${e.toString()}')),
+        );
+      }
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -130,7 +163,6 @@ class _LoginPageState extends State<LoginPage> {
                     children: [
                       Image.asset("assets/Logo.png", height: 120),
                       const SizedBox(height: 40),
-
                       TextFormField(
                         controller: _emailCtrl,
                         decoration: InputDecoration(
@@ -144,54 +176,41 @@ class _LoginPageState extends State<LoginPage> {
                         enableSuggestions: false,
                         textCapitalization: TextCapitalization.none,
                         validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Informe o e-mail';
-                          }
+                          if (value == null || value.isEmpty) return 'Informe o e-mail';
                           final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
-                          if (!emailRegex.hasMatch(value)) {
-                            return 'Email inválido';
-                          }
+                          if (!emailRegex.hasMatch(value)) return 'Email inválido';
                           return null;
                         },
                       ),
                       const SizedBox(height: 16),
-
                       TextFormField(
                         controller: _passCtrl,
                         obscureText: _obscure,
                         decoration: InputDecoration(
                           labelText: "Senha",
                           suffixIcon: IconButton(
-                            icon: Icon(_obscure
-                                ? Icons.visibility
-                                : Icons.visibility_off),
-                            onPressed: () =>
-                                setState(() => _obscure = !_obscure),
+                            icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
+                            onPressed: () => setState(() => _obscure = !_obscure),
                           ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        validator: (v) =>
-                            (v?.isEmpty ?? true) ? 'Informe a senha' : null,
+                        validator: (v) => (v?.isEmpty ?? true) ? 'Informe a senha' : null,
                         onFieldSubmitted: (_) => _login(),
                       ),
                       const SizedBox(height: 8),
-
                       Padding(
                         padding: const EdgeInsets.only(bottom: 38.0, right: 7.6),
                         child: Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
-                            onPressed: () {
-                              Navigator.pushNamed(context, '/recuperar');
-                            },
+                            onPressed: () => Navigator.pushNamed(context, '/recuperar'),
                             child: const Text('Esqueceu a senha?'),
                           ),
                         ),
                       ),
                       const SizedBox(height: 24),
-
                       Transform.translate(
                         offset: const Offset(0, -46),
                         child: SizedBox(
@@ -207,20 +226,15 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             onPressed: _loading ? null : _login,
                             child: _loading
-                                ? const CircularProgressIndicator(
-                                    color: Colors.white)
+                                ? const CircularProgressIndicator(color: Colors.white)
                                 : const Text(
                                     "Entrar",
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                                   ),
                           ),
                         ),
                       ),
                       const SizedBox(height: 12),
-
                       Transform.translate(
                         offset: const Offset(0, -40),
                         child: const Text(

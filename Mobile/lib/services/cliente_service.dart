@@ -2,18 +2,18 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/cliente.dart';
 import 'notification_service.dart';
 
 class ClienteService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-
+  final SupabaseClient _client = Supabase.instance.client;
   List<Cliente> _clientes = [];
   StreamSubscription<ConnectivityResult>? _connectivitySubscription;
+
+  static const String _cacheKey = 'clientes_cache';
+  static const String _pendingKey = 'pending_ops';
 
   List<Cliente> get clientes => _clientes;
   int get totalClientes => _clientes.length;
@@ -30,12 +30,10 @@ class ClienteService {
 
   Future<void> initialize() async {
     await loadClientes();
-
     _connectivitySubscription = Connectivity()
         .onConnectivityChanged
-        .map((List<ConnectivityResult> results) =>
-            results.isNotEmpty ? results.first : ConnectivityResult.none)
-        .listen((ConnectivityResult result) async {
+        .map((results) => results.isNotEmpty ? results.first : ConnectivityResult.none)
+        .listen((result) async {
       if (result != ConnectivityResult.none) {
         await syncPendingOperations();
       }
@@ -48,7 +46,8 @@ class ClienteService {
 
   Future<void> loadClientes() async {
     final prefs = await SharedPreferences.getInstance();
-    final cachedData = prefs.getString('clientes_cache');
+    final cachedData = prefs.getString(_cacheKey);
+    
     if (cachedData != null) {
       try {
         final List<dynamic> jsonList = jsonDecode(cachedData);
@@ -62,9 +61,10 @@ class ClienteService {
   Future<bool> _hasRealInternet() async {
     final result = await Connectivity().checkConnectivity();
     if (result == ConnectivityResult.none) return false;
+    
     try {
-      final lookup =
-          await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 3));
+      final lookup = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(seconds: 3));
       return lookup.isNotEmpty;
     } on SocketException {
       return false;
@@ -76,13 +76,12 @@ class ClienteService {
   }
 
   Future<void> saveCliente(Cliente cliente) async {
-    final user = _auth.currentUser;
+    final user = _client.auth.currentSession?.user;
     if (user == null) {
       print('⚠️ Usuário não autenticado.');
       return;
     }
 
-    // Garante que o UID do consultor seja salvo junto
     final clienteComUid = Cliente(
       id: cliente.id,
       estabelecimento: cliente.estabelecimento,
@@ -96,7 +95,7 @@ class ClienteService {
       telefone: cliente.telefone,
       observacoes: cliente.observacoes,
       consultorResponsavel: cliente.consultorResponsavel,
-      consultorUid: user.uid,
+      consultorUid: user.id,
     );
 
     _clientes.removeWhere((c) => c.id == cliente.id);
@@ -107,21 +106,28 @@ class ClienteService {
 
     try {
       if (isConnected) {
-        await _firestore.collection('clientes').doc(clienteComUid.id).set(clienteComUid.toJson());
+        final data = _clienteToMap(clienteComUid);
+        
+        // CORREÇÃO FINAL: Removido completamente .execute()
+        final response = await _client
+            .from('clientes')
+            .upsert(data);
+            
+        print('✅ Cliente salvo no Supabase: ${clienteComUid.estabelecimento}');
         await NotificationService.showSuccessNotification();
       } else {
         await _savePendingOperation('save', clienteComUid);
         await NotificationService.showOfflineNotification();
       }
     } catch (e) {
-      print('❌ Falha ao salvar cliente: $e');
+      print('❌ Falha ao salvar cliente no Supabase: $e');
       await _savePendingOperation('save', clienteComUid);
       await NotificationService.showOfflineNotification();
     }
   }
 
   Future<void> removeCliente(String id) async {
-    final user = _auth.currentUser;
+    final user = _client.auth.currentSession?.user;
     if (user == null) {
       print('⚠️ Usuário não autenticado.');
       return;
@@ -134,37 +140,39 @@ class ClienteService {
 
     try {
       if (isConnected) {
-        await _firestore.collection('clientes').doc(id).delete();
+        // CORREÇÃO FINAL: Removido completamente .execute()
+        await _client
+            .from('clientes')
+            .delete()
+            .eq('id', id);
+        
+        print('✅ Cliente removido do Supabase: $id');
       } else {
-        await _savePendingOperation(
-            'remove',
-            Cliente(
-              id: id,
-              estabelecimento: '',
-              estado: '',
-              cidade: '',
-              endereco: '',
-              bairro: null,
-              cep: null,
-              dataVisita: DateTime.now(),
-              consultorUid: user.uid,
-            ));
+        await _savePendingOperation('remove', Cliente(
+          id: id,
+          estabelecimento: '',
+          estado: '',
+          cidade: '',
+          endereco: '',
+          bairro: null,
+          cep: null,
+          dataVisita: DateTime.now(),
+          consultorUid: user.id,
+        ));
       }
     } catch (e) {
-      print('❌ Falha ao remover cliente: $e');
-      await _savePendingOperation(
-          'remove',
-          Cliente(
-            id: id,
-            estabelecimento: '',
-            estado: '',
-            cidade: '',
-            endereco: '',
-            bairro: null,
-            cep: null,
-            dataVisita: DateTime.now(),
-            consultorUid: user.uid,
-          ));
+      print('❌ Falha ao remover cliente do Supabase: $e');
+      await _savePendingOperation('remove', Cliente(
+        id: id,
+        estabelecimento: '',
+        estado: '',
+        cidade: '',
+        endereco: '',
+        bairro: null,
+        cep: null,
+        dataVisita: DateTime.now(),
+        consultorUid: user.id,
+      ));
     }
   }
 
@@ -173,45 +181,75 @@ class ClienteService {
     if (!isConnected) return;
 
     final prefs = await SharedPreferences.getInstance();
-    final pendingData = prefs.getString('pending_ops');
+    final pendingData = prefs.getString(_pendingKey);
     if (pendingData == null) return;
 
     final List<dynamic> pendingOps = jsonDecode(pendingData);
     print('📤 Sincronizando ${pendingOps.length} operações pendentes...');
 
-    for (var op in pendingOps) {
+    for (final op in pendingOps) {
       final tipo = op['tipo'] as String;
       final cliente = Cliente.fromJson(op['cliente']);
+      
       try {
         if (tipo == 'save') {
-          await _firestore.collection('clientes').doc(cliente.id).set(cliente.toJson());
-          print('✅ Enviado para Firebase: ${cliente.estabelecimento}');
+          final data = _clienteToMap(cliente);
+          // CORREÇÃO FINAL: Removido completamente .execute()
+          await _client
+              .from('clientes')
+              .upsert(data);
+          
+          print('✅ Enviado para Supabase: ${cliente.estabelecimento}');
         } else if (tipo == 'remove') {
-          await _firestore.collection('clientes').doc(cliente.id).delete();
-          print('✅ Removido no Firebase: ${cliente.id}');
+          // CORREÇÃO FINAL: Removido completamente .execute()
+          await _client
+              .from('clientes')
+              .delete()
+              .eq('id', cliente.id);
+          
+          print('✅ Removido no Supabase: ${cliente.id}');
         }
       } catch (e) {
-        print('❌ Falha ao sincronizar: $e');
+        print('❌ Falha ao sincronizar com Supabase: $e');
         return;
       }
     }
 
-    await prefs.remove('pending_ops');
+    await prefs.remove(_pendingKey);
     print('✅ Fila de operações pendentes limpa!');
   }
 
   Future<void> _saveToCache() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonData = jsonEncode(_clientes.map((c) => c.toJson()).toList());
-    await prefs.setString('clientes_cache', jsonData);
+    await prefs.setString(_cacheKey, jsonData);
   }
 
   Future<void> _savePendingOperation(String tipo, Cliente cliente) async {
     final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getString('pending_ops');
+    final data = prefs.getString(_pendingKey);
     final List<dynamic> ops = data != null ? jsonDecode(data) : [];
+    
     ops.add({'tipo': tipo, 'cliente': cliente.toJson()});
-    await prefs.setString('pending_ops', jsonEncode(ops));
+    await prefs.setString(_pendingKey, jsonEncode(ops));
     print('📁 Operação $tipo salva na fila offline');
+  }
+
+  Map<String, dynamic> _clienteToMap(Cliente cliente) {
+    return {
+      'id': cliente.id,
+      'estabelecimento': cliente.estabelecimento,
+      'estado': cliente.estado,
+      'cidade': cliente.cidade,
+      'endereco': cliente.endereco,
+      'bairro': cliente.bairro,
+      'cep': cliente.cep,
+      'data_visita': cliente.dataVisita.toIso8601String(),
+      'nome_cliente': cliente.nomeCliente,
+      'telefone': cliente.telefone,
+      'observacoes': cliente.observacoes,
+      'consultor_responsavel': cliente.consultorResponsavel,
+      'consultor_uid': cliente.consultorUid,
+    };
   }
 }

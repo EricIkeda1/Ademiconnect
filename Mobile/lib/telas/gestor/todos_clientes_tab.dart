@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../models/cliente.dart';
-import '../../services/consultor_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ademicon_app/services/consultor_service.dart';
+import 'package:ademicon_app/models/cliente.dart';
 
 class TodosClientesTab extends StatefulWidget {
   const TodosClientesTab({super.key});
@@ -25,30 +24,44 @@ class _TodosClientesTabState extends State<TodosClientesTab> {
   }
 
   Future<void> _loadClientes() async {
-    final gestorUid = FirebaseAuth.instance.currentUser?.uid;
-    if (gestorUid == null) return;
+    final gestorId = Supabase.instance.client.auth.currentSession?.user.id;
+    if (gestorId == null) return;
 
     setState(() => _isLoading = true);
 
-    final consultores = await _consultorService.getConsultoresByGestor(gestorUid);
-    _consultoresDoGestor.clear();
-    for (var c in consultores) {
-      _consultoresDoGestor[c.uid] = c.nome;
-      _expandedStates[c.nome] = false;
+    try {
+      // 1. Busca consultores do gestor
+      final consultores = await _consultorService.getConsultoresByGestor(gestorId);
+      _consultoresDoGestor.clear();
+      for (var c in consultores) {
+        _consultoresDoGestor[c.uid] = c.nome;
+        _expandedStates[c.nome] = false;
+      }
+
+      // 2. Busca clientes dos consultores
+      if (_consultoresDoGestor.isNotEmpty) {
+        // Correção: use 'contains' no lugar de 'in_'
+        // Correção: campos em snake_case (consultor_uid)
+        final response = await Supabase.instance.client
+            .from('clientes')
+            .select('*')
+            .contains('consultor_uid', _consultoresDoGestor.keys.toList());
+
+        _clientes = (response as List)
+            .map((row) => Cliente.fromMap(row as Map<String, dynamic>))
+            .toList();
+      } else {
+        _clientes = [];
+      }
+    } catch (error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao carregar clientes: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
-
-    if (_consultoresDoGestor.isNotEmpty) {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('clientes')
-          .where('consultorUid', whereIn: _consultoresDoGestor.keys.toList())
-          .get();
-
-      _clientes = snapshot.docs.map((doc) => Cliente.fromFirestore(doc)).toList();
-    } else {
-      _clientes = [];
-    }
-
-    setState(() => _isLoading = false);
   }
 
   void _toggleExpansion(String consultorNome) {

@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../../models/cliente.dart';
 
@@ -7,7 +8,7 @@ class ExportarDadosTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView( 
+    return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -100,10 +101,11 @@ class ExportarDadosTab extends StatelessWidget {
             Row(
               children: [
                 Expanded(
+                  // Botão de exportar desativado
                   child: FilledButton.icon(
-                    onPressed: clientes.isEmpty
-                        ? null
-                        : () => _showSnack(context, 'Baixando CSV...'),
+                    onPressed: () {
+                      _showSnack(context, 'Função de exportar desativada.');
+                    },
                     icon: const Icon(Icons.download_rounded),
                     label: const Text('Baixar CSV'),
                     style: FilledButton.styleFrom(
@@ -113,10 +115,11 @@ class ExportarDadosTab extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
+                  // Botão de copiar desativado
                   child: OutlinedButton.icon(
-                    onPressed: clientes.isEmpty
-                        ? null
-                        : () => _showSnack(context, 'Copiado para área de transferência!'),
+                    onPressed: () {
+                      _showSnack(context, 'Função de copiar desativada.');
+                    },
                     icon: const Icon(Icons.copy_rounded),
                     label: const Text('Copiar'),
                     style: OutlinedButton.styleFrom(
@@ -237,11 +240,12 @@ class ExportarDadosTab extends StatelessWidget {
     );
   }
 
-  void _showSnack(BuildContext context, String message) {
+  // Exibe mensagem na tela (SnackBar)
+  void _showSnack(BuildContext context, String message, {Color? color}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Theme.of(context).colorScheme.primary,
+        backgroundColor: color ?? Theme.of(context).colorScheme.primary,
         behavior: SnackBarBehavior.floating,
       ),
     );

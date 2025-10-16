@@ -1,5 +1,5 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class RecuperarSenhaPage extends StatefulWidget {
   const RecuperarSenhaPage({super.key});
@@ -11,18 +11,19 @@ class RecuperarSenhaPage extends StatefulWidget {
 class _RecuperarSenhaPageState extends State<RecuperarSenhaPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailCtrl = TextEditingController();
-
   bool _loading = false;
 
   Future<void> _enviarLink() async {
     if (!_formKey.currentState!.validate()) return;
 
     final email = _emailCtrl.text.trim();
-
     setState(() => _loading = true);
 
     try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        email,
+        redirectTo: 'com.yourcompany.app://login', // Configure this in Supabase Auth > URL Configuration
+      );
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -31,16 +32,16 @@ class _RecuperarSenhaPageState extends State<RecuperarSenhaPage> {
       );
 
       Navigator.pop(context);
-    } on FirebaseAuthException catch (e) {
+    } on AuthException catch (e) {
       String mensagem = 'Erro: ';
       switch (e.code) {
-        case 'user-not-found':
+        case 'user_not_found':
           mensagem = 'Nenhum usuário encontrado com esse e-mail.';
           break;
-        case 'invalid-email':
+        case 'invalid_email':
           mensagem = 'E-mail inválido.';
           break;
-        case 'too-many-requests':
+        case 'too_many_requests':
           mensagem = 'Muitas tentativas. Tente mais tarde.';
           break;
         default:

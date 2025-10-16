@@ -1,6 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:email_validator/email_validator.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:flutter/services.dart';
@@ -28,6 +27,8 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
 
   bool _loading = false;
 
+  SupabaseClient get _client => Supabase.instance.client;
+
   @override
   void dispose() {
     _nomeCtrl.dispose();
@@ -39,128 +40,99 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
   }
 
   Future<void> _cadastrarConsultor() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _loading = true);
-      try {
-        final String gestorId = FirebaseAuth.instance.currentUser!.uid;
-        final String email = _emailCtrl.text.trim();
-        final String senha = _senhaCtrl.text;
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _loading = true);
 
-        final gestorDoc = await FirebaseFirestore.instance
-            .collection('gestor')
-            .doc(gestorId)
-            .get();
+    try {
+      final sessionUser = _client.auth.currentSession?.user;
+      final String gestorId = sessionUser?.id ?? '';
 
-        if (gestorDoc.exists) {
-          final String gestorEmail = gestorDoc.get('email') as String? ?? '';
-          if (email.toLowerCase() == gestorEmail.toLowerCase()) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text('Você não pode cadastrar um consultor com seu próprio e-mail.'),
-                backgroundColor: Colors.red.shade700,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-            );
-            setState(() => _loading = false);
-            return;
-          }
-        }
+      if (gestorId.isEmpty) {
+        _mostrarSnack('Sessão não encontrada. Faça login novamente.', cor: Colors.red);
+        setState(() => _loading = false);
+        return;
+      }
 
-        final consultoresSnapshot = await FirebaseFirestore.instance
-            .collection('consultores')
-            .where('email', isEqualTo: email)
-            .limit(1)
-            .get();
+      final email = _emailCtrl.text.trim();
+      final senha = _senhaCtrl.text;
 
-        if (consultoresSnapshot.docs.isNotEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Este e-mail já está cadastrado como consultor.'),
-              backgroundColor: Colors.red.shade700,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-          );
+      // Verifica se o e-mail é o mesmo do gestor
+      final gestorDoc = await _client
+          .from('gestor')
+          .select('email')
+          .eq('id', gestorId)
+          .maybeSingle();
+
+      if (gestorDoc != null && gestorDoc['email'] != null) {
+        final gestorEmail = gestorDoc['email'].toString().toLowerCase();
+        if (email.toLowerCase() == gestorEmail) {
+          _mostrarSnack('Você não pode cadastrar um consultor com seu próprio e-mail.', cor: Colors.red);
           setState(() => _loading = false);
           return;
         }
-
-        final credential = await FirebaseAuth.instance
-            .createUserWithEmailAndPassword(email: email, password: senha);
-        print('✅ Usuário criado: ${credential.user!.uid}');
-
-        await FirebaseFirestore.instance
-            .collection('consultores')
-            .doc(credential.user!.uid)
-            .set({
-          'nome': _nomeCtrl.text.trim(),
-          'telefone': _telefoneCtrl.text,
-          'email': email,
-          'matricula': _matriculaCtrl.text.trim(),
-          'gestorId': gestorId,
-          'tipo': 'consultor',
-          'uid': credential.user!.uid,
-          'data_cadastro': FieldValue.serverTimestamp(),
-        });
-
-        print('✅ Consultor salvo em /consultores/${credential.user!.uid}');
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Consultor cadastrado com sucesso!'),
-            backgroundColor: Colors.green.shade700,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        );
-        _limparCampos();
-      } on FirebaseAuthException catch (e) {
-        print('❌ Auth error: $e');
-        String mensagem = 'Erro: ${e.message}';
-        if (e.code == 'email-already-in-use') {
-          mensagem = 'E-mail já cadastrado no Firebase';
-        } else if (e.code == 'weak-password') {
-          mensagem = 'Senha muito fraca';
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(mensagem),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        );
-      } on FirebaseException catch (e) {
-        print('❌ Firebase error: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-              'Erro ao salvar no banco. Verifique: conexão, regras do Firestore ou tente novamente.',
-            ),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        );
-      } catch (e, stack) {
-        print('❌ Erro inesperado: $e\n$stack');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro: ${e.toString()}'),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        );
-      } finally {
-        setState(() => _loading = false);
       }
+
+      // Verifica se o e-mail já está cadastrado
+      final consultorExistente = await _client
+          .from('consultores')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle();
+
+      if (consultorExistente != null) {
+        _mostrarSnack('Este e-mail já está cadastrado como consultor.', cor: Colors.red);
+        setState(() => _loading = false);
+        return;
+      }
+
+      // ✅ Cria usuário no Supabase Auth com a sintaxe correta
+      final response = await _client.auth.signUp(
+        email: email,
+        password: senha,
+      );
+
+      if (response.session == null) {
+        throw Exception('Falha ao criar usuário. Verifique email/senha.');
+      }
+
+      final userId = response.user!.id;
+
+      // Salva consultor na tabela
+      await _client.from('consultores').insert({
+        'nome': _nomeCtrl.text.trim(),
+        'telefone': _telefoneCtrl.text,
+        'email': email,
+        'matricula': _matriculaCtrl.text.trim(),
+        'gestor_id': gestorId,
+        'tipo': 'consultores',
+        'uid': userId,
+        'data_cadastro': DateTime.now().toIso8601String(),
+      });
+
+      _mostrarSnack('Consultor cadastrado com sucesso!', cor: Colors.green);
+      _limparCampos();
+    } on AuthException catch (e) {
+      _mostrarSnack('Erro de autenticação: ${e.message}', cor: Colors.red);
+    } catch (e) {
+      _mostrarSnack('Erro: ${e.toString()}', cor: Colors.red);
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
+  void _mostrarSnack(String mensagem, {required Color cor}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensagem),
+        backgroundColor: cor,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
   void _limparCampos() {
-    _formKey.currentState!.reset();
+    _formKey.currentState?.reset();
     _nomeCtrl.clear();
     _telefoneCtrl.clear();
     _emailCtrl.clear();
@@ -172,134 +144,18 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
   String get _iniciais {
     final nome = _nomeCtrl.text.trim();
     if (nome.isEmpty) return 'CN';
-    final parts = nome.split(' ').where((p) => p.isNotEmpty).take(2).toList();
-    return parts.map((p) => p[0]).join().toUpperCase();
+    final partes = nome.split(' ').where((p) => p.isNotEmpty).take(2).toList();
+    return partes.map((p) => p[0]).join().toUpperCase();
   }
 
-  InputDecoration _obterDecoracaoCampo(
-    String label, {
-    String? hint,
-    Widget? suffixIcon,
-    bool isObrigatorio = true,
-  }) {
+  InputDecoration _decoracaoCampo(String label, {String? hint, bool obrigatorio = true}) {
     return InputDecoration(
-      labelText: '$label${isObrigatorio ? ' *' : ''}',
+      labelText: '$label${obrigatorio ? ' *' : ''}',
       hintText: hint,
       filled: true,
       fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Theme.of(context).colorScheme.outline),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Theme.of(context).colorScheme.outline),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(
-          color: Theme.of(context).colorScheme.primary,
-          width: 2,
-        ),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Theme.of(context).colorScheme.error),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(
-          color: Theme.of(context).colorScheme.error,
-          width: 2,
-        ),
-      ),
-      suffixIcon: suffixIcon,
-      labelStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-      hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
-          ),
-    );
-  }
-
-  String? _validarCampoObrigatorio(String? v, {String field = 'Campo'}) {
-    if (v == null || v.trim().isEmpty) return '$field é obrigatório';
-    return null;
-  }
-
-  String? _validarCampoOpcional(String? v) {
-    return null;
-  }
-
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              Icons.group_add_rounded,
-              color: Theme.of(context).colorScheme.onPrimaryContainer,
-              size: 28,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Cadastrar Consultor',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Cadastre novos consultores para gerenciar clientes',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title, {String? subtitle}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-        ),
-        if (subtitle != null) ...[
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-          ),
-        ],
-        const SizedBox(height: 16),
-      ],
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
     );
   }
 
@@ -307,222 +163,117 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: () async {
-          _limparCampos();
-        },
+        onRefresh: () async => _limparCampos(),
         child: CustomScrollView(
           slivers: [
-            // Header
-            SliverToBoxAdapter(
-              child: _buildHeader(),
-            ),
-
-            // Formulário
+            SliverToBoxAdapter(child: _buildHeader()),
             SliverToBoxAdapter(
               child: Card(
+                margin: const EdgeInsets.all(16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                elevation: 2,
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: Form(
                     key: _formKey,
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Avatar do consultor
                         Center(
                           child: Column(
                             children: [
-                              Container(
-                                width: 64,
-                                height: 64,
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primaryContainer,
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    _iniciais,
-                                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                          fontWeight: FontWeight.w700,
-                                          color: Theme.of(context).colorScheme.onPrimaryContainer,
-                                        ),
+                              CircleAvatar(
+                                radius: 32,
+                                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                                child: Text(
+                                  _iniciais,
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context).colorScheme.onPrimaryContainer,
                                   ),
                                 ),
                               ),
                               const SizedBox(height: 8),
                               Text(
                                 'Iniciais do Consultor',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                    ),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(color: Colors.grey[600]),
                               ),
                             ],
                           ),
                         ),
-
                         const SizedBox(height: 24),
-
-                        // Seção de Dados Pessoais
-                        _buildSectionTitle(
-                          'Dados Pessoais',
-                          subtitle: 'Informações básicas do consultor',
-                        ),
-
                         TextFormField(
                           controller: _nomeCtrl,
-                          decoration: _obterDecoracaoCampo(
-                            'Nome Completo',
-                            hint: 'Digite o nome completo do consultor',
-                          ),
-                          validator: (v) =>
-                              _validarCampoObrigatorio(v, field: 'Nome completo'),
+                          decoration: _decoracaoCampo('Nome Completo', hint: 'Digite o nome do consultor'),
+                          validator: (v) => v == null || v.isEmpty ? 'Informe o nome' : null,
                           onChanged: (_) => setState(() {}),
                         ),
                         const SizedBox(height: 12),
-
                         TextFormField(
                           controller: _telefoneCtrl,
-                          decoration: _obterDecoracaoCampo(
-                            'Telefone',
-                            hint: '(00) 00000-0000',
-                          ),
+                          decoration: _decoracaoCampo('Telefone', hint: '(00) 00000-0000'),
                           keyboardType: TextInputType.phone,
                           inputFormatters: [_telefoneMask],
                           validator: (v) {
                             final raw = _telefoneMask.getUnmaskedText();
-                            if (raw.isEmpty) return "Informe o telefone";
-                            if (raw.length < 11) return "Telefone inválido";
+                            if (raw.length < 11) return 'Telefone inválido';
                             return null;
                           },
                         ),
                         const SizedBox(height: 12),
-
-                        // Seção de Acesso
-                        _buildSectionTitle(
-                          'Acesso ao Sistema',
-                          subtitle: 'Credenciais para login',
-                        ),
-
                         TextFormField(
                           controller: _emailCtrl,
-                          decoration: _obterDecoracaoCampo(
-                            'E-mail',
-                            hint: 'consultor@empresa.com',
-                          ),
+                          decoration: _decoracaoCampo('E-mail', hint: 'consultor@empresa.com'),
                           keyboardType: TextInputType.emailAddress,
                           validator: (v) {
-                            if (v == null || v.trim().isEmpty) return "Informe o e-mail";
-                            if (!EmailValidator.validate(v.trim())) return "E-mail inválido";
+                            if (v == null || v.trim().isEmpty) return 'Informe o e-mail';
+                            if (!EmailValidator.validate(v.trim())) return 'E-mail inválido';
                             return null;
                           },
                         ),
                         const SizedBox(height: 12),
-
                         TextFormField(
                           controller: _senhaCtrl,
                           obscureText: true,
-                          decoration: _obterDecoracaoCampo(
-                            'Senha',
-                            hint: 'Mínimo 6 caracteres',
-                          ),
+                          decoration: _decoracaoCampo('Senha', hint: 'Mínimo 6 caracteres'),
                           validator: (v) {
-                            if (v == null || v.isEmpty) return "Informe a senha";
-                            if (v.length < 6) return "Mínimo 6 caracteres";
+                            if (v == null || v.isEmpty) return 'Informe a senha';
+                            if (v.length < 6) return 'Mínimo 6 caracteres';
                             return null;
                           },
                         ),
                         const SizedBox(height: 12),
-
-                        // Seção de Dados Adicionais
-                        _buildSectionTitle(
-                          'Dados Adicionais',
-                          subtitle: 'Informações complementares',
-                        ),
-
                         TextFormField(
                           controller: _matriculaCtrl,
-                          decoration: _obterDecoracaoCampo(
-                            'Número da Matrícula',
-                            hint: 'Digite o número da matrícula',
-                            isObrigatorio: false,
-                          ),
+                          decoration: _decoracaoCampo('Matrícula', hint: 'Número de matrícula', obrigatorio: false),
                           keyboardType: TextInputType.number,
                           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                          validator: _validarCampoOpcional,
                         ),
-
                         const SizedBox(height: 24),
-
-                        // Botões de ação
                         Row(
                           children: [
                             Expanded(
                               child: OutlinedButton(
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  side: BorderSide(
-                                    color: Theme.of(context).colorScheme.outline,
-                                  ),
-                                ),
                                 onPressed: _limparCampos,
-                                child: Text(
-                                  'Limpar',
-                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                        color: Theme.of(context).colorScheme.onSurface,
-                                      ),
-                                ),
+                                child: const Text('Limpar'),
                               ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: FilledButton(
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: Theme.of(context).colorScheme.primary,
-                                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
                                 onPressed: _loading ? null : _cadastrarConsultor,
                                 child: _loading
-                                    ? SizedBox(
-                                        height: 20,
+                                    ? const SizedBox(
                                         width: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Theme.of(context).colorScheme.onPrimary,
-                                        ),
+                                        height: 20,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
                                       )
-                                    : Text(
-                                        'Cadastrar Consultor',
-                                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                              color: Theme.of(context).colorScheme.onPrimary,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                      ),
+                                    : const Text('Cadastrar Consultor'),
                               ),
                             ),
                           ],
-                        ),
-
-                        const SizedBox(height: 8),
-
-                        Padding(
-                          padding: const EdgeInsets.only(top: 16),
-                          child: Text(
-                            '',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  fontStyle: FontStyle.italic,
-                                ),
-                            textAlign: TextAlign.center,
-                          ),
                         ),
                       ],
                     ),
@@ -532,6 +283,37 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Icon(Icons.group_add_rounded, size: 40, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Cadastrar Consultor',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              Text(
+                'Adicione novos consultores ao sistema',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: Colors.grey[600]),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

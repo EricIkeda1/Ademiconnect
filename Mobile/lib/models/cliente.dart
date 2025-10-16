@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class Cliente {
   final String id;
   final String estabelecimento;
@@ -39,12 +37,12 @@ class Cliente {
         'endereco': endereco,
         'bairro': bairro,
         'cep': cep,
-        'dataVisita': dataVisita.toIso8601String(),
-        'nomeCliente': nomeCliente,
+        'data_visita': dataVisita.toIso8601String(),  // snake_case for Supabase
+        'nome_cliente': nomeCliente,                  // snake_case for Supabase
         'telefone': telefone,
         'observacoes': observacoes,
-        'consultorResponsavel': consultorResponsavel,
-        'consultorUid': consultorUid,
+        'consultor_responsavel': consultorResponsavel,
+        'consultor_uid': consultorUid,                // snake_case for Supabase
       };
 
   factory Cliente.fromJson(Map<String, dynamic> json) => Cliente(
@@ -55,30 +53,51 @@ class Cliente {
         endereco: json['endereco'],
         bairro: json['bairro'],
         cep: json['cep'],
-        dataVisita: DateTime.parse(json['dataVisita']),
-        nomeCliente: json['nomeCliente'],
+        dataVisita: DateTime.parse(json['data_visita'] ?? json['dataVisita'] ?? ''),
+        nomeCliente: json['nome_cliente'] ?? json['nomeCliente'],
         telefone: json['telefone'],
         observacoes: json['observacoes'],
-        consultorResponsavel: json['consultorResponsavel'],
-        consultorUid: json['consultorUid'] ?? 'desconhecido',
+        consultorResponsavel: json['consultor_responsavel'] ?? json['consultorResponsavel'],
+        consultorUid: json['consultor_uid'] ?? json['consultorUid'] ?? 'desconhecido',
       );
 
-  factory Cliente.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+  // New factory for Supabase - uses snake_case field names
+  factory Cliente.fromMap(Map<String, dynamic> map) {
     return Cliente(
-      id: doc.id,
-      estabelecimento: data['estabelecimento'] ?? '',
-      estado: data['estado'] ?? '',
-      cidade: data['cidade'] ?? '',
-      endereco: data['endereco'] ?? '',
-      bairro: data['bairro'],
-      cep: data['cep'],
-      dataVisita: DateTime.tryParse(data['dataVisita'] ?? '') ?? DateTime.now(),
-      nomeCliente: data['nomeCliente'],
-      telefone: data['telefone'],
-      observacoes: data['observacoes'],
-      consultorResponsavel: data['consultorResponsavel'],
-      consultorUid: data['consultorUid'] ?? 'desconhecido',
+      id: map['id'],
+      estabelecimento: map['estabelecimento'],
+      estado: map['estado'],
+      cidade: map['cidade'],
+      endereco: map['endereco'],
+      bairro: map['bairro'],
+      cep: map['cep'],
+      dataVisita: map['data_visita'] is String 
+          ? DateTime.parse(map['data_visita'])
+          : map['data_visita'],
+      nomeCliente: map['nome_cliente'],
+      telefone: map['telefone'],
+      observacoes: map['observacoes'],
+      consultorResponsavel: map['consultor_responsavel'],
+      consultorUid: map['consultor_uid'] ?? 'desconhecido',
     );
+  }
+
+  // toMap for database operations (snake_case)
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'estabelecimento': estabelecimento,
+      'estado': estado,
+      'cidade': cidade,
+      'endereco': endereco,
+      'bairro': bairro,
+      'cep': cep,
+      'data_visita': dataVisita.toIso8601String(),
+      'nome_cliente': nomeCliente,
+      'telefone': telefone,
+      'observacoes': observacoes,
+      'consultor_responsavel': consultorResponsavel,
+      'consultor_uid': consultorUid,
+    };
   }
 }

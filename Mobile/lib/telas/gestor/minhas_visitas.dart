@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:collection/collection.dart';
 
 class DashboardTab extends StatefulWidget {
   const DashboardTab({super.key});
@@ -9,38 +11,17 @@ class DashboardTab extends StatefulWidget {
 
 class _DashboardTabState extends State<DashboardTab> {
   final TextEditingController _searchCtrl = TextEditingController();
+  final SupabaseClient _client = Supabase.instance.client;
 
-  final List<_ConsultorStatus> _consultores = const [
-    _ConsultorStatus(
-      nome: "João Silva",
-      status: "Trabalhando hoje",
-      local: "Rua das Flores, Centro - Comércio Local",
-    ),
-    _ConsultorStatus(
-      nome: "Pedro Costa",
-      status: "Trabalhando hoje",
-      local: "Rua dos Empresários, Zona Industrial",
-    ),
-  ];
-
-  final List<_VisitaProg> _visitas = const [
-    _VisitaProg(
-      titulo: "Avenida Principal, Bairro Comercial - Shopping e Lojas",
-      consultor: "João Silva",
-      data: "16/09/2025",
-    ),
-    _VisitaProg(
-      titulo: "Boulevard Shopping, Centro da Cidade",
-      consultor: "Pedro Costa",
-      data: "17/09/2025",
-    ),
-  ];
-
+  List<_ConsultorStatus> _consultores = [];
+  List<_VisitaProg> _visitas = [];
   String _query = '';
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    _carregarDados();
     _searchCtrl.addListener(() {
       setState(() {
         _query = _searchCtrl.text.trim();
@@ -52,6 +33,77 @@ class _DashboardTabState extends State<DashboardTab> {
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _carregarDados() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // 🔹 Consultores ativos
+      final consultoresRes = await _client
+          .from('consultores')
+          .select('id, nome, ativo')
+          .eq('ativo', true)
+          .order('nome');
+
+      // 🔹 Visitas dos próximos 30 dias
+      final now = DateTime.now();
+      final thirtyDays = now.add(const Duration(days: 30));
+
+      final visitasRes = await _client
+          .from('clientes')
+          .select('id, nome, endereco, dataVisita, consultor_uid')
+          .gte('dataVisita', now.toIso8601String())
+          .lte('dataVisita', thirtyDays.toIso8601String())
+          .order('dataVisita')
+          .limit(10);
+
+      // Cria mapa de consultores por ID para busca rápida
+      final Map<String, String> consultorMap = {};
+      if (consultoresRes is List) {
+        for (var c in consultoresRes) {
+          final id = c['id'] as String?;
+          final nome = c['nome'] as String?;
+          if (id != null && nome != null) {
+            consultorMap[id] = nome;
+          }
+        }
+      }
+
+      setState(() {
+        _consultores = (consultoresRes as List)
+            .map((c) => _ConsultorStatus(
+                  nome: (c['nome'] as String?) ?? 'Consultor',
+                  status: 'Trabalhando hoje',
+                  local: 'Em campo',
+                ))
+            .toList();
+
+        _visitas = (visitasRes as List)
+            .map((v) {
+              final dataStr = v['dataVisita'] as String?;
+              final data = dataStr != null ? DateTime.parse(dataStr) : DateTime.now();
+              final consultorUid = v['consultor_uid'] as String?;
+              final nomeConsultor = consultorUid != null ? consultorMap[consultorUid] : null;
+
+              return _VisitaProg(
+                titulo: (v['endereco'] as String?) ?? 'Sem endereço',
+                consultor: nomeConsultor ?? 'Consultor',
+                data: '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}',
+              );
+            })
+            .toList();
+
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao carregar dados: $error')),
+        );
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   List<_VisitaProg> get _visitasFiltradas {
@@ -68,63 +120,67 @@ class _DashboardTabState extends State<DashboardTab> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          _SearchBar(
-            controller: _searchCtrl,
-            hint: 'Pesquisar nome da rua...',
-          ),
-          const SizedBox(height: 12),
-
-          if (_query.isNotEmpty) _DisponibilidadeChip(disponivel: !_ruaJaProgramada),
-
-          const SizedBox(height: 16),
-
-          _Section(
-            title: "Status dos Consultores",
-            subtitle: "Situação atual de trabalho de cada consultor",
+    return _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
             child: Column(
-              children: _consultores
-                  .map((c) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: _ConsultorStatusTile(
-                          nome: c.nome,
-                          status: c.status,
-                          local: c.local,
-                        ),
-                      ))
-                  .toList(),
-            ),
-          ),
+              children: [
+                _SearchBar(
+                  controller: _searchCtrl,
+                  hint: 'Pesquisar nome da rua...',
+                ),
+                const SizedBox(height: 12),
 
-          const SizedBox(height: 16),
+                if (_query.isNotEmpty)
+                  _DisponibilidadeChip(disponivel: !_ruaJaProgramada),
 
-          _Section(
-            title: "Visitas Programadas",
-            subtitle: _query.isEmpty
-                ? "Próximas visitas programadas"
-                : "Resultados para: $_query",
-            child: Column(
-              children: _visitasFiltradas
-                  .map((v) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: _VisitaTile(
-                          titulo: v.titulo,
-                          consultor: v.consultor,
-                          data: v.data,
-                        ),
-                      ))
-                  .toList(),
+                const SizedBox(height: 16),
+
+                _Section(
+                  title: "Status dos Consultores",
+                  subtitle: "Situação atual de trabalho de cada consultor",
+                  child: Column(
+                    children: _consultores
+                        .map((c) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: _ConsultorStatusTile(
+                                nome: c.nome,
+                                status: c.status,
+                                local: c.local,
+                              ),
+                            ))
+                        .toList(),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                _Section(
+                  title: "Visitas Programadas",
+                  subtitle: _query.isEmpty
+                      ? "Próximas visitas programadas"
+                      : "Resultados para: $_query",
+                  child: Column(
+                    children: _visitasFiltradas
+                        .map((v) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: _VisitaTile(
+                                titulo: v.titulo,
+                                consultor: v.consultor,
+                                data: v.data,
+                              ),
+                            ))
+                        .toList(),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
-    );
+          );
   }
 }
 
+// ====== MODELOS ======
 class _ConsultorStatus {
   final String nome;
   final String status;
@@ -147,6 +203,7 @@ class _VisitaProg {
   });
 }
 
+// ====== WIDGETS ======
 class _SearchBar extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
