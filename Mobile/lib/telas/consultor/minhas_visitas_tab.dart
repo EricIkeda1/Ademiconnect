@@ -1,3 +1,4 @@
+// lib/telas/consultor/minhas_visitas.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
@@ -32,54 +33,26 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
     if (user == null) {
       return const Stream<List<Map<String, dynamic>>>.empty();
     }
-    
+
     return _client
         .from('clientes')
         .select('*')
-        .eq('consultor_uid', user.id)
+        .eq('consultor_uid_t', user.id) // usa a coluna correta
         .order('data_visita', ascending: true)
         .asStream();
   }
 
-  Future<void> _abrirNoGPS(String endereco) async {
-    final encodedEndereco = Uri.encodeComponent(endereco);
-    
-    final urls = {
-      'Google Maps': 'https://www.google.com/maps/search/?api=1&query=$encodedEndereco',
-      'Waze': 'https://waze.com/ul?q=$encodedEndereco&navigate=yes',
-      'Apple Maps': 'https://maps.apple.com/?q=$encodedEndereco',
-    };
-
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Abrir no GPS'),
-        content: const Text('Escolha o aplicativo de navegação:'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          ...urls.entries.map((entry) => TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _launchUrl(entry.value);
-            },
-            child: Text(entry.key),
-          )).toList(),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _launchUrl(String url) async {
+  Future<void> _abrirNoGoogleMaps(String endereco) async {
+    final encoded = Uri.encodeComponent(endereco);
+    final url = 'https://www.google.com/maps/search/?api=1&query=$encoded';
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Não foi possível abrir o aplicativo'),
+        const SnackBar(
+          content: Text('Não foi possível abrir o Google Maps'),
           backgroundColor: Colors.red,
         ),
       );
@@ -213,16 +186,22 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
 
   Widget _buildVisitaItem(Map<String, dynamic> cliente) {
     final cs = Theme.of(context).colorScheme;
-    
-    final endereco = cliente['endereco'] ?? 'Endereço não informado';
-    final estabelecimento = cliente['estabelecimento'] ?? 'Estabelecimento não informado';
-    
+
+    final endereco = (cliente['endereco'] as String?)?.trim();
+    final estabelecimento = (cliente['estabelecimento'] as String?)?.trim() ?? 'Estabelecimento não informado';
+
     final dataVisitaStr = cliente['data_visita'] as String?;
-    final cidade = cliente['cidade'] ?? '';
-    final estado = cliente['estado'] ?? '';
-    
-    final dataFormatada = _formatarDataVisita(dataVisitaStr);
+    final horaVisitaStr = cliente['hora_visita'] as String?; // hora do banco (TIME), ex: 14:30:00
+    final cidade = (cliente['cidade'] as String?)?.trim() ?? '';
+    final estado = (cliente['estado'] as String?)?.trim() ?? '';
+
+    final dataFormatada = _formatarDataVisita(dataVisitaStr, horaVisitaStr);
     final statusInfo = _determinarStatus(dataVisitaStr);
+
+    final enderecoCompleto = [
+      if ((endereco ?? '').isNotEmpty) endereco,
+      if (cidade.isNotEmpty || estado.isNotEmpty) '$cidade - $estado',
+    ].where((e) => (e ?? '').isNotEmpty).join(', ');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -243,7 +222,6 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
             ),
           ),
           const SizedBox(width: 12),
-          
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -255,7 +233,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    statusInfo['texto'],
+                    statusInfo['texto'] as String,
                     style: TextStyle(
                       color: statusInfo['corTexto'],
                       fontSize: 12,
@@ -264,7 +242,6 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                
                 Text(
                   estabelecimento,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
@@ -275,17 +252,22 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
-                
-                Text(
-                  '$endereco, $cidade - $estado',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                if (enderecoCompleto.isNotEmpty)
+                  GestureDetector(
+                    onTap: () {
+                      _abrirNoGoogleMaps(enderecoCompleto);
+                    },
+                    child: Text(
+                      enderecoCompleto,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: cs.primary,
+                            decoration: TextDecoration.underline,
+                          ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 const SizedBox(height: 4),
-                
                 Text(
                   dataFormatada,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -300,25 +282,35 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
     );
   }
 
-  String _formatarDataVisita(String? dataVisitaStr) {
+  String _formatarDataVisita(String? dataVisitaStr, String? horaVisitaStr) {
     if (dataVisitaStr == null || dataVisitaStr.isEmpty) return 'Data não informada';
-    
+
     try {
       final dataVisita = DateTime.parse(dataVisitaStr);
-      
+
+      // Se vier do banco como 'HH:MM:SS' (tipo time), normaliza para HH:mm
+      String? horaPreferida;
+      if (horaVisitaStr != null && horaVisitaStr.isNotEmpty) {
+        final parts = horaVisitaStr.split(':');
+        if (parts.length >= 2) {
+          horaPreferida = '${parts[0].padLeft(2, '0')}:${parts[1].padLeft(2, '0')}';
+        }
+      }
+
+      // Fallback: usa a hora embutida em data_visita (caso exista)
+      final horaFallback = DateFormat('HH:mm').format(dataVisita);
+      final horaExibida = horaPreferida ?? horaFallback;
+
       final hoje = DateTime.now();
       final amanha = DateTime(hoje.year, hoje.month, hoje.day + 1);
-      
+
       if (dataVisita.year == hoje.year && dataVisita.month == hoje.month && dataVisita.day == hoje.day) {
-        return 'Hoje às ${DateFormat('HH:mm', 'pt_BR').format(dataVisita)}';
+        return 'Hoje às $horaExibida';
       } else if (dataVisita.year == amanha.year && dataVisita.month == amanha.month && dataVisita.day == amanha.day) {
-        return 'Amanhã às ${DateFormat('HH:mm', 'pt_BR').format(dataVisita)}';
+        return 'Amanhã às $horaExibida';
       } else {
-        final format = dataVisita.year == hoje.year
-            ? 'EEE, d MMMM' 
-            : 'EEE, d MMMM y';
-        
-        return '${_capitalize(DateFormat(format, 'pt_BR').format(dataVisita))} às ${DateFormat('HH:mm', 'pt_BR').format(dataVisita)}';
+        final format = dataVisita.year == hoje.year ? 'EEE, d MMMM' : 'EEE, d MMMM y';
+        return '${_capitalize(DateFormat(format, 'pt_BR').format(dataVisita))} às $horaExibida';
       }
     } catch (e) {
       return 'Data inválida';
@@ -327,7 +319,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
 
   Map<String, dynamic> _determinarStatus(String? dataVisitaStr) {
     final cs = Theme.of(context).colorScheme;
-    
+
     if (dataVisitaStr == null || dataVisitaStr.isEmpty) {
       return {
         'icone': Icons.event_note_outlined,
@@ -336,13 +328,13 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
         'corTexto': Colors.green,
       };
     }
-    
+
     try {
       final dataVisita = DateTime.parse(dataVisitaStr);
       final hoje = DateTime.now();
       final hojeInicio = DateTime(hoje.year, hoje.month, hoje.day);
       final hojeFim = DateTime(hoje.year, hoje.month, hoje.day, 23, 59, 59);
-      
+
       if (dataVisita.isAfter(hojeInicio) && dataVisita.isBefore(hojeFim)) {
         return {
           'icone': Icons.flag_outlined,
@@ -385,10 +377,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          SliverToBoxAdapter(
-            child: _buildHeader(),
-          ),
-
+          SliverToBoxAdapter(child: _buildHeader()),
           SliverToBoxAdapter(
             child: _buildCard(
               title: 'Pesquisar Visitas',
@@ -414,7 +403,6 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
               ),
             ),
           ),
-
           SliverToBoxAdapter(
             child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: _meusClientesStream,
@@ -423,46 +411,49 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
                   return _buildCard(
                     title: 'Próximas Visitas',
                     child: Column(
-                      children: List.generate(3, (index) => Container(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.surfaceVariant,
-                                borderRadius: BorderRadius.circular(10),
+                      children: List.generate(
+                        3,
+                        (index) => Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.surfaceVariant,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    width: 80,
-                                    height: 20,
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context).colorScheme.surfaceVariant,
-                                      borderRadius: BorderRadius.circular(4),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      width: 80,
+                                      height: 20,
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context).colorScheme.surfaceVariant,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Container(
-                                    width: double.infinity,
-                                    height: 16,
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(context).colorScheme.surfaceVariant,
-                                      borderRadius: BorderRadius.circular(4),
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      width: double.infinity,
+                                      height: 16,
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context).colorScheme.surfaceVariant,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      )),
+                      ),
                     ),
                   );
                 }
@@ -582,13 +573,9 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
               },
             ),
           ),
-
-          const SliverToBoxAdapter(
-            child: SizedBox(height: 20),
-          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 20)),
         ],
       ),
     );
   }
-
 }

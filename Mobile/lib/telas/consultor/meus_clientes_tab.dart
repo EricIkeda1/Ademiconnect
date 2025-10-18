@@ -1,3 +1,4 @@
+// lib/telas/consultor/meus_clientes_tab.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
@@ -38,50 +39,23 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
     return _client
         .from('clientes')
         .select('*')
-        .eq('consultor_uid', user.id)
+        .eq('consultor_uid_t', user.id)
         .order('data_visita', ascending: true)
         .asStream();
   }
 
-  Future<void> _abrirNoGPS(String endereco) async {
+  // ✅ Abre direto no Google Maps
+  Future<void> _abrirNoGoogleMaps(String endereco) async {
     final encodedEndereco = Uri.encodeComponent(endereco);
+    final url = 'https://www.google.com/maps/search/?api=1&query=$encodedEndereco';
 
-    final urls = {
-      'Google Maps': 'https://www.google.com/maps/search/?api=1&query=$encodedEndereco',
-      'Waze': 'https://waze.com/ul?q=$encodedEndereco&navigate=yes',
-      'Apple Maps': 'https://maps.apple.com/?q=$encodedEndereco',
-    };
-
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Abrir no GPS'),
-        content: const Text('Escolha o aplicativo de navegação:'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          ...urls.entries.map((entry) => TextButton(
-                onPressed: () async {
-                  Navigator.pop(context);
-                  await _launchUrl(entry.value);
-                },
-                child: Text(entry.key),
-              )).toList(),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _launchUrl(String url) async {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Não foi possível abrir o aplicativo'),
+        const SnackBar(
+          content: Text('Não foi possível abrir o Google Maps'),
           backgroundColor: Colors.red,
         ),
       );
@@ -203,9 +177,10 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          SliverToBoxAdapter(
-            child: _buildHeader(),
-          ),
+          // Cabeçalho
+          SliverToBoxAdapter(child: _buildHeader()),
+
+          // Campo de busca
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -226,45 +201,53 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
               ),
             ),
           ),
-          SliverToBoxAdapter(
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _meusClientesStream,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
 
-                if (snapshot.hasError) {
-                  return Padding(
+          // Lista de clientes com StreamBuilder
+          StreamBuilder<List<Map<String, dynamic>>>(
+            stream: _meusClientesStream,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return SliverToBoxAdapter(
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              if (snapshot.hasError) {
+                return SliverToBoxAdapter(
+                  child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text('Erro: ${snapshot.error}'),
-                  );
-                }
+                  ),
+                );
+              }
 
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return Padding(
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return SliverToBoxAdapter(
+                  child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: _buildEmptyState(),
-                  );
-                }
+                  ),
+                );
+              }
 
-                final clientes = snapshot.data!;
-                final clientesFiltrados = _query.isEmpty
-                    ? clientes
-                    : clientes.where((cliente) {
-                        final estabelecimento = (cliente['estabelecimento']?.toString().toLowerCase() ?? '');
-                        final endereco = (cliente['endereco']?.toString().toLowerCase() ?? '');
-                        final bairro = (cliente['bairro']?.toString().toLowerCase() ?? '');
-                        final cidade = (cliente['cidade']?.toString().toLowerCase() ?? '');
-                        final query = _query.toLowerCase();
-                        return estabelecimento.contains(query) ||
-                            endereco.contains(query) ||
-                            bairro.contains(query) ||
-                            cidade.contains(query);
-                      }).toList();
+              final clientes = snapshot.data!;
+              final clientesFiltrados = _query.isEmpty
+                  ? clientes
+                  : clientes.where((cliente) {
+                      final estabelecimento = (cliente['estabelecimento']?.toString().toLowerCase() ?? '');
+                      final endereco = (cliente['endereco']?.toString().toLowerCase() ?? '');
+                      final bairro = (cliente['bairro']?.toString().toLowerCase() ?? '');
+                      final cidade = (cliente['cidade']?.toString().toLowerCase() ?? '');
+                      final query = _query.toLowerCase();
+                      return estabelecimento.contains(query) ||
+                          endereco.contains(query) ||
+                          bairro.contains(query) ||
+                          cidade.contains(query);
+                    }).toList();
 
-                if (clientesFiltrados.isEmpty) {
-                  return Padding(
+              if (clientesFiltrados.isEmpty) {
+                return SliverToBoxAdapter(
+                  child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       children: [
@@ -280,20 +263,26 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
                         ),
                       ],
                     ),
-                  );
-                }
-
-                return SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final cliente = clientesFiltrados[index];
-                      return _buildClienteItem(cliente);
-                    },
-                    childCount: clientesFiltrados.length,
                   ),
                 );
-              },
-            ),
+              }
+
+              // Lista de clientes
+              return SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final cliente = clientesFiltrados[index];
+                    return _buildClienteItem(cliente);
+                  },
+                  childCount: clientesFiltrados.length,
+                ),
+              );
+            },
+          ),
+
+          // Espaço final
+          const SliverToBoxAdapter(
+            child: SizedBox(height: 20),
           ),
         ],
       ),
@@ -323,12 +312,14 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: InkWell(
         onTap: () {
+          // Abrir detalhes
         },
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Ícone de status
               Container(
                 width: 40,
                 height: 40,
@@ -347,6 +338,7 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
                 ),
               ),
               const SizedBox(width: 16),
+              // Dados
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -359,9 +351,20 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      endereco,
-                      style: Theme.of(context).textTheme.bodySmall,
+                    // Endereço clicável → abre no Google Maps
+                    GestureDetector(
+                      onTap: () {
+                        if (endereco.trim().isNotEmpty) {
+                          _abrirNoGoogleMaps(endereco);
+                        }
+                      },
+                      child: Text(
+                        endereco,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.primary,
+                              decoration: TextDecoration.underline,
+                            ),
+                      ),
                     ),
                     Text(
                       cidade,
@@ -385,6 +388,7 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
                   ],
                 ),
               ),
+              // Ícone de excluir
               IconButton(
                 icon: const Icon(Icons.delete_outline, color: Colors.red),
                 onPressed: () async {
@@ -409,9 +413,7 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
                   if (confirmar == true) {
                     try {
                       await _client.from('clientes').delete().eq('id', cliente['id']);
-
                       widget.onClienteRemovido();
-
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Cliente excluído com sucesso'),

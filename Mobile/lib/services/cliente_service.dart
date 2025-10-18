@@ -1,3 +1,4 @@
+// lib/services/cliente_service.dart
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
@@ -65,10 +66,13 @@ class ClienteService {
               bairro: cliente.bairro,
               cep: cliente.cep,
               dataVisita: cliente.dataVisita,
+              // ✅ Novo campo: hora
+              horaVisita: cliente.horaVisita ?? '',
               nomeCliente: cliente.nomeCliente,
               telefone: cliente.telefone,
               observacoes: cliente.observacoes,
               consultorResponsavel: cliente.consultorResponsavel,
+              // ✅ Garante o consultor_uid mesmo se vazio
               consultorUid: cliente.consultorUid.isNotEmpty ? cliente.consultorUid : user,
             );
           }).toList();
@@ -114,6 +118,7 @@ class ClienteService {
       return;
     }
 
+    // ✅ Garantir o consultorUid e hora
     final clienteComUid = Cliente(
       id: cliente.id,
       estabelecimento: cliente.estabelecimento,
@@ -123,6 +128,7 @@ class ClienteService {
       bairro: cliente.bairro,
       cep: cliente.cep,
       dataVisita: cliente.dataVisita,
+      horaVisita: cliente.horaVisita,
       nomeCliente: cliente.nomeCliente,
       telefone: cliente.telefone,
       observacoes: cliente.observacoes,
@@ -183,6 +189,10 @@ class ClienteService {
           bairro: null,
           cep: null,
           dataVisita: DateTime.now(),
+          // ✅ Necessário
+          horaVisita: null,
+          nomeCliente: '',
+          telefone: '',
           consultorUid: user,
         ));
       }
@@ -197,6 +207,9 @@ class ClienteService {
         bairro: null,
         cep: null,
         dataVisita: DateTime.now(),
+        horaVisita: null,
+        nomeCliente: '',
+        telefone: '',
         consultorUid: user,
       ));
     }
@@ -255,6 +268,7 @@ class ClienteService {
     print('📁 Operação $tipo salva na fila offline');
   }
 
+  // ✅ Corrigido: usa consultor_uid_t e inclui hora_visita
   Map<String, dynamic> _clienteToMap(Cliente cliente) {
     return {
       'id': cliente.id,
@@ -267,7 +281,10 @@ class ClienteService {
       'bairro': cliente.bairro,
       'cep': cliente.cep,
       'data_visita': cliente.dataVisita.toIso8601String(),
+      // ✅ Novo campo
+      'hora_visita': cliente.horaVisita,
       'observacoes': cliente.observacoes,
+      // ✅ Corrigido: _t
       'consultor_uid_t': cliente.consultorUid,
       'responsavel': cliente.consultorResponsavel,
     };

@@ -166,6 +166,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
         observacoes: _observacoesCtrl.text.trim().isNotEmpty ? _observacoesCtrl.text.trim() : null,
         consultorResponsavel: consultorNome,
         consultorUid: userId,
+        horaVisita: horaStr,
       );
 
       await ClienteService().saveCliente(cliente);
