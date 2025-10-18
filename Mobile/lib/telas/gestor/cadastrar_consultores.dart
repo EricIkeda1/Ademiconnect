@@ -4,7 +4,7 @@ import 'package:email_validator/email_validator.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:flutter/services.dart';
 
-const String SENHA_PADRAO = 'Ademicom@2025';
+const String SENHA_PADRAO = 'Ademicon123456';
 
 class ConsultoresTab extends StatefulWidget {
   const ConsultoresTab({super.key});
@@ -87,9 +87,12 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
         password: SENHA_PADRAO,
       );
 
-      final userId = response.user?.id ??
-          (await _getUserIdByEmail(email)) ??
-          (throw Exception('Não foi possível obter o ID do usuário.'));
+      final authUser = response.user;
+      if (authUser == null) {
+        throw Exception('Falha ao criar usuário no Auth');
+      }
+
+      final userId = authUser.id;
 
       await _client.from('consultores').insert({
         'nome': _nomeCtrl.text.trim(),
@@ -97,7 +100,7 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
         'email': email,
         'matricula': _matriculaCtrl.text.trim(),
         'gestor_id': gestorId,
-        'tipo': 'consultores',
+        'tipo': 'consultor', 
         'uid': userId,
         'data_cadastro': DateTime.now().toIso8601String(),
       });
@@ -114,24 +117,16 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
         _mostrarSnack('Consultor cadastrado e logado com sucesso!', cor: Colors.green);
         _limparCampos();
       } else {
-        (throw Exception('Falha ao fazer login automático.'));
+        throw Exception('Falha ao fazer login automático.');
       }
     } on AuthException catch (e) {
       _mostrarSnack('Erro de autenticação: ${e.message}', cor: Colors.red);
     } catch (e) {
       _mostrarSnack('Erro: ${e.toString()}', cor: Colors.red);
+      print('❌ Erro completo: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
-  }
-
-  Future<String?> _getUserIdByEmail(String email) async {
-    final response = await _client
-        .from('auth.users')
-        .select('id')
-        .eq('email', email)
-        .maybeSingle();
-    return response?['id'];
   }
 
   void _mostrarSnack(String mensagem, {required Color cor}) {

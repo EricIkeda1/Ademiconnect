@@ -169,10 +169,10 @@ class _HomeGestorState extends State<HomeGestor> {
             body: TabBarView(
               physics: const BouncingScrollPhysics(),
               children: [
-                const DashboardTab(),
-                const ConsultoresTab(),
-                const TodosClientesTab(),
-                const RelatoriosTab(),
+                MinhasVisitasPage(),        
+                ConsultoresTab(),         
+                TodosClientesTab(),        
+                RelatoriosTab(),      
               ],
             ),
           ),

@@ -19,7 +19,6 @@ class Consultor {
 class ConsultorService {
   final SupabaseClient _client = Supabase.instance.client;
 
-  /// 🔹 Busca todos os consultores de um gestor
   Future<List<Consultor>> getConsultoresByGestor(String gestorUid) async {
     try {
       final response = await _client
@@ -29,7 +28,7 @@ class ConsultorService {
           .order('nome');
 
       if (response is List) {
-        return response.map((r) => Consultor.fromMap(r)).toList();
+        return response.map((r) => Consultor.fromMap(r as Map<String, dynamic>)).toList();
       }
       return [];
     } catch (e) {
@@ -38,11 +37,10 @@ class ConsultorService {
     }
   }
 
-  /// 🔹 Stream em tempo real de consultores (novo formato Supabase)
   Stream<List<Consultor>> getConsultoresStreamByGestor(String gestorUid) {
     return _client
         .from('consultores')
-        .stream(primaryKey: ['id']) // ✅ método atualizado
+        .stream(primaryKey: ['id'])
         .eq('gestor_id', gestorUid)
         .order('nome')
         .map((rows) =>
@@ -52,7 +50,6 @@ class ConsultorService {
     });
   }
 
-  /// 🔹 Cria novo consultor
   Future<Consultor> createConsultor({
     required String nome,
     required String gestorId,
@@ -80,7 +77,6 @@ class ConsultorService {
     }
   }
 
-  /// 🔹 Atualiza consultor
   Future<void> updateConsultor(Consultor consultor) async {
     try {
       await _client
@@ -93,7 +89,6 @@ class ConsultorService {
     }
   }
 
-  /// 🔹 Exclui consultor
   Future<void> deleteConsultor(String consultorUid) async {
     try {
       await _client.from('consultores').delete().eq('id', consultorUid);
@@ -103,7 +98,6 @@ class ConsultorService {
     }
   }
 
-  /// 🔹 Busca consultores por nome
   Future<List<Consultor>> searchConsultores(String query, String gestorUid) async {
     try {
       final response = await _client
@@ -114,7 +108,7 @@ class ConsultorService {
           .order('nome');
 
       if (response is List) {
-        return response.map((r) => Consultor.fromMap(r)).toList();
+        return response.map((r) => Consultor.fromMap(r as Map<String, dynamic>)).toList();
       }
       return [];
     } catch (e) {

@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:collection/collection.dart';
 
-class DashboardTab extends StatefulWidget {
-  const DashboardTab({super.key});
+class MinhasVisitasPage extends StatefulWidget {
+  const MinhasVisitasPage({super.key});
 
   @override
-  State<DashboardTab> createState() => _DashboardTabState();
+  State<MinhasVisitasPage> createState() => _MinhasVisitasPageState();
 }
 
-class _DashboardTabState extends State<DashboardTab> {
+class _MinhasVisitasPageState extends State<MinhasVisitasPage> {
   final TextEditingController _searchCtrl = TextEditingController();
   final SupabaseClient _client = Supabase.instance.client;
 
@@ -45,17 +45,6 @@ class _DashboardTabState extends State<DashboardTab> {
           .eq('ativo', true)
           .order('nome');
 
-      final now = DateTime.now();
-      final thirtyDays = now.add(const Duration(days: 30));
-
-      final visitasRes = await _client
-          .from('clientes')
-          .select('id, nome, endereco, dataVisita, consultor_uid')
-          .gte('dataVisita', now.toIso8601String())
-          .lte('dataVisita', thirtyDays.toIso8601String())
-          .order('dataVisita')
-          .limit(10);
-
       final Map<String, String> consultorMap = {};
       if (consultoresRes is List) {
         for (var c in consultoresRes) {
@@ -66,6 +55,17 @@ class _DashboardTabState extends State<DashboardTab> {
           }
         }
       }
+
+      final now = DateTime.now();
+      final thirtyDays = now.add(const Duration(days: 30));
+
+      final visitasRes = await _client
+          .from('clientes')
+          .select('id, nome, endereco, dataVisita, consultor_uid')
+          .filter('dataVisita', 'gte', now.toIso8601String())
+          .filter('dataVisita', 'lte', thirtyDays.toIso8601String())
+          .order('dataVisita')
+          .limit(10);
 
       setState(() {
         _consultores = (consultoresRes as List)
@@ -78,15 +78,28 @@ class _DashboardTabState extends State<DashboardTab> {
 
         _visitas = (visitasRes as List)
             .map((v) {
-              final dataStr = v['dataVisita'] as String?;
-              final data = dataStr != null ? DateTime.parse(dataStr) : DateTime.now();
+              DateTime data;
+              try {
+                final dataStr = v['dataVisita'] as String?;
+                if (dataStr != null && dataStr.isNotEmpty) {
+                  data = DateTime.parse(dataStr);
+                } else {
+                  data = DateTime.now();
+                }
+              } catch (e) {
+                data = DateTime.now();
+              }
+
               final consultorUid = v['consultor_uid'] as String?;
-              final nomeConsultor = consultorUid != null ? consultorMap[consultorUid] : null;
+              final nomeConsultor = consultorUid != null
+                  ? (consultorMap[consultorUid] ?? 'Desconhecido')
+                  : 'Desconhecido';
 
               return _VisitaProg(
                 titulo: (v['endereco'] as String?) ?? 'Sem endereço',
-                consultor: nomeConsultor ?? 'Consultor',
-                data: '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}',
+                consultor: nomeConsultor,
+                data:
+                    '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}',
               );
             })
             .toList();
@@ -96,7 +109,7 @@ class _DashboardTabState extends State<DashboardTab> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao carregar dados: $error')),
+          SnackBar(content: Text('Erro: $error')),
         );
         setState(() => _isLoading = false);
       }
@@ -128,12 +141,9 @@ class _DashboardTabState extends State<DashboardTab> {
                   hint: 'Pesquisar nome da rua...',
                 ),
                 const SizedBox(height: 12),
-
                 if (_query.isNotEmpty)
                   _DisponibilidadeChip(disponivel: !_ruaJaProgramada),
-
                 const SizedBox(height: 16),
-
                 _Section(
                   title: "Status dos Consultores",
                   subtitle: "Situação atual de trabalho de cada consultor",
@@ -150,9 +160,7 @@ class _DashboardTabState extends State<DashboardTab> {
                         .toList(),
                   ),
                 ),
-
                 const SizedBox(height: 16),
-
                 _Section(
                   title: "Visitas Programadas",
                   subtitle: _query.isEmpty
@@ -291,13 +299,16 @@ class _Section extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 4),
-          Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 12)),
-          const SizedBox(height: 12),
-          child,
-        ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+            const SizedBox(height: 12),
+            child,
+          ],
+        ),
       ),
     );
   }
@@ -323,17 +334,20 @@ class _ConsultorStatusTile extends StatelessWidget {
           const CircleAvatar(child: Icon(Icons.person)),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(nome, style: const TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 2),
-              Row(
-                children: [
-                  const Icon(Icons.place, size: 16, color: Colors.green),
-                  const SizedBox(width: 4),
-                  Expanded(child: Text(local, style: const TextStyle(color: Colors.black54))),
-                ],
-              ),
-            ]),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(nome, style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    const Icon(Icons.place, size: 16, color: Colors.green),
+                    const SizedBox(width: 4),
+                    Expanded(child: Text(local, style: const TextStyle(color: Colors.black54))),
+                  ],
+                ),
+              ],
+            ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

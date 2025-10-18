@@ -43,7 +43,6 @@ class _LoginPageState extends State<LoginPage> {
       final email = _emailCtrl.text.trim().toLowerCase();
       final password = _passCtrl.text;
 
-      // 1. Primeiro autentica no Supabase Auth
       final authResponse = await _client.auth.signInWithPassword(
         email: email,
         password: password,
@@ -53,10 +52,11 @@ class _LoginPageState extends State<LoginPage> {
         throw Exception('Falha na autenticação');
       }
 
-      // Força atualização da sessão para garantir dados sincronizados
-      await _client.auth.refreshSession();
+      final user = _client.auth.currentUser;
+      if (user == null) {
+        throw Exception('Nenhum usuário logado');
+      }
 
-      // 2. Depois verifica se o usuário existe nas tabelas do aplicativo
       Map<String, dynamic>? gestor;
       Map<String, dynamic>? consultor;
 
@@ -64,25 +64,32 @@ class _LoginPageState extends State<LoginPage> {
         gestor = await _client
             .from('gestor')
             .select('tipo')
-            .eq('email', email)
+            .eq('id', user.id)
             .maybeSingle();
+        if (gestor != null) {
+          print('✅ Gestor encontrado: ${gestor['tipo']}');
+        }
       } catch (e) {
         gestor = null;
+        print('❌ Erro ao buscar gestor: $e');
       }
 
       if (gestor == null) {
         try {
           consultor = await _client
               .from('consultores')
-              .select('uid')
-              .eq('email', email)
+              .select('tipo')
+              .eq('uid', user.id)
               .maybeSingle();
+          if (consultor != null) {
+            print('✅ Consultor encontrado: ${consultor['tipo']}');
+          }
         } catch (e) {
           consultor = null;
+          print('❌ Erro ao buscar consultor: $e');
         }
       }
 
-      // 3. Se não existe em nenhuma tabela, força logout e mostra erro
       if (gestor == null && consultor == null) {
         await _client.auth.signOut();
         if (mounted) {
@@ -91,18 +98,17 @@ class _LoginPageState extends State<LoginPage> {
               content: Text('Usuário não encontrado no sistema. Contate o administrador.'),
             ),
           );
+        }
+        if (mounted) {
           setState(() => _loading = false);
         }
         return;
       }
 
-      // 4. Decide rota pelo tipo
-      String route;
+      String route = '/consultor';
       if (gestor != null) {
         final tipo = (gestor['tipo'] as String?) ?? 'gestor';
         route = (tipo == 'gestor' || tipo == 'supervisor') ? '/gestor' : '/consultor';
-      } else {
-        route = '/consultor';
       }
 
       if (mounted) {

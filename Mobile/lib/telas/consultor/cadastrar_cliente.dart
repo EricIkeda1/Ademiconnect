@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../models/cliente.dart';
-import '../../services/cliente_service.dart';
+import 'package:uuid/uuid.dart';
+import 'package:ademicon_app/models/cliente.dart';
+import 'package:ademicon_app/services/cliente_service_memory.dart';
 
 class CadastrarCliente extends StatefulWidget {
   final Function()? onClienteCadastrado;
@@ -15,7 +16,6 @@ class CadastrarCliente extends StatefulWidget {
 
 class _CadastrarClienteState extends State<CadastrarCliente> {
   final _formKey = GlobalKey<FormState>();
-  final _clienteService = ClienteService();
   final _client = Supabase.instance.client;
 
   final _nomeClienteCtrl = TextEditingController();
@@ -49,12 +49,10 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     super.initState();
     _dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
     _horaVisitaCtrl.text = DateFormat('HH:mm').format(DateTime.now());
-    _clienteService.initialize();
   }
 
   @override
   void dispose() {
-    _clienteService.dispose();
     _nomeClienteCtrl.dispose();
     _telefoneCtrl.dispose();
     _nomeEstabelecimentoCtrl.dispose();
@@ -71,18 +69,18 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
 
   Future<String> _buscarNomeDoConsultor(String uid) async {
     try {
-      final row = await _client
+      final response = await _client
           .from('consultores')
-          .select('nome, email')
-          .eq('id', uid)
+          .select('nome')
+          .eq('uid', uid)
           .maybeSingle();
 
-      if (row != null) {
-        final nome = (row['nome'] as String?)?.trim() ?? '';
-        if (nome.isNotEmpty) return nome;
-        final email = (row['email'] as String?)?.trim() ?? '';
-        if (email.isNotEmpty) return email.split('@').first;
+      if (response != null && response['nome'] != null) {
+        final nome = (response['nome'] as String).trim();
+        print('✅ Nome do consultor encontrado: $nome');
+        return nome;
       }
+      print('❌ Nenhum nome encontrado para uid: $uid');
     } catch (e) {
       debugPrint('Erro ao buscar nome do consultor: $e');
     }
@@ -101,14 +99,16 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
       try {
         dataHora = DateFormat('dd/MM/yyyy HH:mm').parse('$dataStr $horaStr');
       } on FormatException {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Data ou hora inválida. Use o formato correto.')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Data ou hora inválida. Use o formato correto.')),
+          );
+        }
         return;
       }
 
-      final user = _client.auth.currentSession?.user;
-      if (user == null) {
+      final session = _client.auth.currentSession;
+      if (session == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Erro: sessão expirada. Faça login novamente.')),
@@ -117,24 +117,58 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
         return;
       }
 
-      String consultorNome = await _buscarNomeDoConsultor(user.id);
+      final userId = session.user?.id;
+      if (userId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Erro: não foi possível identificar o usuário.')),
+          );
+        }
+        return;
+      }
+
+      print('🔍 ID do usuário (auth.uid): $userId');
+
+      final consultor = await _client
+          .from('consultores')
+          .select('id, nome')
+          .eq('uid', userId)
+          .maybeSingle();
+
+      if (consultor == null) {
+        print('❌ ERRO: Nenhum consultor encontrado com uid = $userId');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Erro: seu perfil de consultor não foi encontrado no banco.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      print('✅ Consultor encontrado: ${consultor['nome']}');
+
+      final consultorNome = await _buscarNomeDoConsultor(userId);
+
       final cliente = Cliente(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        nomeCliente: _nomeClienteCtrl.text.trim().isEmpty ? null : _nomeClienteCtrl.text.trim(),
+        id: const Uuid().v4(),
+        nomeCliente: _nomeClienteCtrl.text.trim(),
         telefone: _telefoneCtrl.text.replaceAll(RegExp(r'[^\d]'), ''),
         estabelecimento: _nomeEstabelecimentoCtrl.text.trim(),
         estado: _estadoCtrl.text.trim(),
         cidade: _cidadeCtrl.text.trim(),
         endereco: _enderecoCtrl.text.trim(),
-        bairro: _bairroCtrl.text.trim().isEmpty ? null : _bairroCtrl.text.trim(),
+        bairro: _bairroCtrl.text.trim().isNotEmpty ? _bairroCtrl.text.trim() : null,
         cep: _cepCtrl.text.replaceAll('-', ''),
         dataVisita: dataHora,
-        observacoes: _observacoesCtrl.text.trim().isEmpty ? null : _observacoesCtrl.text.trim(),
+        observacoes: _observacoesCtrl.text.trim().isNotEmpty ? _observacoesCtrl.text.trim() : null,
         consultorResponsavel: consultorNome,
-        consultorUid: user.id,
+        consultorUid: userId,
       );
 
-      await _clienteService.saveCliente(cliente);
+      await ClienteServiceHybrid().saveCliente(cliente);
 
       if (mounted) {
         _limparCampos();
@@ -145,13 +179,14 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
             backgroundColor: Colors.green,
           ),
         );
+        print('🎉 Cliente cadastrado com sucesso!');
       }
     } catch (e, st) {
-      debugPrint('Erro ao salvar cliente: $e\n$st');
+      print('❌ ERRO COMPLETO ao salvar cliente: $e\n$st');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Erro ao salvar: ${e.toString().split('\n').first}'),
+            content: Text('Erro: ${e.toString().split('\n').first}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -321,14 +356,12 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                           style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 16),
-
                         TextFormField(
                           controller: _nomeClienteCtrl,
                           decoration: _obterDecoracaoCampo('Nome do Cliente', hint: 'Nome completo'),
                           validator: (v) => _validarCampoObrigatorio(v, field: 'Nome do cliente'),
                         ),
                         const SizedBox(height: 12),
-
                         TextFormField(
                           controller: _telefoneCtrl,
                           keyboardType: TextInputType.phone,
@@ -337,14 +370,12 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                           validator: (v) => _validarCampoObrigatorio(v, field: 'Telefone'),
                         ),
                         const SizedBox(height: 12),
-
                         TextFormField(
                           controller: _nomeEstabelecimentoCtrl,
                           decoration: _obterDecoracaoCampo('Estabelecimento', hint: 'Nome do ponto de venda'),
                           validator: (v) => _validarCampoObrigatorio(v, field: 'Estabelecimento'),
                         ),
                         const SizedBox(height: 12),
-
                         Row(
                           children: [
                             Expanded(
@@ -366,31 +397,34 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                           ],
                         ),
                         const SizedBox(height: 12),
-
                         TextFormField(
                           controller: _enderecoCtrl,
                           decoration: _obterDecoracaoCampo('Endereço', hint: 'Av. ex: 123'),
                           validator: (v) => _validarCampoObrigatorio(v, field: 'Endereço'),
                         ),
                         const SizedBox(height: 12),
-
                         Row(
                           children: [
-                            Expanded(flex: 3, child: TextFormField(
-                              controller: _bairroCtrl,
-                              decoration: _obterDecoracaoCampo('Bairro', hint: 'Jardim x', isObrigatorio: false),
-                            )),
+                            Expanded(
+                              flex: 3,
+                              child: TextFormField(
+                                controller: _bairroCtrl,
+                                decoration: _obterDecoracaoCampo('Bairro', hint: 'Jardim x', isObrigatorio: false),
+                              ),
+                            ),
                             const SizedBox(width: 12),
-                            Expanded(flex: 2, child: TextFormField(
-                              controller: _cepCtrl,
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [_cepFormatter],
-                              decoration: _obterDecoracaoCampo('CEP', hint: '00000-000', isObrigatorio: false),
-                            )),
+                            Expanded(
+                              flex: 2,
+                              child: TextFormField(
+                                controller: _cepCtrl,
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [_cepFormatter],
+                                decoration: _obterDecoracaoCampo('CEP', hint: '00000-000', isObrigatorio: false),
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 12),
-
                         Row(
                           children: [
                             Expanded(
@@ -429,10 +463,11 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                           ],
                         ),
                         const SizedBox(height: 24),
-
-                        Text('Observações', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                        Text(
+                          'Observações',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                        ),
                         const SizedBox(height: 16),
-
                         TextFormField(
                           controller: _observacoesCtrl,
                           maxLines: 3,
@@ -443,9 +478,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                         ),
-
                         const SizedBox(height: 24),
-
                         Row(
                           children: [
                             Expanded(

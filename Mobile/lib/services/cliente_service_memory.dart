@@ -1,4 +1,3 @@
-import 'dart:js' as js;
 import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
@@ -16,7 +15,6 @@ class ClienteServiceHybrid {
 
   static const String _cacheKey = 'clientes_cache';
   static const String _pendingKey = 'pending_ops';
-  static const String _webStorageKey = 'clientes_data';
 
   List<Cliente> get clientes => List.unmodifiable(_clientes);
   int get totalClientes => _clientes.length;
@@ -24,189 +22,195 @@ class ClienteServiceHybrid {
   int get totalVisitasHoje {
     final hoje = DateTime.now();
     return _clientes.where((c) =>
-      c.dataVisita.year == hoje.year &&
-      c.dataVisita.month == hoje.month &&
-      c.dataVisita.day == hoje.day
+        c.dataVisita.year == hoje.year &&
+        c.dataVisita.month == hoje.month &&
+        c.dataVisita.day == hoje.day
     ).length;
   }
 
   Future<void> loadClientes() async {
     final prefs = await SharedPreferences.getInstance();
     final cachedData = prefs.getString(_cacheKey);
+
     if (cachedData != null) {
       try {
         final List<dynamic> jsonList = jsonDecode(cachedData);
         _clientes = jsonList.map((e) => Cliente.fromJson(e)).toList();
+        if (kDebugMode) print('✅ Cache carregado: ${_clientes.length} clientes');
       } catch (e) {
-        if (kDebugMode) print('Erro ao decodificar cache local: $e');
-      }
-    }
-
-    if (kIsWeb) {
-      try {
-        final stored = _getFromLocalStorageWeb();
-        if (stored != null) {
-          final List<dynamic> jsonList = json.decode(stored);
-          _clientes = jsonList.map((json) => Cliente.fromJson(json)).toList();
-        }
-      } catch (e) {
-        if (kDebugMode) print('Erro web ao carregar clientes: $e');
+        if (kDebugMode) print('❌ Erro ao ler cache: $e');
       }
     }
 
     if (await _isOnline()) {
+      if (kDebugMode) print('📡 Online: sincronizando com Supabase');
       try {
+        final user = _client.auth.currentSession?.user?.id;
+        if (user == null) {
+          if (kDebugMode) print('❌ Usuário não autenticado');
+          return;
+        }
+
         final response = await _client
             .from('clientes')
             .select('*')
-            .order('data_visita');
+            .eq('consultor_uid_t', user)
+            .order('data_visita', ascending: true);
 
-        if (response is List) {
-          final supabaseClientes = response
+        if (response is List && response.isNotEmpty) {
+          _clientes = response
               .map((row) => Cliente.fromMap(row as Map<String, dynamic>))
               .toList();
-          
-          if (supabaseClientes.isNotEmpty) {
-            _clientes = supabaseClientes;
-            await _saveToCache();
-            if (kIsWeb) _saveToLocalStorageWeb(jsonEncode(_clientes.map((c) => c.toJson()).toList()));
-          }
+          await _saveToCache();
+          if (kDebugMode) print('✅ Clientes do Supabase carregados');
+        } else {
+          if (kDebugMode) print('🟨 Nenhum cliente no Supabase');
         }
-      } catch (e) {
-        if (kDebugMode) print('Erro ao carregar clientes do Supabase: $e');
+      } catch (e, st) {
+        if (kDebugMode) {
+          print('❌ Falha ao carregar do Supabase: $e');
+          print('❌ Stack: $st');
+        }
       }
+    } else {
+      if (kDebugMode) print('💤 Offline: usando cache local');
     }
   }
 
   Future<void> saveCliente(Cliente cliente) async {
+    final user = _client.auth.currentSession?.user?.id;
+    if (user == null) {
+      if (kDebugMode) print('❌ ERRO: Usuário não autenticado.');
+      return;
+    }
+
+    final clienteComUid = Cliente(
+      id: cliente.id,
+      nomeCliente: cliente.nomeCliente,
+      telefone: cliente.telefone,
+      estabelecimento: cliente.estabelecimento,
+      estado: cliente.estado,
+      cidade: cliente.cidade,
+      endereco: cliente.endereco,
+      bairro: cliente.bairro,
+      cep: cliente.cep,
+      dataVisita: cliente.dataVisita,
+      observacoes: cliente.observacoes,
+      consultorResponsavel: cliente.consultorResponsavel,
+      consultorUid: user,
+    );
+
     _clientes.removeWhere((c) => c.id == cliente.id);
-    _clientes.add(cliente);
-
+    _clientes.add(clienteComUid);
     await _saveToCache();
-    if (kIsWeb) _saveToLocalStorageWeb(jsonEncode(_clientes.map((c) => c.toJson()).toList()));
+    if (kDebugMode) print('💾 Salvo no cache local: ${clienteComUid.estabelecimento}');
 
-    if (await _isOnline()) {
+    final online = await _isOnline();
+    if (kDebugMode) print('🌐 Online? $online');
+
+    if (online) {
       try {
-        final data = _clienteToMap(cliente);
-        await _client
-            .from('clientes')
-            .upsert(data)
-            .single();
-        
+        final data = _clienteToMap(clienteComUid);
+        if (kDebugMode) print('📤 Dados enviados ao Supabase: $data');
+
+        await _client.from('clientes').upsert(data, onConflict: 'id');
+        if (kDebugMode) print('✅ SUCESSO: Salvo no Supabase');
+
         await _removePendingOperation('save', cliente.id);
-      } catch (e) {
-        if (kDebugMode) print('Erro ao salvar cliente no Supabase: $e');
-        await _savePendingOperation('save', cliente);
+      } catch (e, st) {
+        if (kDebugMode) {
+          print('❌ FALHA no Supabase: $e');
+          print('❌ Stack: $st');
+          print('📌 Cliente salvo offline para sincronizar depois');
+        }
+        await _savePendingOperation('save', clienteComUid);
       }
     } else {
-      await _savePendingOperation('save', cliente);
+      if (kDebugMode) print('💤 OFFLINE: salvo apenas local');
+      await _savePendingOperation('save', clienteComUid);
     }
   }
 
   Future<void> removeCliente(String id) async {
-    final cliente = _clientes.firstWhere((c) => c.id == id, orElse: () => Cliente(
+    final user = _client.auth.currentSession?.user?.id;
+    if (user == null) {
+      if (kDebugMode) print('❌ ERRO: Usuário não autenticado.');
+      return;
+    }
+
+    final cliente = Cliente(
       id: id,
-      estabelecimento: '',
-      estado: '',
-      cidade: '',
-      endereco: '',
+      nomeCliente: 'Removido',
+      telefone: '',
+      estabelecimento: 'Removido',
+      estado: 'SC',
+      cidade: 'Florianópolis',
+      endereco: 'Removido',
+      bairro: null,
+      cep: null,
       dataVisita: DateTime.now(),
-    ));
-    
+      observacoes: null,
+      consultorResponsavel: 'Sistema',
+      consultorUid: user,
+    );
+
     _clientes.removeWhere((c) => c.id == id);
-
     await _saveToCache();
-    if (kIsWeb) _saveToLocalStorageWeb(jsonEncode(_clientes.map((c) => c.toJson()).toList()));
 
-    if (await _isOnline()) {
+    final online = await _isOnline();
+    if (online) {
       try {
-        await _client
-            .from('clientes')
-            .delete()
-            .eq('id', id)
-            .execute();
-        
+        await _client.from('clientes').delete().eq('id', id);
+        if (kDebugMode) print('✅ Removido do Supabase: $id');
         await _removePendingOperation('remove', id);
       } catch (e) {
-        if (kDebugMode) print('Erro ao remover cliente do Supabase: $e');
+        if (kDebugMode) print('❌ Falha ao remover no Supabase: $e');
         await _savePendingOperation('remove', cliente);
       }
     } else {
+      if (kDebugMode) print('📁 Remoção salva offline');
       await _savePendingOperation('remove', cliente);
     }
   }
 
   Future<void> syncPendingOperations() async {
-    if (!await _isOnline()) return;
+    if (!await _isOnline()) {
+      if (kDebugMode) print('sync: offline, não sincronizando');
+      return;
+    }
 
     final prefs = await SharedPreferences.getInstance();
     final pendingData = prefs.getString(_pendingKey);
-    if (pendingData == null) return;
+    if (pendingData == null || pendingData.isEmpty) {
+      if (kDebugMode) print('sync: sem operações pendentes');
+      return;
+    }
 
     final List<dynamic> pendingOps = jsonDecode(pendingData);
-    
-    if (kDebugMode) {
-      print('📤 Sincronizando ${pendingOps.length} operações pendentes...');
-    }
+    if (kDebugMode) print('📤 Sincronizando ${pendingOps.length} operações pendentes...');
 
-    try {
-      for (var op in pendingOps) {
-        final tipo = op['tipo'];
-        final clienteMap = op['cliente'] as Map<String, dynamic>;
-        final cliente = Cliente.fromJson(clienteMap);
+    for (final op in pendingOps) {
+      final tipo = op['tipo'] as String;
+      final clienteMap = op['cliente'] as Map<String, dynamic>;
+      final cliente = Cliente.fromJson(clienteMap);
 
+      try {
         if (tipo == 'save') {
-          try {
-            final data = _clienteToMap(cliente);
-            await _client
-                .from('clientes')
-                .upsert(data)
-                .single();
-            
-            if (kDebugMode) {
-              print('✅ Enviado para Supabase: ${cliente.estabelecimento}');
-            }
-          } catch (e) {
-            if (kDebugMode) {
-              print('❌ Falha ao sincronizar save: ${cliente.estabelecimento} - $e');
-            }
-            continue;
-          }
+          final data = _clienteToMap(cliente);
+          await _client.from('clientes').upsert(data, onConflict: 'id');
+          if (kDebugMode) print('✅ Sync: salvo ${cliente.estabelecimento}');
         } else if (tipo == 'remove') {
-          try {
-            final response = await _client
-                .from('clientes')
-                .delete()
-                .eq('id', cliente.id)
-                .execute();
-
-            if (response.error != null) {
-              if (kDebugMode) {
-                print('❌ Erro ao excluir: ${response.error?.message}');
-              }
-              continue;
-            }
-
-            if (kDebugMode) {
-              print('✅ Removido do Supabase: ${cliente.id}');
-            }
-          } catch (e) {
-            if (kDebugMode) {
-              print('❌ Falha ao sincronizar remove: ${cliente.id} - $e');
-            }
-            continue;
-          }
+          await _client.from('clientes').delete().eq('id', cliente.id);
+          if (kDebugMode) print('✅ Sync: removido ${cliente.id}');
         }
-      }
-
-      if (kDebugMode) {
-        print('✅ Fila de operações pendentes limpa!');
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ Erro crítico ao sincronizar: $e');
+        await _removePendingOperation(tipo, cliente.id);
+      } catch (e) {
+        if (kDebugMode) print('❌ Falha ao sincronizar $tipo: $e');
+        break;
       }
     }
+
+    if (kDebugMode) print('✅ Sincronização concluída!');
   }
 
   Future<void> _saveToCache() async {
@@ -219,66 +223,48 @@ class ClienteServiceHybrid {
     final prefs = await SharedPreferences.getInstance();
     final data = prefs.getString(_pendingKey);
     List<dynamic> ops = data != null ? jsonDecode(data) : [];
-    
-    ops.removeWhere((op) => 
-      op['tipo'] == tipo && 
-      op['cliente']['id'] == cliente.id
-    );
-    
+
     ops.add({'tipo': tipo, 'cliente': cliente.toJson()});
     await prefs.setString(_pendingKey, jsonEncode(ops));
+    if (kDebugMode) print('📌 Operação "$tipo" salva offline: ${cliente.estabelecimento}');
   }
 
   Future<void> _removePendingOperation(String tipo, String clienteId) async {
     final prefs = await SharedPreferences.getInstance();
     final data = prefs.getString(_pendingKey);
     if (data == null) return;
-
     List<dynamic> ops = jsonDecode(data);
     ops.removeWhere((op) => 
       op['tipo'] == tipo && 
       op['cliente']['id'] == clienteId
     );
-    
     await prefs.setString(_pendingKey, jsonEncode(ops));
   }
 
   Future<bool> _isOnline() async {
-    final result = await Connectivity().checkConnectivity();
-    if (result == ConnectivityResult.none) return false;
-    
-    if (kIsWeb) {
-      try {
-        final response = await _client.from('clientes').select('count()', count: CountOption.exact).execute();
-        return response.error == null;
-      } catch (e) {
-        return false;
-      }
-    }
-    
-    return true;
-  }
-
-  void _saveToLocalStorageWeb(String data) {
     try {
-      js.context.callMethod('eval', ['localStorage.setItem("$_webStorageKey", "$data")']);
-    } catch (e) {
-      if (kDebugMode) print('Erro salvar localStorage web: $e');
-    }
-  }
+      final result = await Connectivity().checkConnectivity();
+      if (result == ConnectivityResult.none) return false;
 
-  String? _getFromLocalStorageWeb() {
-    try {
-      return js.context.callMethod('eval', ['localStorage.getItem("$_webStorageKey")']) as String?;
+      if (!kIsWeb) return true;
+
+      final response = await _client
+          .from('clientes')
+          .select('id')
+          .limit(1);
+
+      return response is List && response.isNotEmpty;
     } catch (e) {
-      if (kDebugMode) print('Erro ler localStorage web: $e');
-      return null;
+      if (kDebugMode) print('❌ Erro em _isOnline: $e');
+      return false;
     }
   }
 
   Map<String, dynamic> _clienteToMap(Cliente cliente) {
     return {
       'id': cliente.id,
+      'nome_cliente': cliente.nomeCliente,
+      'telefone': cliente.telefone,
       'estabelecimento': cliente.estabelecimento,
       'estado': cliente.estado,
       'cidade': cliente.cidade,
@@ -286,11 +272,9 @@ class ClienteServiceHybrid {
       'bairro': cliente.bairro,
       'cep': cliente.cep,
       'data_visita': cliente.dataVisita.toIso8601String(),
-      'nome_cliente': cliente.nomeCliente,
-      'telefone': cliente.telefone,
       'observacoes': cliente.observacoes,
       'consultor_responsavel': cliente.consultorResponsavel,
-      'consultor_uid': cliente.consultorUid,
+      'consultor_uid_t': cliente.consultorUid,
     };
   }
 }

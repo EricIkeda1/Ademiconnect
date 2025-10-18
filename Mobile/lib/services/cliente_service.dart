@@ -47,11 +47,34 @@ class ClienteService {
   Future<void> loadClientes() async {
     final prefs = await SharedPreferences.getInstance();
     final cachedData = prefs.getString(_cacheKey);
-    
+
     if (cachedData != null) {
       try {
         final List<dynamic> jsonList = jsonDecode(cachedData);
-        _clientes = jsonList.map((e) => Cliente.fromJson(e)).toList();
+        final List<Cliente> carregados = jsonList.map((e) => Cliente.fromJson(e)).toList();
+
+        final user = _client.auth.currentSession?.user?.id;
+        if (user != null) {
+          _clientes = carregados.map((cliente) {
+            return Cliente(
+              id: cliente.id,
+              estabelecimento: cliente.estabelecimento,
+              estado: cliente.estado,
+              cidade: cliente.cidade,
+              endereco: cliente.endereco,
+              bairro: cliente.bairro,
+              cep: cliente.cep,
+              dataVisita: cliente.dataVisita,
+              nomeCliente: cliente.nomeCliente,
+              telefone: cliente.telefone,
+              observacoes: cliente.observacoes,
+              consultorResponsavel: cliente.consultorResponsavel,
+              consultorUid: cliente.consultorUid.isNotEmpty ? cliente.consultorUid : user,
+            );
+          }).toList();
+        } else {
+          _clientes = carregados;
+        }
       } catch (e) {
         print('❌ Erro ao carregar cache: $e');
       }
@@ -61,7 +84,7 @@ class ClienteService {
   Future<bool> _hasRealInternet() async {
     final result = await Connectivity().checkConnectivity();
     if (result == ConnectivityResult.none) return false;
-    
+
     try {
       final lookup = await InternetAddress.lookup('google.com')
           .timeout(const Duration(seconds: 3));
@@ -76,7 +99,7 @@ class ClienteService {
   }
 
   Future<void> saveCliente(Cliente cliente) async {
-    final user = _client.auth.currentSession?.user;
+    final user = _client.auth.currentSession?.user?.id;
     if (user == null) {
       print('⚠️ Usuário não autenticado.');
       return;
@@ -95,7 +118,7 @@ class ClienteService {
       telefone: cliente.telefone,
       observacoes: cliente.observacoes,
       consultorResponsavel: cliente.consultorResponsavel,
-      consultorUid: user.id,
+      consultorUid: user,
     );
 
     _clientes.removeWhere((c) => c.id == cliente.id);
@@ -107,26 +130,22 @@ class ClienteService {
     try {
       if (isConnected) {
         final data = _clienteToMap(clienteComUid);
-        
-        final response = await _client
-            .from('clientes')
-            .upsert(data);
-            
+        await _client.from('clientes').upsert(data, onConflict: 'id');
         print('✅ Cliente salvo no Supabase: ${clienteComUid.estabelecimento}');
         await NotificationService.showSuccessNotification();
       } else {
         await _savePendingOperation('save', clienteComUid);
         await NotificationService.showOfflineNotification();
       }
-    } catch (e) {
-      print('❌ Falha ao salvar cliente no Supabase: $e');
+    } catch (e, st) {
+      print('❌ Falha ao salvar no Supabase: $e\n$st');
       await _savePendingOperation('save', clienteComUid);
       await NotificationService.showOfflineNotification();
     }
   }
 
   Future<void> removeCliente(String id) async {
-    final user = _client.auth.currentSession?.user;
+    final user = _client.auth.currentSession?.user?.id;
     if (user == null) {
       print('⚠️ Usuário não autenticado.');
       return;
@@ -139,11 +158,7 @@ class ClienteService {
 
     try {
       if (isConnected) {
-        await _client
-            .from('clientes')
-            .delete()
-            .eq('id', id);
-        
+        await _client.from('clientes').delete().eq('id', id);
         print('✅ Cliente removido do Supabase: $id');
       } else {
         await _savePendingOperation('remove', Cliente(
@@ -155,11 +170,11 @@ class ClienteService {
           bairro: null,
           cep: null,
           dataVisita: DateTime.now(),
-          consultorUid: user.id,
+          consultorUid: user,
         ));
       }
-    } catch (e) {
-      print('❌ Falha ao remover cliente do Supabase: $e');
+    } catch (e, st) {
+      print('❌ Falha ao remover do Supabase: $e\n$st');
       await _savePendingOperation('remove', Cliente(
         id: id,
         estabelecimento: '',
@@ -169,7 +184,7 @@ class ClienteService {
         bairro: null,
         cep: null,
         dataVisita: DateTime.now(),
-        consultorUid: user.id,
+        consultorUid: user,
       ));
     }
   }
@@ -188,25 +203,18 @@ class ClienteService {
     for (final op in pendingOps) {
       final tipo = op['tipo'] as String;
       final cliente = Cliente.fromJson(op['cliente']);
-      
+
       try {
         if (tipo == 'save') {
           final data = _clienteToMap(cliente);
-          await _client
-              .from('clientes')
-              .upsert(data);
-          
-          print('✅ Enviado para Supabase: ${cliente.estabelecimento}');
+          await _client.from('clientes').upsert(data, onConflict: 'id');
+          print('✅ Sync: cliente salvo -> ${cliente.estabelecimento}');
         } else if (tipo == 'remove') {
-          await _client
-              .from('clientes')
-              .delete()
-              .eq('id', cliente.id);
-          
-          print('✅ Removido no Supabase: ${cliente.id}');
+          await _client.from('clientes').delete().eq('id', cliente.id);
+          print('✅ Sync: cliente removido -> ${cliente.id}');
         }
-      } catch (e) {
-        print('❌ Falha ao sincronizar com Supabase: $e');
+      } catch (e, st) {
+        print('❌ Falha ao sincronizar com Supabase: $e\n$st');
         return;
       }
     }
@@ -225,7 +233,7 @@ class ClienteService {
     final prefs = await SharedPreferences.getInstance();
     final data = prefs.getString(_pendingKey);
     final List<dynamic> ops = data != null ? jsonDecode(data) : [];
-    
+
     ops.add({'tipo': tipo, 'cliente': cliente.toJson()});
     await prefs.setString(_pendingKey, jsonEncode(ops));
     print('📁 Operação $tipo salva na fila offline');
@@ -234,6 +242,8 @@ class ClienteService {
   Map<String, dynamic> _clienteToMap(Cliente cliente) {
     return {
       'id': cliente.id,
+      'nome_cliente': cliente.nomeCliente,
+      'telefone': cliente.telefone,
       'estabelecimento': cliente.estabelecimento,
       'estado': cliente.estado,
       'cidade': cliente.cidade,
@@ -241,8 +251,6 @@ class ClienteService {
       'bairro': cliente.bairro,
       'cep': cliente.cep,
       'data_visita': cliente.dataVisita.toIso8601String(),
-      'nome_cliente': cliente.nomeCliente,
-      'telefone': cliente.telefone,
       'observacoes': cliente.observacoes,
       'consultor_responsavel': cliente.consultorResponsavel,
       'consultor_uid': cliente.consultorUid,
