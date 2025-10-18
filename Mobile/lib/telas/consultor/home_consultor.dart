@@ -1,7 +1,8 @@
 // lib/telas/consultor/home_consultor.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart'; // Clipboard
+import 'package:intl/intl.dart';
 import '../widgets/custom_navbar.dart';
 import 'meus_clientes_tab.dart';
 import 'minhas_visitas_tab.dart';
@@ -119,23 +120,18 @@ class _HomeConsultorState extends State<HomeConsultor> {
     _loadStats();
   }
 
-  Future<void> _abrirNoGPS(String endereco, String estabelecimento) async {
-    final encodedEndereco = Uri.encodeComponent(endereco);
-    final url = 'https://www.google.com/maps/search/?api=1&query=$encodedEndereco';
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Não foi possível abrir o Google Maps'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      );
-    }
+  // Copia texto para a área de transferência com feedback visual
+  Future<void> _copiarEndereco(String texto) async {
+    await Clipboard.setData(ClipboardData(text: texto));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Endereço copiado: $texto'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   Stream<List<Map<String, dynamic>>> _streamClientes() {
@@ -150,42 +146,73 @@ class _HomeConsultorState extends State<HomeConsultor> {
         .asStream();
   }
 
+  // ===== Cartão compacto: Rua de Trabalho - Hoje =====
   Widget _buildRuaTrabalhoCard() {
-    final cs = Theme.of(context).colorScheme;
-
     return Card(
+      margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       elevation: 1,
       child: Padding(
         padding: const EdgeInsets.all(6),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Container(
-                  width: 22,
-                  height: 22,
+                  width: 18,
+                  height: 18,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: const Color(0xFFEFFAF1),
-                    borderRadius: BorderRadius.circular(5),
+                    borderRadius: BorderRadius.circular(4),
                     border: Border.all(color: const Color(0xFFDCEFE1)),
                   ),
-                  child: const Icon(Icons.flag, size: 13, color: Color(0xFF3CB371)),
+                  child: const Icon(Icons.flag, size: 12, color: Color(0xFF3CB371)),
                 ),
                 const SizedBox(width: 4),
                 const Expanded(
-                  child: Text('Rua de Trabalho - Hoje', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  child: Text(
+                    'Rua de Trabalho - Hoje',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 4),
-            _buildRuaTrabalhoHoje(),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 78),
+              child: _buildRuaTrabalhoHoje(),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  // Formata HH:mm combinando data_visita + hora_visita (se houver)
+  String _formatHoraHoje(Map<String, dynamic> clienteHoje) {
+    final dataStr = clienteHoje['data_visita']?.toString();
+    final horaStr = clienteHoje['hora_visita']?.toString();
+    if (dataStr == null || dataStr.isEmpty) return '';
+    try {
+      DateTime data = DateTime.parse(dataStr);
+      if (horaStr != null && horaStr.isNotEmpty) {
+        final parts = horaStr.split(':');
+        final h = int.tryParse(parts[0]) ?? 0;
+        final m = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+        final s = parts.length > 2 ? int.tryParse(parts[2]) ?? 0 : 0;
+        data = DateTime(data.year, data.month, data.day, h, m, s);
+        return DateFormat('HH:mm').format(data);
+      }
+      final embutida = DateFormat('HH:mm').format(data);
+      return embutida != '00:00' ? embutida : '';
+    } catch (_) {
+      return '';
+    }
   }
 
   Widget _buildRuaTrabalhoHoje() {
@@ -208,6 +235,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
 
         Map<String, dynamic>? clienteHoje;
 
+        // Mantém a lógica anterior: iguala só a parte da data
         for (final data in lista) {
           final s = data['data_visita']?.toString();
           if (s == null || s.isEmpty) continue;
@@ -229,11 +257,20 @@ class _HomeConsultorState extends State<HomeConsultor> {
         final endereco = (clienteHoje['endereco'] as String?) ?? 'Endereço';
         final cidade = (clienteHoje['cidade'] as String?) ?? '';
         final estado = (clienteHoje['estado'] as String?) ?? '';
-        final enderecoCompleto = '$endereco, $cidade - $estado';
+        final horaHHmm = _formatHoraHoje(clienteHoje);
+
+        final enderecoCompleto = [
+          if ((endereco).isNotEmpty) endereco,
+          if (cidade.isNotEmpty || estado.isNotEmpty) '$cidade - $estado',
+        ].where((e) => e.isNotEmpty).join(', ');
+
+        final tituloLinha = horaHHmm.isNotEmpty
+            ? 'HOJE $horaHHmm - $estabelecimento'
+            : 'HOJE - $estabelecimento';
 
         return GestureDetector(
-          onTap: () => _abrirNoGPS(enderecoCompleto, estabelecimento),
-          child: _buildRuaTrabalhoReal(cs, estabelecimento, enderecoCompleto),
+          onTap: () => _copiarEndereco(enderecoCompleto),
+          child: _buildRuaTrabalhoReal(cs, tituloLinha, enderecoCompleto),
         );
       },
     );
@@ -241,39 +278,41 @@ class _HomeConsultorState extends State<HomeConsultor> {
 
   Widget _buildRuaTrabalhoPlaceholder(ColorScheme cs, String titulo, String subtitulo) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: cs.surfaceVariant.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.outline.withOpacity(0.2)),
+        color: cs.surfaceVariant.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: cs.outline.withOpacity(0.18)),
       ),
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(color: cs.surfaceVariant, borderRadius: BorderRadius.circular(10)),
-            child: Icon(Icons.info_outline, color: cs.onSurfaceVariant, size: 20),
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(color: cs.surfaceVariant, borderRadius: BorderRadius.circular(8)),
+            child: Icon(Icons.info_outline, color: cs.onSurfaceVariant, size: 18),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(titulo,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.w500,
-                          color: cs.onSurface,
-                        )),
-                const SizedBox(height: 2),
+                Text(
+                  titulo,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface,
+                      ),
+                ),
+                const SizedBox(height: 1),
                 Text(
                   subtitulo,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                 ),
               ],
             ),
@@ -283,73 +322,74 @@ class _HomeConsultorState extends State<HomeConsultor> {
     );
   }
 
-  Widget _buildRuaTrabalhoReal(ColorScheme cs, String estabelecimento, String localizacao) {
+  Widget _buildRuaTrabalhoReal(ColorScheme cs, String tituloLinha, String localizacao) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: cs.primaryContainer.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: cs.primaryContainer.withOpacity(0.3)),
+          color: cs.primaryContainer.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: cs.primaryContainer.withOpacity(0.25)),
         ),
         child: Row(
           children: [
             Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(color: cs.primary, borderRadius: BorderRadius.circular(10)),
-              child: Icon(Icons.flag_rounded, color: cs.onPrimary, size: 20),
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(color: cs.primary, borderRadius: BorderRadius.circular(8)),
+              child: Icon(Icons.flag_rounded, color: cs.onPrimary, size: 18),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'HOJE - $estabelecimento',
+                    tituloLinha,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: cs.onSurface,
                         ),
                   ),
-                  const SizedBox(height: 2),
                   Text(
                     localizacao,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
-                  const SizedBox(height: 2),
                   Text(
-                    'Toque para abrir no GPS',
+                    'Toque para copiar o endereço',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: cs.primary,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w600,
                         ),
                   ),
                 ],
               ),
             ),
+            const SizedBox(width: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: cs.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: cs.primary.withOpacity(0.3)),
+                color: cs.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: cs.primary.withOpacity(0.25)),
               ),
-              child: Text('PRIORIDADE',
-                  maxLines: 1,
-                  overflow: TextOverflow.fade,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: cs.primary,
-                        fontWeight: FontWeight.w600,
-                      )),
+              child: Text(
+                'PRIORIDADE',
+                maxLines: 1,
+                overflow: TextOverflow.fade,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: cs.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
             ),
           ],
         ),
@@ -380,7 +420,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
             ),
           ),
         ),
-        // Home sem rolagem; rolagem só nas tabs
         body: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(

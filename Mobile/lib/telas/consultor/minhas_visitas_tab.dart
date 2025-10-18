@@ -28,6 +28,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
     super.dispose();
   }
 
+  // ORDENAR POR MAIS RECENTES (data desc, hora desc)
   Stream<List<Map<String, dynamic>>> get _meusClientesStream {
     final user = _client.auth.currentSession?.user;
     if (user == null) {
@@ -37,8 +38,9 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
     return _client
         .from('clientes')
         .select('*')
-        .eq('consultor_uid_t', user.id) // usa a coluna correta
-        .order('data_visita', ascending: true)
+        .eq('consultor_uid_t', user.id)
+        .order('data_visita', ascending: false) // datas mais novas primeiro
+        .order('hora_visita', ascending: false) // em empate, hora mais nova primeiro
         .asStream();
   }
 
@@ -191,12 +193,12 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
     final estabelecimento = (cliente['estabelecimento'] as String?)?.trim() ?? 'Estabelecimento não informado';
 
     final dataVisitaStr = cliente['data_visita'] as String?;
-    final horaVisitaStr = cliente['hora_visita'] as String?; // hora do banco (TIME), ex: 14:30:00
+    final horaVisitaStr = cliente['hora_visita'] as String?; // TIME ex: 14:30:00
     final cidade = (cliente['cidade'] as String?)?.trim() ?? '';
     final estado = (cliente['estado'] as String?)?.trim() ?? '';
 
     final dataFormatada = _formatarDataVisita(dataVisitaStr, horaVisitaStr);
-    final statusInfo = _determinarStatus(dataVisitaStr);
+    final statusInfo = _determinarStatus(dataVisitaStr, horaVisitaStr: horaVisitaStr);
 
     final enderecoCompleto = [
       if ((endereco ?? '').isNotEmpty) endereco,
@@ -282,42 +284,8 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
     );
   }
 
-  String _formatarDataVisita(String? dataVisitaStr, String? horaVisitaStr) {
-    if (dataVisitaStr == null || dataVisitaStr.isEmpty) return 'Data não informada';
-
-    try {
-      final dataVisita = DateTime.parse(dataVisitaStr);
-
-      // Se vier do banco como 'HH:MM:SS' (tipo time), normaliza para HH:mm
-      String? horaPreferida;
-      if (horaVisitaStr != null && horaVisitaStr.isNotEmpty) {
-        final parts = horaVisitaStr.split(':');
-        if (parts.length >= 2) {
-          horaPreferida = '${parts[0].padLeft(2, '0')}:${parts[1].padLeft(2, '0')}';
-        }
-      }
-
-      // Fallback: usa a hora embutida em data_visita (caso exista)
-      final horaFallback = DateFormat('HH:mm').format(dataVisita);
-      final horaExibida = horaPreferida ?? horaFallback;
-
-      final hoje = DateTime.now();
-      final amanha = DateTime(hoje.year, hoje.month, hoje.day + 1);
-
-      if (dataVisita.year == hoje.year && dataVisita.month == hoje.month && dataVisita.day == hoje.day) {
-        return 'Hoje às $horaExibida';
-      } else if (dataVisita.year == amanha.year && dataVisita.month == amanha.month && dataVisita.day == amanha.day) {
-        return 'Amanhã às $horaExibida';
-      } else {
-        final format = dataVisita.year == hoje.year ? 'EEE, d MMMM' : 'EEE, d MMMM y';
-        return '${_capitalize(DateFormat(format, 'pt_BR').format(dataVisita))} às $horaExibida';
-      }
-    } catch (e) {
-      return 'Data inválida';
-    }
-  }
-
-  Map<String, dynamic> _determinarStatus(String? dataVisitaStr) {
+  // Combina data + hora, normaliza para local, e classifica corretamente HOJE/REALIZADA/AGENDADO
+  Map<String, dynamic> _determinarStatus(String? dataVisitaStr, {String? horaVisitaStr}) {
     final cs = Theme.of(context).colorScheme;
 
     if (dataVisitaStr == null || dataVisitaStr.isEmpty) {
@@ -330,19 +298,36 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
     }
 
     try {
-      final dataVisita = DateTime.parse(dataVisitaStr);
-      final hoje = DateTime.now();
-      final hojeInicio = DateTime(hoje.year, hoje.month, hoje.day);
-      final hojeFim = DateTime(hoje.year, hoje.month, hoje.day, 23, 59, 59);
+      // Parse e normalização para fuso local
+      DateTime data = DateTime.parse(dataVisitaStr).toLocal(); // normaliza para local
 
-      if (dataVisita.isAfter(hojeInicio) && dataVisita.isBefore(hojeFim)) {
+      // Combina a hora se existir; senão, usa 23:59 para não antecipar "REALIZADA"
+      if (horaVisitaStr != null && horaVisitaStr.isNotEmpty) {
+        final p = horaVisitaStr.split(':');
+        final h = int.tryParse(p[0]) ?? 0;
+        final m = p.length > 1 ? int.tryParse(p[1]) ?? 0 : 0;
+        final s = p.length > 2 ? int.tryParse(p[2]) ?? 0 : 0;
+        data = DateTime(data.year, data.month, data.day, h, m, s);
+      } else {
+        data = DateTime(data.year, data.month, data.day, 23, 59, 59);
+      }
+
+      final agora = DateTime.now();
+      final hojeInicio = DateTime(agora.year, agora.month, agora.day, 0, 0, 0);
+      final hojeFim = DateTime(agora.year, agora.month, agora.day, 23, 59, 59);
+
+      final ehHoje = (data.isAfter(hojeInicio) && data.isBefore(hojeFim)) ||
+          data.isAtSameMomentAs(hojeInicio) ||
+          data.isAtSameMomentAs(hojeFim);
+
+      if (ehHoje) {
         return {
           'icone': Icons.flag_outlined,
           'texto': 'HOJE',
           'corFundo': Colors.black,
           'corTexto': Colors.white,
         };
-      } else if (dataVisita.isBefore(hoje)) {
+      } else if (data.isBefore(hojeInicio)) {
         return {
           'icone': Icons.check_circle_outlined,
           'texto': 'REALIZADA',
@@ -357,13 +342,44 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
           'corTexto': Colors.green,
         };
       }
-    } catch (e) {
+    } catch (_) {
       return {
         'icone': Icons.event_note_outlined,
         'texto': 'AGENDADO',
         'corFundo': const Color(0x3328A745),
         'corTexto': Colors.green,
       };
+    }
+  }
+
+  // Formata combinando a hora real; usa toLocal para coerência de fuso
+  String _formatarDataVisita(String? dataVisitaStr, String? horaVisitaStr) {
+    if (dataVisitaStr == null || dataVisitaStr.isEmpty) return 'Data não informada';
+    try {
+      DateTime data = DateTime.parse(dataVisitaStr).toLocal();
+
+      if (horaVisitaStr != null && horaVisitaStr.isNotEmpty) {
+        final p = horaVisitaStr.split(':');
+        final h = int.tryParse(p[0]) ?? 0;
+        final m = p.length > 1 ? int.tryParse(p[1]) ?? 0 : 0;
+        final s = p.length > 2 ? int.tryParse(p[2]) ?? 0 : 0;
+        data = DateTime(data.year, data.month, data.day, h, m, s);
+      }
+
+      final hoje = DateTime.now();
+      final amanha = DateTime(hoje.year, hoje.month, hoje.day + 1);
+      final horaExibida = DateFormat('HH:mm').format(data);
+
+      if (data.year == hoje.year && data.month == hoje.month && data.day == hoje.day) {
+        return 'Hoje às $horaExibida';
+      } else if (data.year == amanha.year && data.month == amanha.month && data.day == amanha.day) {
+        return 'Amanhã às $horaExibida';
+      } else {
+        final format = data.year == hoje.year ? 'EEE, d MMMM' : 'EEE, d MMMM y';
+        return '${_capitalize(DateFormat(format, 'pt_BR').format(data))} às $horaExibida';
+      }
+    } catch (_) {
+      return 'Data inválida';
     }
   }
 
