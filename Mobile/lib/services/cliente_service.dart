@@ -82,18 +82,27 @@ class ClienteService {
   }
 
   Future<bool> _hasRealInternet() async {
-    final result = await Connectivity().checkConnectivity();
-    if (result == ConnectivityResult.none) return false;
-
     try {
-      final lookup = await InternetAddress.lookup('google.com')
-          .timeout(const Duration(seconds: 3));
-      return lookup.isNotEmpty;
-    } on SocketException {
-      return false;
-    } on TimeoutException {
-      return false;
-    } catch (_) {
+      final result = await Connectivity().checkConnectivity();
+      if (result == ConnectivityResult.none) {
+        print('❌ Sem conexão de rede');
+        return false;
+      }
+
+      print('📡 Testando conexão com Supabase...');
+
+      final response = await _client
+          .from('clientes')
+          .select('id')
+          .limit(1)
+          .timeout(const Duration(seconds: 10));
+
+      final temConexao = response is List;
+      print('✅ Conexão com Supabase: ${temConexao ? "OK" : "Falhou"}');
+      return temConexao;
+    } catch (e, st) {
+      print('❌ ERRO REAL ao testar internet: $e');
+      print('📝 Stack: $st');
       return false;
     }
   }
@@ -126,10 +135,12 @@ class ClienteService {
     await _saveToCache();
 
     final isConnected = await _hasRealInternet();
+    print('🌐 Online? $isConnected');
 
     try {
       if (isConnected) {
         final data = _clienteToMap(clienteComUid);
+        print('📊 Dados: $data');
         await _client.from('clientes').upsert(data, onConflict: 'id');
         print('✅ Cliente salvo no Supabase: ${clienteComUid.estabelecimento}');
         await NotificationService.showSuccessNotification();
@@ -138,7 +149,8 @@ class ClienteService {
         await NotificationService.showOfflineNotification();
       }
     } catch (e, st) {
-      print('❌ Falha ao salvar no Supabase: $e\n$st');
+      print('❌ Falha ao salvar no Supabase: $e');
+      print('📜 Stack: $st');
       await _savePendingOperation('save', clienteComUid);
       await NotificationService.showOfflineNotification();
     }
@@ -155,6 +167,7 @@ class ClienteService {
     await _saveToCache();
 
     final isConnected = await _hasRealInternet();
+    print('🌐 Remover - Online? $isConnected');
 
     try {
       if (isConnected) {
@@ -191,7 +204,10 @@ class ClienteService {
 
   Future<void> syncPendingOperations() async {
     final isConnected = await _hasRealInternet();
-    if (!isConnected) return;
+    if (!isConnected) {
+      print('📡 Sem internet para sincronizar');
+      return;
+    }
 
     final prefs = await SharedPreferences.getInstance();
     final pendingData = prefs.getString(_pendingKey);
@@ -242,7 +258,7 @@ class ClienteService {
   Map<String, dynamic> _clienteToMap(Cliente cliente) {
     return {
       'id': cliente.id,
-      'nome_cliente': cliente.nomeCliente,
+      'nome': cliente.nomeCliente,
       'telefone': cliente.telefone,
       'estabelecimento': cliente.estabelecimento,
       'estado': cliente.estado,
@@ -252,8 +268,8 @@ class ClienteService {
       'cep': cliente.cep,
       'data_visita': cliente.dataVisita.toIso8601String(),
       'observacoes': cliente.observacoes,
-      'consultor_responsavel': cliente.consultorResponsavel,
-      'consultor_uid': cliente.consultorUid,
+      'consultor_uid_t': cliente.consultorUid,
+      'responsavel': cliente.consultorResponsavel,
     };
   }
 }

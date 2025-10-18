@@ -4,7 +4,7 @@ import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:ademicon_app/models/cliente.dart';
-import 'package:ademicon_app/services/cliente_service_memory.dart';
+import 'package:ademicon_app/services/cliente_service.dart';
 
 class CadastrarCliente extends StatefulWidget {
   final Function()? onClienteCadastrado;
@@ -168,7 +168,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
         consultorUid: userId,
       );
 
-      await ClienteServiceHybrid().saveCliente(cliente);
+      await ClienteService().saveCliente(cliente);
 
       if (mounted) {
         _limparCampos();
@@ -497,7 +497,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                                         height: 20,
                                         child: CircularProgressIndicator(strokeWidth: 2),
                                       )
-                                    : const Text('Cadastrar Cliente'),
+                                    : const Text('Cadastrar'),
                               ),
                             ),
                           ],
