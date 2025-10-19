@@ -7,6 +7,7 @@ class CustomNavbar extends StatelessWidget implements PreferredSizeWidget {
   final bool tabsNoAppBar;
   final VoidCallback? onLogout;
   final double collapseProgress;
+  final bool hideAvatar;
 
   const CustomNavbar({
     super.key,
@@ -16,6 +17,7 @@ class CustomNavbar extends StatelessWidget implements PreferredSizeWidget {
     this.tabsNoAppBar = true,
     this.onLogout,
     this.collapseProgress = 0.0,
+    this.hideAvatar = false,
   });
 
   @override
@@ -27,9 +29,14 @@ class CustomNavbar extends StatelessWidget implements PreferredSizeWidget {
     final double toolbarHeight = lerpDouble(baseToolbar, minToolbar, t);
     final double logoHeight = lerpDouble(32, 24, t);
 
+    const Color cinzaBrand = Color(0xFF939598);
+
+    final scale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
+    final double nomeSize = 16.0 * scale;
+    final double cargoSize = 12.0 * scale;
+
     return PreferredSize(
-      preferredSize:
-          Size.fromHeight(toolbarHeight + (tabsNoAppBar && tabs != null ? 54 : 0)),
+      preferredSize: Size.fromHeight(toolbarHeight + (tabsNoAppBar && tabs != null ? 60 : 0)),
       child: AppBar(
         automaticallyImplyLeading: false,
         backgroundColor: Colors.white,
@@ -44,13 +51,9 @@ class CustomNavbar extends StatelessWidget implements PreferredSizeWidget {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 height: logoHeight,
-                child: Image.asset(
-                  'assets/Logo.png',
-                  fit: BoxFit.contain,
-                ),
+                child: Image.asset('assets/Logo.png', fit: BoxFit.contain),
               ),
             ),
-
             Align(
               alignment: Alignment.centerLeft,
               child: Padding(
@@ -58,28 +61,33 @@ class CustomNavbar extends StatelessWidget implements PreferredSizeWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const CircleAvatar(
-                      radius: 16,
-                      backgroundColor: Color(0xFF231F20),
-                      child: Icon(Icons.person, size: 16, color: Colors.white),
-                    ),
-                    const SizedBox(width: 8),
+                    if (!hideAvatar)
+                      const CircleAvatar(
+                        radius: 16,
+                        backgroundColor: Color(0xFF231F20),
+                        child: Icon(Icons.person, size: 16, color: Colors.white),
+                      ),
+                    if (!hideAvatar) const SizedBox(width: 8),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           nome,
-                          style: const TextStyle(
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
                             fontWeight: FontWeight.w700,
                             color: Colors.black87,
-                            fontSize: 13.8,
+                            fontSize: nomeSize,
                           ),
                         ),
                         Text(
                           cargo,
-                          style: const TextStyle(
-                            fontSize: 11.5,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: cargoSize,
                             color: Colors.black54,
                           ),
                         ),
@@ -89,7 +97,6 @@ class CustomNavbar extends StatelessWidget implements PreferredSizeWidget {
                 ),
               ),
             ),
-
             Align(
               alignment: Alignment.centerRight,
               child: Padding(
@@ -101,71 +108,49 @@ class CustomNavbar extends StatelessWidget implements PreferredSizeWidget {
                     foregroundColor: const Color(0xFF231F20),
                     side: const BorderSide(color: Color(0xFF231F20)),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    textStyle:
-                        const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6),
-                    ),
+                    textStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                   ),
-                  onPressed:
-                      onLogout ?? () => Navigator.pushReplacementNamed(context, '/login'),
+                  onPressed: onLogout ?? () => Navigator.pushReplacementNamed(context, '/login'),
                 ),
               ),
             ),
           ],
         ),
-
         bottom: tabsNoAppBar && tabs != null
             ? PreferredSize(
-                preferredSize: const Size.fromHeight(54),
+                preferredSize: const Size.fromHeight(60),
                 child: Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  color: cinzaBrand, 
+                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF7F8FA),
-                      borderRadius: BorderRadius.circular(50),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.2),
-                          blurRadius: 10,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
+                      color: Colors.transparent, 
+                      borderRadius: BorderRadius.circular(20),
                     ),
                     child: TabBar(
                       isScrollable: true,
-                      labelPadding:
-                          const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                      labelColor: Colors.white,
-                      unselectedLabelColor: Colors.black54,
-                      labelStyle: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13.5,
-                      ),
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      labelColor: Colors.black,
+                      unselectedLabelColor: Colors.white,
+                      labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                      unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                       indicator: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [
-                            Color(0xFF231F20),
-                            Color(0xFF3A3839),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(50),
-                        border: Border.all(color: Colors.black26, width: 0.8),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: cinzaBrand, width: 1.4),
                         boxShadow: const [
                           BoxShadow(
-                            color: Colors.black38,
-                            blurRadius: 8,
-                            offset: Offset(0, 3),
+                            color: Color(0x33000000),
+                            blurRadius: 14,
+                            spreadRadius: 2,
+                            offset: Offset(0, 4),
                           ),
                         ],
                       ),
                       indicatorSize: TabBarIndicatorSize.tab,
-                      splashBorderRadius: BorderRadius.circular(50),
-                      overlayColor:
-                          MaterialStateProperty.all(Colors.black12.withOpacity(0.05)),
+                      splashBorderRadius: BorderRadius.circular(22),
+                      automaticIndicatorColorAdjustment: false,
                       tabs: tabs!,
                     ),
                   ),
@@ -177,8 +162,7 @@ class CustomNavbar extends StatelessWidget implements PreferredSizeWidget {
   }
 
   @override
-  Size get preferredSize =>
-      Size.fromHeight(68 + (tabsNoAppBar && tabs != null ? 54 : 0));
+  Size get preferredSize => Size.fromHeight(68 + (tabsNoAppBar && tabs != null ? 60 : 0));
 }
 
 double lerpDouble(double a, double b, double t) => a + (b - a) * t;

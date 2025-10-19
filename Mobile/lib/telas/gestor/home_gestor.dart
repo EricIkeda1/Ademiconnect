@@ -22,12 +22,14 @@ class _HomeGestorState extends State<HomeGestor> {
   SupabaseClient get _client => Supabase.instance.client;
 
   Future<List<Map<String, dynamic>>>? _consultoresFuture;
+  Future<Map<String, int>>? _contadoresFuture;
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
     _loadConsultores();
+    _contadoresFuture = _loadContadores();
   }
 
   Future<void> _loadUserData() async {
@@ -35,12 +37,7 @@ class _HomeGestorState extends State<HomeGestor> {
     if (user == null || !mounted) return;
 
     try {
-      final response = await _client
-          .from('gestor')
-          .select('nome')
-          .eq('id', user.id)
-          .maybeSingle();
-
+      final response = await _client.from('gestor').select('nome').eq('id', user.id).maybeSingle();
       String nomeFormatado = 'Gestor';
       if (response != null && response.containsKey('nome')) {
         final nomeCompleto = (response['nome'] as String?) ?? '';
@@ -48,15 +45,13 @@ class _HomeGestorState extends State<HomeGestor> {
       } else {
         nomeFormatado = (user.email?.split('@').first ?? 'Gestor');
       }
-
       if (mounted) {
         setState(() {
           _userName = nomeFormatado;
           _isLoading = false;
         });
       }
-    } catch (error) {
-      print('❌ Erro ao carregar nome do gestor: $error');
+    } catch (_) {
       final fallback = _client.auth.currentSession?.user?.email?.split('@').first ?? 'Gestor';
       if (mounted) {
         setState(() {
@@ -73,11 +68,16 @@ class _HomeGestorState extends State<HomeGestor> {
 
     final consultoresFuture = _client
         .from('consultores')
-        .select('id, nome')
+        .select('id, nome, data_cadastro')
         .eq('gestor_id', user.id)
-        .order('nome')
-        .order('created_at', ascending: false)
-        .then((data) => data as List<Map<String, dynamic>>);
+        .eq('ativo', true)
+        .order('nome', ascending: true)
+        .order('data_cadastro', ascending: false)
+        .then((data) {
+      final list = (data as List).cast<Map<String, dynamic>>();
+      debugPrint('Consultores ativos carregados: ${list.length}');
+      return list;
+    });
 
     if (mounted) {
       setState(() {
@@ -91,6 +91,63 @@ class _HomeGestorState extends State<HomeGestor> {
     if (partes.isEmpty) return 'Gestor';
     if (partes.length == 1) return partes[0];
     return '${partes[0]} ${partes.last}';
+  }
+
+  Future<int> _countRpc({required String gestorId, DateTime? inicio, DateTime? fim}) async {
+    try {
+      final params = <String, dynamic>{
+        'p_gestor_id': gestorId,
+        'p_inicio': inicio?.toIso8601String(),
+        'p_fim': fim?.toIso8601String(),
+      };
+      final res = await _client.rpc('count_consultores_periodo', params: params);
+      if (res is int) return res;
+      if (res is num) return res.toInt();
+      if (res is List && res.isNotEmpty) {
+        final v = res.first;
+        if (v is int) return v;
+        if (v is num) return v.toInt();
+        if (v is Map && v.values.isNotEmpty) {
+          final firstVal = v.values.first;
+          if (firstVal is int) return firstVal;
+          if (firstVal is num) return firstVal.toInt();
+        }
+      }
+      if (res is Map && res.isNotEmpty) {
+        final firstVal = res.values.first;
+        if (firstVal is int) return firstVal;
+        if (firstVal is num) return firstVal.toInt();
+      }
+      return 0;
+    } catch (e) {
+      debugPrint('Erro RPC count_consultores_periodo: $e');
+      return 0;
+    }
+  }
+
+  Future<Map<String, int>> _loadContadores() async {
+    final user = _client.auth.currentSession?.user;
+    if (user == null) {
+      return {'hoje': 0, 'mes': 0, 'ano': 0, 'ativos': 0};
+    }
+
+    final now = DateTime.now().toUtc();
+    final inicioHoje = DateTime.utc(now.year, now.month, now.day);
+    final inicioAmanha = inicioHoje.add(const Duration(days: 1));
+    final inicioMes = DateTime.utc(now.year, now.month, 1);
+    final inicioProxMes = (now.month == 12) ? DateTime.utc(now.year + 1, 1, 1) : DateTime.utc(now.year, now.month + 1, 1);
+    final inicioAno = DateTime.utc(now.year, 1, 1);
+    final inicioProxAno = DateTime.utc(now.year + 1, 1, 1);
+
+    final gestorId = user.id;
+    final futures = <Future<int>>[
+      _countRpc(gestorId: gestorId, inicio: inicioHoje, fim: inicioAmanha),
+      _countRpc(gestorId: gestorId, inicio: inicioMes, fim: inicioProxMes),
+      _countRpc(gestorId: gestorId, inicio: inicioAno, fim: inicioProxAno),
+      _countRpc(gestorId: gestorId),
+    ];
+    final r = await Future.wait(futures);
+    return {'hoje': r[0], 'mes': r[1], 'ano': r[2], 'ativos': r[3]};
   }
 
   @override
@@ -114,6 +171,7 @@ class _HomeGestorState extends State<HomeGestor> {
               cargo: 'Gestor',
               tabsNoAppBar: false,
               collapseProgress: _collapseProgress,
+              hideAvatar: true,
             ),
           ),
         ),
@@ -130,49 +188,45 @@ class _HomeGestorState extends State<HomeGestor> {
           },
           child: NestedScrollView(
             headerSliverBuilder: (context, inner) => [
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: _buildStatsCardGrid(),
-                ),
-              ),
+              SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(12), child: _buildStatsCardGrid())),
               SliverPersistentHeader(
                 pinned: true,
                 delegate: _TabsHeaderDelegate(
-                  TabBar(
-                    isScrollable: true,
-                    labelPadding: const EdgeInsets.symmetric(horizontal: 14),
-                    labelColor: Colors.black,
-                    unselectedLabelColor: Colors.black54,
-                    indicatorSize: TabBarIndicatorSize.tab,
-                    labelStyle: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                    indicator: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: const [
-                        BoxShadow(color: Colors.black12, blurRadius: 2),
+                  Container(
+                    height: 56,
+                    color: const Color(0xFFdcddde),
+                    alignment: Alignment.centerLeft,
+                    child: const TabBar(
+                      isScrollable: true,
+                      labelPadding: EdgeInsets.symmetric(horizontal: 12), 
+                      labelColor: Colors.black,
+                      unselectedLabelColor: Colors.black54,
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                      indicator: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.all(Radius.circular(20)),
+                        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 2)],
+                      ),
+                      tabs: [
+                        Tab(text: 'Visitas do Consultor'),
+                        Tab(text: 'Consultores'),
+                        Tab(text: 'Todos os Clientes'),
+                        Tab(text: 'Relatórios'),
                       ],
                     ),
-                    tabs: const [
-                      Tab(text: 'Minhas Visitas'),
-                      Tab(text: 'Consultores'),
-                      Tab(text: 'Todos os Clientes'),
-                      Tab(text: 'Relatórios'),
-                    ],
                   ),
+                  min: 56,
+                  max: 56,
                 ),
               ),
             ],
-            body: TabBarView(
-              physics: const BouncingScrollPhysics(),
+            body: const TabBarView(
               children: [
-                MinhasVisitasPage(),        
-                ConsultoresTab(),         
-                TodosClientesTab(),        
-                RelatoriosTab(),      
+                MinhasVisitasPage(),
+                ConsultoresTab(),
+                TodosClientesTab(),
+                RelatoriosTab(),
               ],
             ),
           ),
@@ -182,10 +236,10 @@ class _HomeGestorState extends State<HomeGestor> {
   }
 
   Widget _buildStatsCardGrid() {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _consultoresFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+    return FutureBuilder<Map<String, int>>(
+      future: _contadoresFuture,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
           return GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,
@@ -194,35 +248,15 @@ class _HomeGestorState extends State<HomeGestor> {
             crossAxisSpacing: 10,
             childAspectRatio: 2,
             children: const [
-              StatCard(
-                title: "Cadastros Hoje",
-                value: "0",
-                icon: Icons.event_available,
-                color: Colors.blue,
-              ),
-              StatCard(
-                title: "Cadastros Este Mês",
-                value: "0",
-                icon: Icons.stacked_bar_chart,
-                color: Colors.green,
-              ),
-              StatCard(
-                title: "Cadastros Este Ano",
-                value: "0",
-                icon: Icons.insert_chart,
-                color: Colors.purple,
-              ),
-              StatCard(
-                title: "Consultor Ativo",
-                value: "0",
-                icon: Icons.groups,
-                color: Colors.orange,
-              ),
+              StatCard(title: "Cadastros Hoje", value: "0", icon: Icons.event_available, color: Colors.blue),
+              StatCard(title: "Cadastros Este Mês", value: "0", icon: Icons.stacked_bar_chart, color: Colors.green),
+              StatCard(title: "Cadastros Este Ano", value: "0", icon: Icons.insert_chart, color: Colors.purple),
+              StatCard(title: "Consultor Ativo", value: "0", icon: Icons.groups, color: Colors.orange),
             ],
           );
         }
 
-        if (snapshot.hasError) {
+        if (snap.hasError || snap.data == null) {
           return GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,
@@ -231,36 +265,15 @@ class _HomeGestorState extends State<HomeGestor> {
             crossAxisSpacing: 10,
             childAspectRatio: 2,
             children: const [
-              StatCard(
-                title: "Cadastros Hoje",
-                value: "0",
-                icon: Icons.event_available,
-                color: Colors.blue,
-              ),
-              StatCard(
-                title: "Cadastros Este Mês",
-                value: "0",
-                icon: Icons.stacked_bar_chart,
-                color: Colors.green,
-              ),
-              StatCard(
-                title: "Cadastros Este Ano",
-                value: "0",
-                icon: Icons.insert_chart,
-                color: Colors.purple,
-              ),
-              StatCard(
-                title: "Consultor Ativo",
-                value: "Erro",
-                icon: Icons.error,
-                color: Colors.red,
-              ),
+              StatCard(title: "Cadastros Hoje", value: "0", icon: Icons.event_available, color: Colors.blue),
+              StatCard(title: "Cadastros Este Mês", value: "0", icon: Icons.stacked_bar_chart, color: Colors.green),
+              StatCard(title: "Cadastros Este Ano", value: "0", icon: Icons.insert_chart, color: Colors.purple),
+              StatCard(title: "Consultor Ativo", value: "Erro", icon: Icons.error, color: Colors.red),
             ],
           );
         }
 
-        final count = snapshot.data?.length ?? 0;
-
+        final dados = snap.data!;
         return GridView.count(
           crossAxisCount: 2,
           shrinkWrap: true,
@@ -269,30 +282,10 @@ class _HomeGestorState extends State<HomeGestor> {
           crossAxisSpacing: 10,
           childAspectRatio: 2,
           children: [
-            const StatCard(
-              title: "Cadastros Hoje",
-              value: "0",
-              icon: Icons.event_available,
-              color: Colors.blue,
-            ),
-            const StatCard(
-              title: "Cadastros Este Mês",
-              value: "0",
-              icon: Icons.stacked_bar_chart,
-              color: Colors.green,
-            ),
-            const StatCard(
-              title: "Cadastros Este Ano",
-              value: "0",
-              icon: Icons.insert_chart,
-              color: Colors.purple,
-            ),
-            StatCard(
-              title: "Consultor Ativo",
-              value: count.toString(),
-              icon: Icons.groups,
-              color: Colors.orange,
-            ),
+            StatCard(title: "Cadastros Hoje", value: (dados['hoje'] ?? 0).toString(), icon: Icons.event_available, color: Colors.blue),
+            StatCard(title: "Cadastros Este Mês", value: (dados['mes'] ?? 0).toString(), icon: Icons.stacked_bar_chart, color: Colors.green),
+            StatCard(title: "Cadastros Este Ano", value: (dados['ano'] ?? 0).toString(), icon: Icons.insert_chart, color: Colors.purple),
+            StatCard(title: "Consultor Ativo", value: (dados['ativos'] ?? 0).toString(), icon: Icons.groups, color: Colors.orange),
           ],
         );
       },
@@ -301,27 +294,22 @@ class _HomeGestorState extends State<HomeGestor> {
 }
 
 class _TabsHeaderDelegate extends SliverPersistentHeaderDelegate {
-  final TabBar tabBar;
-
-  _TabsHeaderDelegate(this.tabBar);
+  final Widget child;
+  final double min;
+  final double max;
+  _TabsHeaderDelegate(this.child, {this.min = 56, this.max = 56});
 
   @override
-  double get minExtent => tabBar.preferredSize.height + 12;
+  double get minExtent => min;
   @override
-  double get maxExtent => tabBar.preferredSize.height + 12;
+  double get maxExtent => max;
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
     return Material(
-      color: Colors.white,
+      color: Colors.transparent,
       elevation: overlapsContent ? 1 : 0,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: tabBar,
-        ),
-      ),
+      child: child,
     );
   }
 

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:collection/collection.dart';
 
 class MinhasVisitasPage extends StatefulWidget {
   const MinhasVisitasPage({super.key});
@@ -13,19 +12,19 @@ class _MinhasVisitasPageState extends State<MinhasVisitasPage> {
   final TextEditingController _searchCtrl = TextEditingController();
   final SupabaseClient _client = Supabase.instance.client;
 
-  List<_ConsultorStatus> _consultores = [];
-  List<_VisitaProg> _visitas = [];
+  List<_Consultor> _consultores = [];
   String _query = '';
   bool _isLoading = true;
+
+  final Map<String, List<_RuaVisita>> _ruasPorConsultor = {};
+  final Map<String, bool> _loadingRuas = {};
 
   @override
   void initState() {
     super.initState();
-    _carregarDados();
+    _carregarConsultores();
     _searchCtrl.addListener(() {
-      setState(() {
-        _query = _searchCtrl.text.trim();
-      });
+      setState(() => _query = _searchCtrl.text.trim());
     });
   }
 
@@ -35,176 +34,231 @@ class _MinhasVisitasPageState extends State<MinhasVisitasPage> {
     super.dispose();
   }
 
-  Future<void> _carregarDados() async {
+  Future<void> _carregarConsultores() async {
     setState(() => _isLoading = true);
-
     try {
-      final consultoresRes = await _client
+      final res = await _client
           .from('consultores')
           .select('id, nome, ativo')
           .eq('ativo', true)
-          .order('nome');
+          .order('nome'); 
 
-      final Map<String, String> consultorMap = {};
-      if (consultoresRes is List) {
-        for (var c in consultoresRes) {
+      final list = <_Consultor>[];
+      if (res is List) {
+        for (final c in res) {
           final id = c['id'] as String?;
           final nome = c['nome'] as String?;
           if (id != null && nome != null) {
-            consultorMap[id] = nome;
+            list.add(_Consultor(id: id, nome: nome));
           }
         }
       }
-
-      final now = DateTime.now();
-      final thirtyDays = now.add(const Duration(days: 30));
-
-      final visitasRes = await _client
-          .from('clientes')
-          .select('id, nome, endereco, dataVisita, consultor_uid')
-          .filter('dataVisita', 'gte', now.toIso8601String())
-          .filter('dataVisita', 'lte', thirtyDays.toIso8601String())
-          .order('dataVisita')
-          .limit(10);
-
       setState(() {
-        _consultores = (consultoresRes as List)
-            .map((c) => _ConsultorStatus(
-                  nome: (c['nome'] as String?) ?? 'Consultor',
-                  status: 'Trabalhando hoje',
-                  local: 'Em campo',
-                ))
-            .toList();
-
-        _visitas = (visitasRes as List)
-            .map((v) {
-              DateTime data;
-              try {
-                final dataStr = v['dataVisita'] as String?;
-                if (dataStr != null && dataStr.isNotEmpty) {
-                  data = DateTime.parse(dataStr);
-                } else {
-                  data = DateTime.now();
-                }
-              } catch (e) {
-                data = DateTime.now();
-              }
-
-              final consultorUid = v['consultor_uid'] as String?;
-              final nomeConsultor = consultorUid != null
-                  ? (consultorMap[consultorUid] ?? 'Desconhecido')
-                  : 'Desconhecido';
-
-              return _VisitaProg(
-                titulo: (v['endereco'] as String?) ?? 'Sem endereço',
-                consultor: nomeConsultor,
-                data:
-                    '${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}',
-              );
-            })
-            .toList();
-
+        _consultores = list;
         _isLoading = false;
       });
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro: $error')),
-        );
-        setState(() => _isLoading = false);
-      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
+      setState(() => _isLoading = false);
     }
   }
 
-  List<_VisitaProg> get _visitasFiltradas {
-    if (_query.isEmpty) return _visitas;
-    final q = _query.toLowerCase();
-    return _visitas.where((v) => v.titulo.toLowerCase().contains(q)).toList();
-  }
+  Future<void> _carregarRuasDoConsultor(String consultorId) async {
+    if (_loadingRuas[consultorId] == true) return;
+    _loadingRuas[consultorId] = true;
+    setState(() {});
+    try {
+      final now = DateTime.now();
+      final start = now.subtract(const Duration(days: 30));
+      final end = now.add(const Duration(days: 60));
+      final startStr = DateTime(start.year, start.month, start.day).toIso8601String().substring(0, 10);
+      final endStr = DateTime(end.year, end.month, end.day).toIso8601String().substring(0, 10);
 
-  bool get _ruaJaProgramada {
-    if (_query.isEmpty) return false;
-    final q = _query.toLowerCase();
-    return _visitas.any((v) => v.titulo.toLowerCase().contains(q));
+      final visitas = await _client
+          .from('clientes')
+          .select('endereco, bairro, cidade, estado, data_visita')
+          .eq('consultor_uid_t', consultorId) 
+          .gte('data_visita', startStr)     
+          .lte('data_visita', endStr)
+          .order('data_visita');           
+
+      final ruas = <_RuaVisita>[];
+      if (visitas is List) {
+        for (final v in visitas) {
+          final rua = (v['endereco'] as String?)?.trim() ?? '';
+          if (rua.isEmpty) continue;
+          final bairro = (v['bairro'] as String?) ?? '';
+          final cidade = (v['cidade'] as String?) ?? '';
+          final estado = (v['estado'] as String?) ?? '';
+          final dataStr = v['data_visita'] as String?;
+          DateTime? data;
+          if (dataStr != null && dataStr.isNotEmpty) {
+            try {
+              final p = dataStr.split('-');
+              data = DateTime(int.parse(p[0]), int.parse(p[1]), int.parse(p[2]));
+            } catch (_) {}
+          }
+          ruas.add(_RuaVisita(
+            rua: rua,
+            local: [bairro, cidade, estado].where((s) => s.isNotEmpty).join(' - '),
+            data: data,
+          ));
+        }
+      }
+      _ruasPorConsultor[consultorId] = ruas;
+    } finally {
+      _loadingRuas[consultorId] = false;
+      if (mounted) setState(() {});
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return _isLoading
-        ? const Center(child: CircularProgressIndicator())
-        : SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                _SearchBar(
-                  controller: _searchCtrl,
-                  hint: 'Pesquisar nome da rua...',
-                ),
-                const SizedBox(height: 12),
-                if (_query.isNotEmpty)
-                  _DisponibilidadeChip(disponivel: !_ruaJaProgramada),
-                const SizedBox(height: 16),
-                _Section(
-                  title: "Status dos Consultores",
-                  subtitle: "Situação atual de trabalho de cada consultor",
-                  child: Column(
-                    children: _consultores
-                        .map((c) => Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: _ConsultorStatusTile(
-                                nome: c.nome,
-                                status: c.status,
-                                local: c.local,
-                              ),
-                            ))
-                        .toList(),
+    final consultoresFiltrados = _query.isEmpty
+        ? _consultores
+        : _consultores.where((c) => c.nome.toLowerCase().contains(_query.toLowerCase())).toList();
+
+    return Scaffold(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _carregarConsultores,
+              child: CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                      child: _SearchBar(controller: _searchCtrl, hint: 'Pesquisar consultor...'),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                _Section(
-                  title: "Visitas Programadas",
-                  subtitle: _query.isEmpty
-                      ? "Próximas visitas programadas"
-                      : "Resultados para: $_query",
-                  child: Column(
-                    children: _visitasFiltradas
-                        .map((v) => Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: _VisitaTile(
-                                titulo: v.titulo,
-                                consultor: v.consultor,
-                                data: v.data,
-                              ),
-                            ))
-                        .toList(),
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    sliver: SliverList.separated(
+                      itemCount: consultoresFiltrados.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (_, index) {
+                        final c = consultoresFiltrados[index];
+                        final isLoading = _loadingRuas[c.id] == true;
+                        final ruas = _ruasPorConsultor[c.id];
+
+                        return Card(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          elevation: 2,
+                          child: ExpansionTile(
+                            key: ValueKey('consultor_${c.id}'),
+                            leading: CircleAvatar(child: Text(_iniciais(c.nome))),
+                            title: Text(c.nome, style: const TextStyle(fontWeight: FontWeight.w600)),
+                            subtitle: Text(
+                              ruas == null
+                                  ? 'Toque para ver ruas programadas'
+                                  : '${ruas.length} rua${ruas.length == 1 ? '' : 's'} encontradas',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            onExpansionChanged: (open) {
+                              if (open) {
+                                WidgetsBinding.instance.addPostFrameCallback((_) {
+                                  _carregarRuasDoConsultor(c.id);
+                                });
+                              }
+                            },
+                            children: [
+                              if (isLoading)
+                                const Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Center(child: CircularProgressIndicator()),
+                                )
+                              else if (ruas == null)
+                                const Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Text('Carregando...'),
+                                )
+                              else if (ruas.isEmpty)
+                                const Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Text('Nenhuma rua programada no período'),
+                                )
+                              else
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                                  child: _RuasDoConsultor(ruas: ruas),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          );
+    );
+  }
+
+  String _iniciais(String nome) {
+    final parts = nome.trim().split(' ').where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return "??";
+    final first = parts.first;
+    final second = parts.length > 1 ? parts.last : "";
+    return (first[0] + (second.isNotEmpty ? second[0] : first.length > 1 ? first[1] : '')).toUpperCase();
   }
 }
 
-class _ConsultorStatus {
-  final String nome;
-  final String status;
-  final String local;
-  const _ConsultorStatus({
-    required this.nome,
-    required this.status,
-    required this.local,
-  });
+class _RuasDoConsultor extends StatelessWidget {
+  final List<_RuaVisita> ruas;
+  const _RuasDoConsultor({required this.ruas});
+
+  @override
+  Widget build(BuildContext context) {
+    if (ruas.length <= 8) {
+      return Column(children: ruas.map(_tileRua).toList()); 
+    }
+    return SizedBox(
+      height: 320,
+      child: ListView.separated(
+        itemCount: ruas.length,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(), 
+        itemBuilder: (_, i) => _tileRua(ruas[i]),
+        separatorBuilder: (_, __) => const Divider(height: 8, thickness: 0),
+      ),
+    );
+  }
+
+  Widget _tileRua(_RuaVisita r) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.place_outlined),
+      title: Text(r.rua),
+      subtitle: r.local.isNotEmpty ? Text(r.local) : null,
+      trailing: r.data != null
+          ? Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '${r.data!.day.toString().padLeft(2, '0')}/${r.data!.month.toString().padLeft(2, '0')}',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+              ),
+            )
+          : null,
+    );
+  }
 }
 
-class _VisitaProg {
-  final String titulo;
-  final String consultor;
-  final String data;
-  const _VisitaProg({
-    required this.titulo,
-    required this.consultor,
-    required this.data,
-  });
+class _Consultor {
+  final String id;
+  final String nome;
+  _Consultor({required this.id, required this.nome});
+}
+
+class _RuaVisita {
+  final String rua;
+  final String local;
+  final DateTime? data;
+  _RuaVisita({required this.rua, required this.local, required this.data});
 }
 
 class _SearchBar extends StatelessWidget {
@@ -239,144 +293,6 @@ class _SearchBar extends StatelessWidget {
         ),
         contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
       ),
-      onSubmitted: (_) {},
-    );
-  }
-}
-
-class _DisponibilidadeChip extends StatelessWidget {
-  final bool disponivel;
-  const _DisponibilidadeChip({required this.disponivel});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = disponivel ? const Color(0xFF2E7D32) : const Color(0xFF6B7280);
-    final bg = disponivel ? const Color(0xFFE8F5E9) : const Color(0xFFF3F4F6);
-    final texto = disponivel ? 'Disponível' : 'Já programada';
-
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withOpacity(0.5)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              disponivel ? Icons.check_circle : Icons.info_outline,
-              color: color,
-              size: 16,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              texto,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Section extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final Widget child;
-  const _Section({required this.title, required this.subtitle, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 4),
-            Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 12)),
-            const SizedBox(height: 12),
-            child,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ConsultorStatusTile extends StatelessWidget {
-  final String nome;
-  final String status;
-  final String local;
-  const _ConsultorStatusTile({required this.nome, required this.status, required this.local});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1FFF3),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE2F6E5)),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          const CircleAvatar(child: Icon(Icons.person)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(nome, style: const TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    const Icon(Icons.place, size: 16, color: Colors.green),
-                    const SizedBox(width: 4),
-                    Expanded(child: Text(local, style: const TextStyle(color: Colors.black54))),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE9FFF0),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(status, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VisitaTile extends StatelessWidget {
-  final String titulo;
-  final String consultor;
-  final String data;
-  const _VisitaTile({required this.titulo, required this.consultor, required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      tileColor: const Color(0xFFF7F7F7),
-      title: Text(titulo),
-      subtitle: Text(consultor),
-      trailing: Text(data, style: const TextStyle(fontWeight: FontWeight.w600)),
     );
   }
 }

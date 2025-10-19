@@ -26,20 +26,19 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
     setState(() => _isLoading = true);
 
     try {
-
       final consultores = await Supabase.instance.client
           .from('consultores')
           .select('id')
           .eq('gestor_id', gestorId);
 
       setState(() {
-        _consultoresIds.clear();
-        _consultoresIds.addAll((consultores as List)
-            .map((c) => (c as Map<String, dynamic>)['id'].toString()));
+        _consultoresIds
+          ..clear()
+          ..addAll((consultores as List).map((c) => (c as Map<String, dynamic>)['id'].toString()));
         _isLoading = false;
       });
     } catch (error) {
-      print('Erro ao carregar dados: $error');
+      debugPrint('Erro ao carregar dados: $error');
       setState(() => _isLoading = false);
     }
   }
@@ -49,25 +48,22 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
     if (parts.isEmpty) return "??";
     final first = parts.first;
     final second = parts.length > 1 ? parts.last : "";
-    return (first[0] + (second.isNotEmpty ? second[0] : first.length > 1 ? first[1] : ''))
-        .toUpperCase();
+    return (first[0] + (second.isNotEmpty ? second[0] : first.length > 1 ? first[1] : '')).toUpperCase();
   }
 
   DateTime? _parseData(dynamic data) {
     if (data == null) return null;
-
-    if (data is String) {
+    if (data is String && data.isNotEmpty) {
       try {
-        return DateTime.parse(data);
-      } catch (e) {
-        print('Erro ao parse data: $data, erro: $e');
-        return null;
-      }
+        final p = data.split('-'); 
+        return DateTime(int.parse(p[0]), int.parse(p[1]), int.parse(p[2]));
+      } catch (_) {}
     }
     return null;
   }
 
   Widget _buildHeader() {
+    final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
       child: Row(
@@ -75,37 +71,21 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
           Container(
             width: 48,
             height: 48,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              Icons.analytics_rounded,
-              color: Theme.of(context).colorScheme.onPrimaryContainer,
-              size: 28,
-            ),
+            decoration: BoxDecoration(color: cs.primaryContainer, borderRadius: BorderRadius.circular(12)),
+            child: Icon(Icons.analytics_rounded, color: cs.onPrimaryContainer, size: 28),
           ),
           const SizedBox(width: 16),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Relatórios',
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Relatórios',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w700,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Visão geral das atividades da sua equipe',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                ),
-              ],
-            ),
+                        color: cs.onSurface,
+                      )),
+              const SizedBox(height: 4),
+              Text('Visão geral das atividades da sua equipe',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+            ]),
           ),
         ],
       ),
@@ -140,14 +120,9 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
         onRefresh: _carregarDados,
         child: CustomScrollView(
           slivers: [
-            SliverToBoxAdapter(
-              child: _buildHeader(),
-            ),
-
+            SliverToBoxAdapter(child: _buildHeader()),
             if (_isLoading)
-              SliverToBoxAdapter(
-                child: _buildLoadingState(),
-              )
+              SliverToBoxAdapter(child: _buildLoadingState())
             else
               SliverToBoxAdapter(
                 child: Column(
@@ -161,30 +136,20 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.assignment_ind_rounded,
-                                  color: Theme.of(context).colorScheme.primary,
-                                  size: 24,
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Desempenho dos Consultores',
+                            Row(children: [
+                              Icon(Icons.assignment_ind_rounded, color: Theme.of(context).colorScheme.primary, size: 24),
+                              const SizedBox(width: 12),
+                              Text('Desempenho dos Consultores',
                                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                         fontWeight: FontWeight.w600,
                                         color: Theme.of(context).colorScheme.onSurface,
-                                      ),
-                                ),
-                              ],
-                            ),
+                                      )),
+                            ]),
                             const SizedBox(height: 8),
-                            Text(
-                              'Número total e deste mês por consultor',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  ),
-                            ),
+                            Text('Visitas totais e no mês por consultor',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    )),
                             const SizedBox(height: 20),
                             _consultoresIds.isEmpty
                                 ? _buildEmptyConsultoresState()
@@ -214,30 +179,20 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.access_time_rounded,
-                                  color: Theme.of(context).colorScheme.primary,
-                                  size: 24,
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'Atividade Recente',
+                            Row(children: [
+                              Icon(Icons.access_time_rounded, color: Theme.of(context).colorScheme.primary, size: 24),
+                              const SizedBox(width: 12),
+                              Text('Atividade Recente',
                                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                         fontWeight: FontWeight.w600,
                                         color: Theme.of(context).colorScheme.onSurface,
-                                      ),
-                                ),
-                              ],
-                            ),
+                                      )),
+                            ]),
                             const SizedBox(height: 8),
-                            Text(
-                              'Últimos cadastros feitos pela sua equipe',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  ),
-                            ),
+                            Text('Últimas visitas registradas pela sua equipe',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    )),
                             const SizedBox(height: 20),
                             _consultoresIds.isEmpty
                                 ? _buildEmptyAtividadesState()
@@ -267,83 +222,52 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
   }
 
   Widget _buildEmptyConsultoresState() {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 40),
       child: Column(
         children: [
-          Icon(
-            Icons.people_outline_rounded,
-            size: 48,
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
-          ),
+          Icon(Icons.people_outline_rounded, size: 48, color: cs.onSurface.withOpacity(0.4)),
           const SizedBox(height: 12),
-          Text(
-            'Nenhum consultor cadastrado',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                ),
-          ),
+          Text('Nenhum consultor cadastrado',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.onSurface.withOpacity(0.6))),
           const SizedBox(height: 8),
-          Text(
-            'Cadastre consultores para ver os relatórios',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
-                ),
-            textAlign: TextAlign.center,
-          ),
+          Text('Cadastre consultores para ver os relatórios',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurface.withOpacity(0.4))),
         ],
       ),
     );
   }
 
   Widget _buildEmptyAtividadesState() {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 40),
       child: Column(
         children: [
-          Icon(
-            Icons.assignment_outlined,
-            size: 48,
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
-          ),
+          Icon(Icons.assignment_outlined, size: 48, color: cs.onSurface.withOpacity(0.4)),
           const SizedBox(height: 12),
-          Text(
-            'Nenhum cadastro recente',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                ),
-          ),
+          Text('Nenhum registro recente',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.onSurface.withOpacity(0.6))),
           const SizedBox(height: 8),
-          Text(
-            'Os cadastros da sua equipe aparecerão aqui',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
-                ),
-            textAlign: TextAlign.center,
-          ),
+          Text('Os registros da sua equipe aparecerão aqui',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurface.withOpacity(0.4))),
         ],
       ),
     );
   }
 
   Widget _buildErrorState(String mensagem) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          Icon(
-            Icons.error_outline_rounded,
-            color: Theme.of(context).colorScheme.error,
-            size: 48,
-          ),
+          Icon(Icons.error_outline_rounded, color: cs.error, size: 48),
           const SizedBox(height: 12),
-          Text(
-            mensagem,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.error,
-                ),
-            textAlign: TextAlign.center,
-          ),
+          Text(mensagem, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.error)),
         ],
       ),
     );
@@ -354,7 +278,6 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
 
     for (final consultorId in _consultoresIds) {
       try {
-
         final consultor = await Supabase.instance.client
             .from('consultores')
             .select('nome')
@@ -363,19 +286,18 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
 
         final nome = (consultor['nome'] as String?) ?? 'Sem nome';
 
-
         final clientes = await Supabase.instance.client
             .from('clientes')
-            .select('*')
-            .eq('consultor_uid', consultorId); 
+            .select('id, data_visita')
+            .eq('consultor_uid_t', consultorId);
 
         final List<dynamic> clientesList = clientes as List;
 
-        int total = clientesList.length;
-        int mes = clientesList.where((cliente) {
-          final dataCadastro = cliente['data_cadastro'] as String?;
-          final DateTime? data = _parseData(dataCadastro);
-          return data != null && data.isAfter(inicioMes);
+        final int total = clientesList.length;
+        final int mes = clientesList.where((cliente) {
+          final dv = cliente['data_visita'] as String?;
+          final DateTime? data = _parseData(dv);
+          return data != null && !data.isBefore(inicioMes);
         }).length;
 
         stats.add(
@@ -385,9 +307,7 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-              ),
+              border: Border.all(color: Theme.of(context).colorScheme.outline.withOpacity(0.2)),
             ),
             child: Row(
               children: [
@@ -411,25 +331,14 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        nome,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '$total cadastros totais',
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(nome, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                    const SizedBox(height: 4),
+                    Text('$total visitas totais',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                      ),
-                    ],
-                  ),
+                            )),
+                  ]),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -437,21 +346,19 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
                     color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(
-                    '$mes este mês',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
+                  child: Text('$mes este mês',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      )),
                 ),
               ],
             ),
           ),
         );
       } catch (error) {
-        print('Erro ao carregar stats do consultor $consultorId: $error');
+        debugPrint('Erro ao carregar stats do consultor $consultorId: $error');
       }
     }
 
@@ -462,12 +369,14 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
     final List<Widget> atividades = [];
 
     try {
+      if (_consultoresIds.isEmpty) return atividades;
 
+      final lista = '(${_consultoresIds.join(',')})'; 
       final clientes = await Supabase.instance.client
           .from('clientes')
-          .select('*')
-          .contains('consultor_uid', _consultoresIds) 
-          .order('data_cadastro', ascending: false)
+          .select('nome, bairro, data_visita')
+          .filter('consultor_uid_t', 'in', lista)
+          .order('data_visita', ascending: false)
           .limit(10);
 
       final List<dynamic> clientesList = clientes as List;
@@ -475,11 +384,9 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
       for (final cliente in clientesList) {
         final nomeCliente = (cliente['nome'] as String?) ?? 'Cliente';
         final bairro = (cliente['bairro'] as String?) ?? 'sem bairro';
-        final dataCadastro = cliente['data_cadastro'] as String?;
-        final DateTime? data = _parseData(dataCadastro);
-        final dataFormatada = data != null
-            ? DateFormat('dd/MM HH:mm').format(data)
-            : 'Data inválida';
+        final dv = cliente['data_visita'] as String?;
+        final DateTime? data = _parseData(dv);
+        final dataFormatada = data != null ? DateFormat('dd/MM').format(data) : 'Data inválida';
 
         atividades.add(
           Container(
@@ -498,37 +405,23 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
                     color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Icon(
-                    Icons.person_rounded,
-                    size: 18,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+                  child: Icon(Icons.person_rounded, size: 18, color: Theme.of(context).colorScheme.primary),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        nomeCliente,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(nomeCliente,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        bairro,
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    const SizedBox(height: 2),
+                    Text(bairro,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
+                            )),
+                  ]),
                 ),
                 const SizedBox(width: 12),
                 Text(
@@ -544,7 +437,7 @@ class _RelatoriosTabState extends State<RelatoriosTab> {
         );
       }
     } catch (error) {
-      print('Erro ao carregar atividades: $error');
+      debugPrint('Erro ao carregar atividades: $error');
     }
 
     return atividades;

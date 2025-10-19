@@ -1,4 +1,3 @@
-// lib/telas/consultor/meus_clientes_tab.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
@@ -35,7 +34,6 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
     if (user == null) {
       return const Stream<List<Map<String, dynamic>>>.empty();
     }
-
     return _client
         .from('clientes')
         .select('*')
@@ -44,20 +42,15 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
         .asStream();
   }
 
-  // ✅ Abre direto no Google Maps
   Future<void> _abrirNoGoogleMaps(String endereco) async {
     final encodedEndereco = Uri.encodeComponent(endereco);
     final url = 'https://www.google.com/maps/search/?api=1&query=$encodedEndereco';
-
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Não foi possível abrir o Google Maps'),
-          backgroundColor: Colors.red,
-        ),
+        const SnackBar(content: Text('Não foi possível abrir o Google Maps'), backgroundColor: Colors.red),
       );
     }
   }
@@ -84,10 +77,7 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(
-          color: Theme.of(context).colorScheme.primary,
-          width: 2,
-        ),
+        borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2),
       ),
       suffixIcon: suffixIcon,
       labelStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -111,33 +101,20 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
               color: Theme.of(context).colorScheme.primaryContainer,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              Icons.people_outline_rounded,
-              color: Theme.of(context).colorScheme.onPrimaryContainer,
-              size: 28,
-            ),
+            child: Icon(Icons.people_outline_rounded, color: Theme.of(context).colorScheme.onPrimaryContainer, size: 28),
           ),
           const SizedBox(width: 16),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Meus Clientes',
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Meus Clientes',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                         color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Gerencie sua lista de clientes',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                ),
-              ],
-            ),
+                      )),
+              const SizedBox(height: 4),
+              Text('Gerencie sua lista de clientes',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ]),
           ),
         ],
       ),
@@ -149,24 +126,13 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
       padding: const EdgeInsets.symmetric(vertical: 40),
       child: Column(
         children: [
-          Icon(
-            Icons.people_outline_rounded,
-            size: 64,
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
-          ),
+          Icon(Icons.people_outline_rounded, size: 64, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4)),
           const SizedBox(height: 16),
-          Text(
-            'Nenhum cliente cadastrado',
-            style: Theme.of(context).textTheme.bodyLarge,
-          ),
+          Text('Nenhum cliente cadastrado', style: Theme.of(context).textTheme.bodyLarge),
           const SizedBox(height: 8),
-          Text(
-            'Cadastre seus primeiros clientes',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                ),
-            textAlign: TextAlign.center,
-          ),
+          Text('Cadastre seus primeiros clientes',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6))),
         ],
       ),
     );
@@ -177,10 +143,7 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          // Cabeçalho
           SliverToBoxAdapter(child: _buildHeader()),
-
-          // Campo de busca
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -192,42 +155,22 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
                   hint: 'Digite para pesquisar...',
                   suffixIcon: _query.isEmpty
                       ? const Icon(Icons.search)
-                      : IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: _searchCtrl.clear,
-                          tooltip: 'Limpar',
-                        ),
+                      : IconButton(icon: const Icon(Icons.clear), onPressed: _searchCtrl.clear, tooltip: 'Limpar'),
                 ),
               ),
             ),
           ),
-
-          // Lista de clientes com StreamBuilder
           StreamBuilder<List<Map<String, dynamic>>>(
             stream: _meusClientesStream,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return SliverToBoxAdapter(
-                  child: Center(child: CircularProgressIndicator()),
-                );
+                return const SliverToBoxAdapter(child: Center(child: CircularProgressIndicator()));
               }
-
               if (snapshot.hasError) {
-                return SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text('Erro: ${snapshot.error}'),
-                  ),
-                );
+                return SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(16), child: Text('Erro: ${snapshot.error}')));
               }
-
               if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: _buildEmptyState(),
-                  ),
-                );
+                return SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(16), child: _buildEmptyState()));
               }
 
               final clientes = snapshot.data!;
@@ -238,11 +181,8 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
                       final endereco = (cliente['endereco']?.toString().toLowerCase() ?? '');
                       final bairro = (cliente['bairro']?.toString().toLowerCase() ?? '');
                       final cidade = (cliente['cidade']?.toString().toLowerCase() ?? '');
-                      final query = _query.toLowerCase();
-                      return estabelecimento.contains(query) ||
-                          endereco.contains(query) ||
-                          bairro.contains(query) ||
-                          cidade.contains(query);
+                      final q = _query.toLowerCase();
+                      return estabelecimento.contains(q) || endereco.contains(q) || bairro.contains(q) || cidade.contains(q);
                     }).toList();
 
               if (clientesFiltrados.isEmpty) {
@@ -251,39 +191,24 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       children: [
-                        Icon(
-                          Icons.search_off_outlined,
-                          size: 48,
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
-                        ),
+                        Icon(Icons.search_off_outlined, size: 48, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4)),
                         const SizedBox(height: 16),
-                        Text(
-                          'Nenhum cliente encontrado',
-                          style: Theme.of(context).textTheme.bodyLarge,
-                        ),
+                        Text('Nenhum cliente encontrado', style: Theme.of(context).textTheme.bodyLarge),
                       ],
                     ),
                   ),
                 );
               }
 
-              // Lista de clientes
               return SliverList(
                 delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final cliente = clientesFiltrados[index];
-                    return _buildClienteItem(cliente);
-                  },
+                  (context, index) => _buildClienteItem(clientesFiltrados[index]),
                   childCount: clientesFiltrados.length,
                 ),
               );
             },
           ),
-
-          // Espaço final
-          const SliverToBoxAdapter(
-            child: SizedBox(height: 20),
-          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 20)),
         ],
       ),
     );
@@ -311,15 +236,12 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: InkWell(
-        onTap: () {
-          // Abrir detalhes
-        },
+        onTap: () => _mostrarDetalhesCliente(cliente), 
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Ícone de status
               Container(
                 width: 40,
                 height: 40,
@@ -338,38 +260,14 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
                 ),
               ),
               const SizedBox(width: 16),
-              // Dados
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      estabelecimento,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
-                      ),
-                    ),
+                    Text(estabelecimento, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
                     const SizedBox(height: 4),
-                    // Endereço clicável → abre no Google Maps
-                    GestureDetector(
-                      onTap: () {
-                        if (endereco.trim().isNotEmpty) {
-                          _abrirNoGoogleMaps(endereco);
-                        }
-                      },
-                      child: Text(
-                        endereco,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.primary,
-                              decoration: TextDecoration.underline,
-                            ),
-                      ),
-                    ),
-                    Text(
-                      cidade,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                    Text(endereco, style: Theme.of(context).textTheme.bodySmall),
+                    Text(cidade, style: Theme.of(context).textTheme.bodySmall),
                     const SizedBox(height: 8),
                     Text(
                       dataFormatada,
@@ -388,7 +286,6 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
                   ],
                 ),
               ),
-              // Ícone de excluir
               IconButton(
                 icon: const Icon(Icons.delete_outline, color: Colors.red),
                 onPressed: () async {
@@ -398,14 +295,8 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
                       title: const Text('Confirmar exclusão'),
                       content: Text('Tem certeza que deseja excluir $estabelecimento?'),
                       actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text('Cancelar'),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          child: const Text('Excluir', style: TextStyle(color: Colors.red)),
-                        ),
+                        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+                        TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Excluir', style: TextStyle(color: Colors.red))),
                       ],
                     ),
                   );
@@ -415,17 +306,11 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
                       await _client.from('clientes').delete().eq('id', cliente['id']);
                       widget.onClienteRemovido();
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Cliente excluído com sucesso'),
-                          backgroundColor: Colors.green,
-                        ),
+                        const SnackBar(content: Text('Cliente excluído com sucesso'), backgroundColor: Colors.green),
                       );
                     } catch (e) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Erro ao excluir cliente: $e'),
-                          backgroundColor: Colors.red,
-                        ),
+                        SnackBar(content: Text('Erro ao excluir cliente: $e'), backgroundColor: Colors.red),
                       );
                     }
                   }
@@ -435,6 +320,136 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _mostrarDetalhesCliente(Map<String, dynamic> c) async {
+    final enderecoCompleto = [
+      c['endereco'] ?? '',
+      c['bairro'] ?? '',
+      c['cidade'] ?? '',
+      c['estado'] ?? ''
+    ].where((s) => (s as String).toString().trim().isNotEmpty).join(', ');
+
+    final String? dataVisitaStr = c['data_visita'] as String?;
+    final DateTime? dataVisita = dataVisitaStr != null ? DateTime.tryParse(dataVisitaStr) : null;
+    final String dataFormatada = dataVisita != null ? DateFormat('dd/MM/yyyy').format(dataVisita) : 'Não informada';
+
+    final String? horaVisitaStr = c['hora_visita']?.toString();
+    final String horaFormatada = (horaVisitaStr != null && horaVisitaStr.isNotEmpty) ? horaVisitaStr.substring(0, 5) : 'Não informada';
+
+    final String responsavel = (c['responsavel'] ?? 'Não informado').toString();
+    final String telefone = (c['telefone'] ?? 'Não informado').toString();
+    final String cep = (c['cep'] ?? 'Não informado').toString();
+    final String observacoes = (c['observacoes'] ?? '').toString().trim();
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true, 
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              top: 16,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min, 
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(Icons.business_rounded, color: Theme.of(context).colorScheme.onPrimaryContainer),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          c['estabelecimento'] ?? c['nome'] ?? 'Cliente',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context), tooltip: 'Fechar')
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _linhaInfo(Icons.person_outline, 'Responsável', responsavel),
+                  const SizedBox(height: 8),
+                  _linhaInfo(Icons.phone_outlined, 'Telefone', telefone),
+                  const SizedBox(height: 8),
+                  _linhaInfo(Icons.location_on_outlined, 'Endereço', enderecoCompleto.isEmpty ? 'Não informado' : enderecoCompleto),
+                  const SizedBox(height: 8),
+                  _linhaInfo(Icons.markunread_mailbox_outlined, 'CEP', cep),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(child: _linhaInfo(Icons.event_outlined, 'Data da visita', dataFormatada)),
+                      const SizedBox(width: 12),
+                      Expanded(child: _linhaInfo(Icons.schedule_outlined, 'Hora da visita', horaFormatada)),
+                    ],
+                  ),
+                  if (observacoes.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text('Observações',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            )),
+                    const SizedBox(height: 4),
+                    Text(observacoes, style: Theme.of(context).textTheme.bodyMedium),
+                  ],
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: enderecoCompleto.isEmpty ? null : () => _abrirNoGoogleMaps(enderecoCompleto),
+                          icon: const Icon(Icons.map_outlined),
+                          label: const Text('Abrir no Maps'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.check_circle_outline),
+                          label: const Text('OK'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _linhaInfo(IconData icone, String titulo, String valor) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icone, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(titulo, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 2),
+            Text(valor, style: Theme.of(context).textTheme.bodyMedium),
+          ]),
+        ),
+      ],
     );
   }
 }

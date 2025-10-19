@@ -267,7 +267,7 @@ class _ConsultoresTabState extends State<ConsultoresTab> {
                                         height: 20,
                                         child: CircularProgressIndicator(strokeWidth: 2),
                                       )
-                                    : const Text('Cadastrar e Entrar'),
+                                    : const Text('Cadastrar'),
                               ),
                             ),
                           ],

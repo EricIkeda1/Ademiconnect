@@ -1,7 +1,6 @@
-// lib/telas/consultor/home_consultor.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/services.dart'; // Clipboard
+import 'package:flutter/services.dart'; 
 import 'package:intl/intl.dart';
 import '../widgets/custom_navbar.dart';
 import 'meus_clientes_tab.dart';
@@ -48,11 +47,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
     if (user == null || !mounted) return;
 
     try {
-      final doc = await _client
-          .from('consultores')
-          .select('nome, email')
-          .eq('id', user.id)
-          .maybeSingle();
+      final doc = await _client.from('consultores').select('nome, email').eq('id', user.id).maybeSingle();
 
       if (doc != null) {
         final nomeCompleto = (doc['nome'] as String?) ?? '';
@@ -86,9 +81,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
 
     final rows = await _client.from('clientes').select('*').eq('consultor_uid_t', uid);
 
-    final clientes = (rows as List)
-        .map((m) => Cliente.fromMap(m as Map<String, dynamic>))
-        .toList();
+    final clientes = (rows as List).map((m) => Cliente.fromMap(m as Map<String, dynamic>)).toList();
 
     final agora = DateTime.now();
     final hoje = DateTime(agora.year, agora.month, agora.day);
@@ -120,7 +113,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
     _loadStats();
   }
 
-  // Copia texto para a área de transferência com feedback visual
   Future<void> _copiarEndereco(String texto) async {
     await Clipboard.setData(ClipboardData(text: texto));
     if (!mounted) return;
@@ -146,7 +138,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
         .asStream();
   }
 
-  // ===== Cartão compacto: Rua de Trabalho - Hoje =====
   Widget _buildRuaTrabalhoCard() {
     return Card(
       margin: EdgeInsets.zero,
@@ -193,7 +184,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
     );
   }
 
-  // Formata HH:mm combinando data_visita + hora_visita (se houver)
   String _formatHoraHoje(Map<String, dynamic> clienteHoje) {
     final dataStr = clienteHoje['data_visita']?.toString();
     final horaStr = clienteHoje['hora_visita']?.toString();
@@ -235,7 +225,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
 
         Map<String, dynamic>? clienteHoje;
 
-        // Mantém a lógica anterior: iguala só a parte da data
         for (final data in lista) {
           final s = data['data_visita']?.toString();
           if (s == null || s.isEmpty) continue;
@@ -264,9 +253,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
           if (cidade.isNotEmpty || estado.isNotEmpty) '$cidade - $estado',
         ].where((e) => e.isNotEmpty).join(', ');
 
-        final tituloLinha = horaHHmm.isNotEmpty
-            ? 'HOJE $horaHHmm - $estabelecimento'
-            : 'HOJE - $estabelecimento';
+        final tituloLinha = horaHHmm.isNotEmpty ? 'HOJE $horaHHmm - $estabelecimento' : 'HOJE - $estabelecimento';
 
         return GestureDetector(
           onTap: () => _copiarEndereco(enderecoCompleto),
@@ -417,6 +404,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
               nome: _userName,
               cargo: 'Consultor',
               tabsNoAppBar: false,
+              hideAvatar: true, 
             ),
           ),
         ),
@@ -479,7 +467,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
               ),
               const SizedBox(height: 12),
               Material(
-                color: Colors.white,
+                color: const Color(0xFFdcddde),
                 borderRadius: BorderRadius.circular(12),
                 elevation: 2,
                 child: const TabBar(
@@ -550,10 +538,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12)),
+                        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
                         const SizedBox(height: 2),
                         Text(
                           value,
