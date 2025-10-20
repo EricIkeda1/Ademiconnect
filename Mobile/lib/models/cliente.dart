@@ -99,7 +99,6 @@ class Cliente {
         horaVisita: json['horaVisita'] as String?,
       );
 
-  // Linhas vindas do Supabase
   factory Cliente.fromMap(Map<String, dynamic> map) => Cliente(
         id: map['id'] as String,
         nomeCliente: map['nome'] as String? ?? map['nome_cliente'] as String? ?? '',
@@ -117,7 +116,6 @@ class Cliente {
         horaVisita: map['hora_visita'] as String? ?? map['horaVisita'] as String?,
       );
 
-  // Payload para Supabase
   Map<String, dynamic> toSupabaseMap() => {
         'id': id,
         'nome': nomeCliente,

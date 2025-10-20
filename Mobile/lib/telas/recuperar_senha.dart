@@ -22,7 +22,7 @@ class _RecuperarSenhaPageState extends State<RecuperarSenhaPage> {
     try {
       await Supabase.instance.client.auth.resetPasswordForEmail(
         email,
-        redirectTo: 'com.yourcompany.app://login', // Configure this in Supabase Auth > URL Configuration
+        redirectTo: 'com.yourcompany.app://login', 
       );
 
       ScaffoldMessenger.of(context).showSnackBar(

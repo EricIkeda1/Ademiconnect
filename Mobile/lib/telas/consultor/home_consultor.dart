@@ -1,586 +1,347 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import '../widgets/custom_navbar.dart';
-import 'meus_clientes_tab.dart';
-import 'minhas_visitas_tab.dart';
-import 'exportar_dados_tab.dart';
-import 'cadastrar_cliente.dart';
-import '../../models/cliente.dart';
-import '../../services/cliente_service.dart';
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
+import 'package:ademicon_app/models/cliente.dart';
+import 'package:ademicon_app/services/cliente_service.dart';
 
-class HomeConsultor extends StatefulWidget {
-  const HomeConsultor({super.key});
+class CadastrarCliente extends StatefulWidget {
+  final Function()? onClienteCadastrado;
+  const CadastrarCliente({super.key, this.onClienteCadastrado});
 
   @override
-  State<HomeConsultor> createState() => _HomeConsultorState();
+  State<CadastrarCliente> createState() => _CadastrarClienteState();
 }
 
-class _HomeConsultorState extends State<HomeConsultor> {
-  final ClienteService _clienteService = ClienteService();
-  final SupabaseClient _client = Supabase.instance.client;
+class _CadastrarClienteState extends State<CadastrarCliente> {
+  final _formKey = GlobalKey<FormState>();
+  final _client = Supabase.instance.client;
 
-  int _totalClientes = 0;
-  int _totalVisitasHoje = 0;
-  int _totalAlertas = 0;
-  int _totalFinalizados = 0;
-  List<Cliente> _clientes = [];
-  String _userName = 'Consultor';
+  final _nomeClienteCtrl = TextEditingController();
+  final _telefoneCtrl = TextEditingController();
+  final _nomeEstabelecimentoCtrl = TextEditingController();
+  final _estadoCtrl = TextEditingController();
+  final _cidadeCtrl = TextEditingController();
+  final _enderecoCtrl = TextEditingController();
+  final _bairroCtrl = TextEditingController();
+  final _cepCtrl = TextEditingController();
+  final _dataVisitaCtrl = TextEditingController();
+  final _horaVisitaCtrl = TextEditingController();
+  final _observacoesCtrl = TextEditingController();
+
+  final _telefoneFormatter = MaskTextInputFormatter(
+    mask: '(##) #####-####',
+    filter: {"#": RegExp(r'\d')},
+    type: MaskAutoCompletionType.lazy,
+  );
+  final _cepFormatter = MaskTextInputFormatter(
+    mask: '#####-###',
+    filter: {"#": RegExp(r'\d')},
+    type: MaskAutoCompletionType.lazy,
+  );
+
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _loadUserData();
-    _loadStats();
+    _dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
+    _horaVisitaCtrl.text = DateFormat('HH:mm').format(DateTime.now());
   }
 
-  String _formatarNome(String nome) {
-    final partes = nome.trim().split(' ').where((p) => p.isNotEmpty).toList();
-    if (partes.isEmpty) return 'Consultor';
-    if (partes.length == 1) return partes[0];
-    return '${partes[0]} ${partes.last}';
+  @override
+  void dispose() {
+    _nomeClienteCtrl.dispose();
+    _telefoneCtrl.dispose();
+    _nomeEstabelecimentoCtrl.dispose();
+    _estadoCtrl.dispose();
+    _cidadeCtrl.dispose();
+    _enderecoCtrl.dispose();
+    _bairroCtrl.dispose();
+    _cepCtrl.dispose();
+    _dataVisitaCtrl.dispose();
+    _horaVisitaCtrl.dispose();
+    _observacoesCtrl.dispose();
+    super.dispose();
   }
 
-  Future<void> _loadUserData() async {
-    final user = _client.auth.currentSession?.user;
-    if (user == null || !mounted) return;
+  Future<void> _selecionarData() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: now,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 1),
+    );
+    if (picked != null) {
+      _dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(picked);
+    }
+  }
+
+  Future<void> _selecionarHora() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
+    if (picked != null) {
+      _horaVisitaCtrl.text = picked.format(context);
+    }
+  }
+
+  String? _validarCampoObrigatorio(String? v, {String field = 'Campo'}) {
+    if (v == null || v.trim().isEmpty) return '$field é obrigatório';
+    return null;
+  }
+
+  InputDecoration _obterDecoracaoCampo(
+    String label, {
+    String? hint,
+    Widget? suffixIcon,
+    bool isObrigatorio = true,
+  }) {
+    return InputDecoration(
+      labelText: '$label${isObrigatorio ? ' *' : ''}',
+      hintText: hint,
+      filled: true,
+      fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      suffixIcon: suffixIcon,
+    );
+  }
+
+  Future<void> _salvarCliente() async {
+    if (_formKey.currentState?.validate() != true) return;
+    if (mounted) setState(() => _isLoading = true);
 
     try {
-      final doc = await _client.from('consultores').select('nome, email').eq('id', user.id).maybeSingle();
+      final dataStr = _dataVisitaCtrl.text.trim();
+      final horaStr = _horaVisitaCtrl.text.trim();
 
-      if (doc != null) {
-        final nomeCompleto = (doc['nome'] as String?) ?? '';
-        if (nomeCompleto.isNotEmpty) {
-          if (mounted) setState(() => _userName = _formatarNome(nomeCompleto));
-          return;
-        }
-        final email = (doc['email'] as String?) ?? user.email ?? '';
-        if (email.isNotEmpty && mounted) {
-          setState(() => _userName = email.split('@').first);
-          return;
-        }
-      }
-
-      final fallbackEmail = user.email ?? '';
-      if (fallbackEmail.isNotEmpty && mounted) {
-        setState(() => _userName = fallbackEmail.split('@').first);
+      late DateTime dataHora;
+      try {
+        final h = DateFormat('HH:mm').parse(horaStr);
+        final horaPadrao = DateFormat('HH:mm').format(h);
+        dataHora = DateFormat('dd/MM/yyyy HH:mm').parse('$dataStr $horaPadrao');
+      } on FormatException {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Data ou hora inválida. Use o formato correto.')),
+        );
         return;
       }
 
-      if (mounted) setState(() => _userName = 'Consultor');
-    } catch (_) {
-      if (mounted) setState(() => _userName = 'Consultor');
-    }
-  }
-
-  Future<void> _loadStats() async {
-    final user = _client.auth.currentSession?.user;
-    if (user == null || !mounted) return;
-    final uid = user.id;
-
-    final rows = await _client.from('clientes').select('*').eq('consultor_uid_t', uid);
-
-    final clientes = (rows as List).map((m) => Cliente.fromMap(m as Map<String, dynamic>)).toList();
-
-    final agora = DateTime.now();
-    final hoje = DateTime(agora.year, agora.month, agora.day);
-
-    final visitasHoje = clientes.where((c) {
-      final d = c.dataVisita;
-      return d.year == hoje.year && d.month == hoje.month && d.day == hoje.day;
-    }).length;
-
-    final alertas = clientes.where((c) {
-      final d = DateTime(c.dataVisita.year, c.dataVisita.month, c.dataVisita.day);
-      return d.isBefore(hoje);
-    }).length;
-
-    final finalizados = alertas;
-
-    if (mounted) {
-      setState(() {
-        _clientes = clientes;
-        _totalClientes = clientes.length;
-        _totalVisitasHoje = visitasHoje;
-        _totalAlertas = alertas;
-        _totalFinalizados = finalizados;
-      });
-    }
-  }
-
-  void _onClienteCadastrado() {
-    _loadStats();
-  }
-
-  Future<void> _copiarEndereco(String texto) async {
-    await Clipboard.setData(ClipboardData(text: texto));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Endereço copiado: $texto'),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
-  // Stream utilizada no card "Rua de Trabalho - Hoje"
-  Stream<List<Map<String, dynamic>>> _streamClientes() {
-    final user = _client.auth.currentSession?.user;
-    if (user == null) return const Stream<List<Map<String, dynamic>>>.empty();
-
-    return _client
-        .from('clientes')
-        .select('id, estabelecimento, endereco, cidade, estado, data_visita, hora_visita, consultor_uid_t')
-        .eq('consultor_uid_t', user.id)
-        .order('data_visita', ascending: true)  // garante datas do passado -> futuro
-        .order('hora_visita', ascending: true)  // garante horas cedo -> tarde
-        .asStream();
-  }
-
-  Widget _buildRuaTrabalhoCard() {
-    return Card(
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      elevation: 1,
-      child: Padding(
-        padding: const EdgeInsets.all(6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 18,
-                  height: 18,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEFFAF1),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: const Color(0xFFDCEFE1)),
-                  ),
-                  child: const Icon(Icons.flag, size: 12, color: Color(0xFF3CB371)),
-                ),
-                const SizedBox(width: 4),
-                const Expanded(
-                  child: Text(
-                    'Rua de Trabalho - Hoje',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 78),
-              child: _buildRuaTrabalhoHoje(),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _formatHoraHoje(Map<String, dynamic> clienteHoje) {
-    final dataStr = clienteHoje['data_visita']?.toString();
-    final horaStr = clienteHoje['hora_visita']?.toString();
-    if (dataStr == null || dataStr.isEmpty) return '';
-    try {
-      DateTime data = DateTime.parse(dataStr);
-      if (horaStr != null && horaStr.isNotEmpty) {
-        final parts = horaStr.split(':');
-        final h = int.tryParse(parts[0]) ?? 0;
-        final m = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
-        final s = parts.length > 2 ? int.tryParse(parts[2]) ?? 0 : 0;
-        data = DateTime(data.year, data.month, data.day, h, m, s);
-        return DateFormat('HH:mm').format(data);
-      }
-      final embutida = DateFormat('HH:mm').format(data);
-      return embutida != '00:00' ? embutida : '';
-    } catch (_) {
-      return '';
-    }
-  }
-
-  Widget _buildRuaTrabalhoHoje() {
-    final cs = Theme.of(context).colorScheme;
-
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _streamClientes(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildRuaTrabalhoPlaceholder(cs, 'Carregando...', 'Buscando dados do banco');
-        }
-
-        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-          return _buildRuaTrabalhoPlaceholder(cs, 'Nenhuma visita hoje', 'Cadastre clientes para ver as visitas aqui');
-        }
-
-        final lista = snapshot.data!;
-        final now = DateTime.now();
-        final hoje = DateTime(now.year, now.month, now.day);
-
-        // Coleta todos os de HOJE
-        final todays = <Map<String, dynamic>>[];
-        for (final data in lista) {
-          final s = data['data_visita']?.toString();
-          if (s == null || s.isEmpty) continue;
-          try {
-            final dt = DateTime.parse(s);
-            final d = DateTime(dt.year, dt.month, dt.day);
-            if (d == hoje) todays.add(data);
-          } catch (_) {}
-        }
-
-        if (todays.isEmpty) {
-          return _buildRuaTrabalhoPlaceholder(cs, 'Nenhuma visita para hoje', 'As visitas de hoje aparecerão aqui');
-        }
-
-        // Converte para DateTime completo para ordenar por horário
-        DateTime asDateTime(Map<String, dynamic> c) {
-          final s = c['data_visita']?.toString();
-          final h = c['hora_visita']?.toString();
-          DateTime base = DateTime.parse(s!).toLocal();
-          if (h != null && h.isNotEmpty) {
-            final p = h.split(':');
-            final hh = int.tryParse(p[0]) ?? 0;
-            final mm = p.length > 1 ? int.tryParse(p[1]) ?? 0 : 0;
-            final ss = p.length > 2 ? int.tryParse(p[2]) ?? 0 : 0;
-            return DateTime(base.year, base.month, base.day, hh, mm, ss);
-          }
-          // Sem hora definida -> deixa no fim do dia
-          return DateTime(base.year, base.month, base.day, 23, 59, 59);
-        }
-
-        // Ordena por horário e escolhe o MAIS CEDO do dia
-        todays.sort((a, b) => asDateTime(a).compareTo(asDateTime(b)));
-        final clienteHoje = todays.first;
-
-        final estabelecimento = (clienteHoje['estabelecimento'] as String?) ?? 'Estabelecimento';
-        final endereco = (clienteHoje['endereco'] as String?) ?? 'Endereço';
-        final cidade = (clienteHoje['cidade'] as String?) ?? '';
-        final estado = (clienteHoje['estado'] as String?) ?? '';
-        final horaHHmm = _formatHoraHoje(clienteHoje);
-
-        final enderecoCompleto = [
-          if ((endereco).isNotEmpty) endereco,
-          if (cidade.isNotEmpty || estado.isNotEmpty) '$cidade - $estado',
-        ].where((e) => e.isNotEmpty).join(', ');
-
-        final tituloLinha = horaHHmm.isNotEmpty ? 'HOJE $horaHHmm - $estabelecimento' : 'HOJE - $estabelecimento';
-
-        return GestureDetector(
-          onTap: () => _copiarEndereco(enderecoCompleto),
-          child: _buildRuaTrabalhoReal(cs, tituloLinha, enderecoCompleto),
+      final session = _client.auth.currentSession;
+      if (session == null || session.user == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Erro: sessão expirada. Faça login novamente.')),
         );
-      },
-    );
+        return;
+      }
+
+      final userId = session.user!.id;
+      final consultorNomeLocal = session.user!.email ?? 'Desconhecido';
+
+      final cliente = Cliente(
+        id: const Uuid().v4(),
+        nomeCliente: _nomeClienteCtrl.text.trim(),
+        telefone: _telefoneCtrl.text.replaceAll(RegExp(r'[^\d]'), ''),
+        estabelecimento: _nomeEstabelecimentoCtrl.text.trim(),
+        estado: _estadoCtrl.text.trim(),
+        cidade: _cidadeCtrl.text.trim(),
+        endereco: _enderecoCtrl.text.trim(),
+        bairro: _bairroCtrl.text.trim().isNotEmpty ? _bairroCtrl.text.trim() : null,
+        cep: _cepCtrl.text.replaceAll('-', ''),
+        dataVisita: dataHora,
+        observacoes: _observacoesCtrl.text.trim().isNotEmpty ? _observacoesCtrl.text.trim() : null,
+        consultorResponsavel: consultorNomeLocal,
+        consultorUid: userId,
+        horaVisita: horaStr,
+      );
+
+      final persistedNow = await ClienteService.instance.saveCliente(cliente);
+
+      if (!mounted) return;
+      _limparCampos();
+      widget.onClienteCadastrado?.call();
+
+      if (persistedNow) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cliente enviado ao servidor com sucesso.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cliente registrado localmente. Sincronizará automaticamente quando online.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao salvar: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
-  Widget _buildRuaTrabalhoPlaceholder(ColorScheme cs, String titulo, String subtitulo) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: cs.surfaceVariant.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: cs.outline.withOpacity(0.18)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(color: cs.surfaceVariant, borderRadius: BorderRadius.circular(8)),
-            child: Icon(Icons.info_outline, color: cs.onSurfaceVariant, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  titulo,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: cs.onSurface,
-                      ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  subtitulo,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRuaTrabalhoReal(ColorScheme cs, String tituloLinha, String localizacao) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: cs.primaryContainer.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: cs.primaryContainer.withOpacity(0.25)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(color: cs.primary, borderRadius: BorderRadius.circular(8)),
-              child: Icon(Icons.flag_rounded, color: cs.onPrimary, size: 18),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    tituloLinha,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: cs.onSurface,
-                        ),
-                  ),
-                  Text(
-                    localizacao,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                  ),
-                  Text(
-                    'Toque para copiar o endereço',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: cs.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: cs.primary.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: cs.primary.withOpacity(0.25)),
-              ),
-              child: Text(
-                'PRIORIDADE',
-                maxLines: 1,
-                overflow: TextOverflow.fade,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: cs.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  void _limparCampos() {
+    _formKey.currentState?.reset();
+    _nomeClienteCtrl.clear();
+    _telefoneCtrl.clear();
+    _nomeEstabelecimentoCtrl.clear();
+    _estadoCtrl.clear();
+    _cidadeCtrl.clear();
+    _enderecoCtrl.clear();
+    _bairroCtrl.clear();
+    _cepCtrl.clear();
+    _observacoesCtrl.clear();
+    _dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
+    _horaVisitaCtrl.text = DateFormat('HH:mm').format(DateTime.now());
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 4,
-      child: Scaffold(
-        appBar: PreferredSize(
-          preferredSize: const Size.fromHeight(kToolbarHeight),
-          child: Theme(
-            data: Theme.of(context).copyWith(
-              appBarTheme: const AppBarTheme(
-                backgroundColor: Color(0xFFD03025),
-                surfaceTintColor: Color(0xFFD03025),
-                elevation: 1,
-                centerTitle: false,
-              ),
-            ),
-            child: CustomNavbar(
-              nome: _userName,
-              cargo: 'Consultor',
-              tabsNoAppBar: false,
-              hideAvatar: true,
-            ),
-          ),
-        ),
-        body: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            children: [
-              _buildRuaTrabalhoCard(),
-              const SizedBox(height: 10),
-              LayoutBuilder(
-                builder: (context, cst) {
-                  final itemWidth = (cst.maxWidth - 10) / 2;
-                  return Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      SizedBox(
-                        width: itemWidth,
-                        child: _metricCard(
-                          title: 'Clientes',
-                          value: _totalClientes.toString(),
-                          icon: Icons.people_alt,
-                          color: Colors.blue,
-                          subtitle: 'Total cadastrados',
-                        ),
-                      ),
-                      SizedBox(
-                        width: itemWidth,
-                        child: _metricCard(
-                          title: 'Visitas Hoje',
-                          value: _totalVisitasHoje.toString(),
-                          icon: Icons.place,
-                          color: Colors.green,
-                          subtitle: 'Agendadas para hoje',
-                        ),
-                      ),
-                      SizedBox(
-                        width: itemWidth,
-                        child: _metricCard(
-                          title: 'Alertas',
-                          value: _totalAlertas.toString(),
-                          icon: Icons.notifications_active,
-                          color: Colors.orange,
-                          subtitle: 'Visitas vencidas',
-                        ),
-                      ),
-                      SizedBox(
-                        width: itemWidth,
-                        child: _metricCard(
-                          title: 'Finalizados',
-                          value: _totalFinalizados.toString(),
-                          icon: Icons.check_circle,
-                          color: Colors.black,
-                          subtitle: 'Visitas concluídas',
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              Material(
-                color: const Color(0xFFdcddde),
-                borderRadius: BorderRadius.circular(12),
-                elevation: 2,
-                child: const TabBar(
-                  isScrollable: true,
-                  labelPadding: EdgeInsets.symmetric(horizontal: 12),
-                  labelColor: Colors.black,
-                  unselectedLabelColor: Colors.black54,
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-                  indicator: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.all(Radius.circular(20)),
-                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 2)],
-                  ),
-                  tabs: [
-                    Tab(text: 'Minhas Visitas'),
-                    Tab(text: 'Cadastrar Cliente'),
-                    Tab(text: 'Meus Clientes'),
-                    Tab(text: 'Exportar Dados'),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: TabBarView(
+    return Scaffold(
+      body: RefreshIndicator(
+        onRefresh: () async => _limparCampos(),
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                child: Row(
                   children: [
-                    const MinhasVisitasTab(),
-                    CadastrarCliente(onClienteCadastrado: _onClienteCadastrado),
-                    MeusClientesTab(onClienteRemovido: _loadStats),
-                    ExportarDadosTab(clientes: _clientes),
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.add_business_rounded,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Cadastrar Cliente', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                          Text('Preencha os dados do cliente', style: Theme.of(context).textTheme.bodyMedium),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _metricCard({
-    required String title,
-    required String value,
-    required IconData icon,
-    required Color color,
-    String? subtitle,
-  }) {
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      child: SizedBox(
-        height: 72,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 15,
-                backgroundColor: color.withOpacity(0.12),
-                child: Icon(icon, color: color, size: 17),
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Align(
-                  alignment: Alignment.topLeft,
-                  child: IntrinsicHeight(
+            ),
+            SliverToBoxAdapter(
+              child: Card(
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Form(
+                    key: _formKey,
                     child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
-                        const SizedBox(height: 2),
-                        Text(
-                          value,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                        Text('Dados Obrigatórios', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 16),
+                        TextFormField(controller: _nomeClienteCtrl, decoration: _obterDecoracaoCampo('Nome do Cliente', hint: 'Nome completo'), validator: (v) => _validarCampoObrigatorio(v, field: 'Nome do cliente')),
+                        const SizedBox(height: 12),
+                        TextFormField(controller: _telefoneCtrl, keyboardType: TextInputType.phone, inputFormatters: [_telefoneFormatter], decoration: _obterDecoracaoCampo('Telefone', hint: '(00) 00000-0000'), validator: (v) => _validarCampoObrigatorio(v, field: 'Telefone')),
+                        const SizedBox(height: 12),
+                        TextFormField(controller: _nomeEstabelecimentoCtrl, decoration: _obterDecoracaoCampo('Estabelecimento', hint: 'Nome do ponto de venda'), validator: (v) => _validarCampoObrigatorio(v, field: 'Estabelecimento')),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(child: TextFormField(controller: _estadoCtrl, textCapitalization: TextCapitalization.characters, decoration: _obterDecoracaoCampo('Estado', hint: 'PR'), validator: (v) => _validarCampoObrigatorio(v, field: 'Estado'))),
+                            const SizedBox(width: 12),
+                            Expanded(child: TextFormField(controller: _cidadeCtrl, decoration: _obterDecoracaoCampo('Cidade', hint: 'Londrina'), validator: (v) => _validarCampoObrigatorio(v, field: 'Cidade'))),
+                          ],
                         ),
-                        if (subtitle != null) ...[
-                          const SizedBox(height: 1),
-                          Text(
-                            subtitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 10.5, color: Colors.black.withOpacity(0.6)),
+                        const SizedBox(height: 12),
+                        TextFormField(controller: _enderecoCtrl, decoration: _obterDecoracaoCampo('Endereço', hint: 'Av. ex: 123'), validator: (v) => _validarCampoObrigatorio(v, field: 'Endereço')),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(flex: 3, child: TextFormField(controller: _bairroCtrl, decoration: _obterDecoracaoCampo('Bairro', hint: 'Jardim x', isObrigatorio: false))),
+                            const SizedBox(width: 12),
+                            Expanded(flex: 2, child: TextFormField(controller: _cepCtrl, keyboardType: TextInputType.number, inputFormatters: [_cepFormatter], decoration: _obterDecoracaoCampo('CEP', hint: '00000-000', isObrigatorio: false))),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: _dataVisitaCtrl,
+                                readOnly: true,
+                                decoration: _obterDecoracaoCampo('Data da Visita', hint: 'dd/mm/aaaa', suffixIcon: IconButton(icon: const Icon(Icons.calendar_today_outlined), onPressed: _selecionarData)),
+                                onTap: _selecionarData,
+                                validator: (v) => _validarCampoObrigatorio(v, field: 'Data da visita'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                controller: _horaVisitaCtrl,
+                                readOnly: true,
+                                decoration: _obterDecoracaoCampo('Hora', hint: '00:00', suffixIcon: IconButton(icon: const Icon(Icons.access_time), onPressed: _selecionarHora)),
+                                onTap: _selecionarHora,
+                                validator: (v) => _validarCampoObrigatorio(v, field: 'Hora'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        Text('Observações', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _observacoesCtrl,
+                          maxLines: 3,
+                          decoration: InputDecoration(
+                            hintText: 'Ex: cliente solicitou entrega no horário da tarde',
+                            filled: true,
+                            fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                           ),
-                        ],
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          children: [
+                            Expanded(child: OutlinedButton(onPressed: _limparCampos, child: const Text('Limpar'))),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: FilledButton(
+                                onPressed: _isLoading ? null : _salvarCliente,
+                                child: _isLoading
+                                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                                    : const Text('Cadastrar'),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

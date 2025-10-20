@@ -161,17 +161,27 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
         horaVisita: horaStr,
       );
 
-      await ClienteService.instance.saveCliente(cliente);
+      final persistedNow = await ClienteService.instance.saveCliente(cliente);
 
       if (!mounted) return;
       _limparCampos();
       widget.onClienteCadastrado?.call();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cliente registrado localmente. Sincronizará automaticamente quando online.'),
-          backgroundColor: Colors.green,
-        ),
-      );
+
+      if (persistedNow) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cliente enviado ao servidor com sucesso.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cliente registrado localmente. Sincronizará automaticamente quando online.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

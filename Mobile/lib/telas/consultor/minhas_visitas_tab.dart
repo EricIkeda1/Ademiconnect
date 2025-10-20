@@ -441,7 +441,6 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
 
                 final clientes = snapshot.data!;
 
-                // Busca
                 final filtrados = _query.isEmpty
                     ? clientes
                     : clientes.where((c) {
@@ -451,7 +450,6 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> {
                         return estabelecimento.contains(q) || endereco.contains(q);
                       }).toList();
 
-                // Remove HOJE (para não duplicar com o destaque do Home)
                 final agora = DateTime.now();
                 final hojeIni = DateTime(agora.year, agora.month, agora.day, 0, 0, 0);
                 final hojeFim = DateTime(agora.year, agora.month, agora.day, 23, 59, 59);

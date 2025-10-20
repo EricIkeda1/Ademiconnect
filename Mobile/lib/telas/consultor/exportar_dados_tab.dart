@@ -1,4 +1,4 @@
-import 'dart:convert'; // necessário para utf8
+import 'dart:convert'; 
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -112,7 +112,6 @@ class ExportarDadosTab extends StatelessWidget {
                             try {
                               final csv = _buildCsv(clientes);
                               final path = await _saveCsvToTemp(csv);
-                              // Dica: defina o mimeType explicitamente para alguns apps
                               await Share.shareXFiles(
                                 [XFile(path, mimeType: 'text/csv', name: 'clientes_export.csv')],
                                 text: 'Clientes exportados',
@@ -261,7 +260,6 @@ class ExportarDadosTab extends StatelessWidget {
     );
   }
 
-  // Gera CSV com cabeçalho e escaping básico (aspas duplas e vírgulas)
   String _buildCsv(List<Cliente> dados) {
     final headers = [
       'id',
@@ -304,7 +302,6 @@ class ExportarDadosTab extends StatelessWidget {
     return buffer.toString();
   }
 
-  // Escapa vírgulas, quebras de linha e aspas conforme CSV: aspas dobradas e campo entre aspas
   String _escapeCsv(String value) {
     var v = value;
     final needsQuote = v.contains(',') || v.contains('\n') || v.contains('"');
@@ -314,17 +311,15 @@ class ExportarDadosTab extends StatelessWidget {
     return needsQuote ? '"$v"' : v;
   }
 
-  // Salva o CSV no diretório temporário e retorna o caminho
   Future<String> _saveCsvToTemp(String csv) async {
     final dir = await getTemporaryDirectory();
     final safeName = 'clientes_export_${DateTime.now().millisecondsSinceEpoch}.csv';
     final file = File('${dir.path}/$safeName');
 
-    // Use o codec global utf8 (top-level constant da lib dart:convert)
     await file.writeAsString(
       csv,
       encoding: utf8,
-      flush: true, // garante escrita no disco antes de compartilhar
+      flush: true, 
     );
     return file.path;
   }
