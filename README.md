@@ -32,12 +32,12 @@ O **JornadaAppAdemicom** é uma solução completa de gestão de clientes e visi
 - **Flutter** 3.x / **Dart** 3.x
 - **Supabase** (Auth + Postgres + RLS)
 - **Pacotes principais**:
-  - `supabase_flutter` — integração Supabase
-  - `connectivity_plus` ≥ 6.x — detecta reconexão (List<ConnectivityResult>)
-  - `shared_preferences` — cache e fila offline
+  - `supabase_flutter` - integração Supabase
+  - `connectivity_plus` ≥ 6.x - detecta reconexão (List<ConnectivityResult>)
+  - `shared_preferences` - cache e fila offline
   - `intl` — formatação de datas
-  - `mask_text_input_formatter` — máscaras de telefone/CEP
-  - `uuid` — geração de IDs únicos
+  - `mask_text_input_formatter` - máscaras de telefone/CEP
+  - `uuid` - geração de IDs únicos
     
 ## 🔄 Como funciona o Offline‑First
 
