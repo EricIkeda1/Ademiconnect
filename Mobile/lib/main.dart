@@ -4,6 +4,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'telas/login.dart';
 import 'telas/gestor/home_gestor.dart';
 import 'telas/consultor/home_consultor.dart';
@@ -27,6 +28,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   debugPrint('✅ Iniciando app: WidgetsBinding OK');
 
+  // Notificações locais: não inicializar no Web
   if (!kIsWeb) {
     try {
       flutterLocalNotificationsPlugin = await NotificationService.initialize();
@@ -38,12 +40,12 @@ void main() async {
 
   await loadEnv();
 
-  final supabaseUrl = dotenv.get('SUPABASE_URL');
-  final supabaseAnonKey = dotenv.get('SUPABASE_ANON_KEY');
+  final supabaseUrl = dotenv.get('SUPABASE_URL', fallback: '');
+  final supabaseAnonKey = dotenv.get('SUPABASE_ANON_KEY', fallback: '');
 
   if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
     debugPrint('❌ URL ou chave do Supabase não encontradas no .env');
-    runApp(const ErrorScreen(error: 'Configuração do Supabase incorreta.\nVerifique o arquivo .env.'));
+    runApp(ErrorScreen(error: 'Configuração do Supabase incorreta.\nVerifique o arquivo .env.'));
     return;
   }
 
@@ -56,7 +58,7 @@ void main() async {
   } catch (e, s) {
     debugPrint('❌ Falha ao inicializar Supabase: $e');
     debugPrint('❌ Stack trace: $s');
-    runApp(const ErrorScreen(error: 'Erro ao conectar ao banco de dados.\nVerifique sua conexão com a internet.'));
+    runApp(ErrorScreen(error: 'Erro ao conectar ao banco de dados.\nVerifique sua conexão com a internet.'));
     return;
   }
 
@@ -99,12 +101,14 @@ class _MyAppState extends State<MyApp> {
       supportedLocales: const [
         Locale('pt', 'BR'),
       ],
-      home: const AuthGate(),
+      // IMPORTANTE: não usar const aqui, pois dependerá de stream/sessão
+      home: AuthGate(),
+      // IMPORTANTE: mapa de rotas com closures nunca é const
       routes: {
-        '/login': (context) => const LoginPage(),
-        '/gestor': (context) => const HomeGestor(),
-        '/consultor': (context) => const HomeConsultor(),
-        '/recuperar': (context) => const RecuperarSenhaPage(),
+        '/login': (context) => LoginPage(),
+        '/gestor': (context) => HomeGestor(),
+        '/consultor': (context) => HomeConsultor(),
+        '/recuperar': (context) => RecuperarSenhaPage(),
       },
     );
   }
@@ -135,9 +139,11 @@ class AuthGate extends StatelessWidget {
 
         final session = Supabase.instance.client.auth.currentSession;
         if (session == null) {
-          return const LoginPage();
+          // Não usar const: depende do estado de autenticação
+          return LoginPage();
         }
 
+        // Redireciona por tipo de usuário
         return const UserTypeRedirector();
       },
     );
@@ -150,7 +156,8 @@ class UserTypeRedirector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final client = Supabase.instance.client;
-    final userId = client.auth.currentSession?.user?.id; 
+    final userId = client.auth.currentSession?.user.id;
+
     if (userId == null) {
       return const Scaffold(
         body: Center(
@@ -196,7 +203,7 @@ class UserTypeRedirector extends StatelessWidget {
             body: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: [
+                children: const [
                   Icon(Icons.cloud_off, color: Colors.red, size: 60),
                   SizedBox(height: 16),
                   Text('Erro de conexão', style: TextStyle(fontSize: 18)),
@@ -208,9 +215,9 @@ class UserTypeRedirector extends StatelessWidget {
           );
         }
 
-        return snapshot.hasData && snapshot.data != null
-            ? const HomeGestor()
-            : const HomeConsultor();
+        final isGestor = snapshot.hasData && snapshot.data != null;
+        // Não usar const: depende do resultado do Future
+        return isGestor ? HomeGestor() : HomeConsultor();
       },
     );
   }

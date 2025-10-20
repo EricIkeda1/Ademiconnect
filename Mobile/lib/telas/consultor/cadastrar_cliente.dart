@@ -310,13 +310,29 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                         const SizedBox(height: 24),
                         Text('Observações', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 16),
-                        TextFormField(controller: _observacoesCtrl, maxLines: 3, decoration: InputDecoration(hintText: 'Ex: cliente solicitou entrega no horário da tarde', filled: true, fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
+                        TextFormField(
+                          controller: _observacoesCtrl,
+                          maxLines: 3,
+                          decoration: InputDecoration(
+                            hintText: 'Ex: cliente solicitou entrega no horário da tarde',
+                            filled: true,
+                            fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
                         const SizedBox(height: 24),
                         Row(
                           children: [
                             Expanded(child: OutlinedButton(onPressed: _limparCampos, child: const Text('Limpar'))),
                             const SizedBox(width: 12),
-                            Expanded(child: FilledButton(onPressed: _isLoading ? null : _salvarCliente, child: _isLoading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Cadastrar'))),
+                            Expanded(
+                              child: FilledButton(
+                                onPressed: _isLoading ? null : _salvarCliente,
+                                child: _isLoading
+                                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                                    : const Text('Cadastrar'),
+                              ),
+                            ),
                           ],
                         ),
                       ],
