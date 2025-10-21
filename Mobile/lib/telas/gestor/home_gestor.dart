@@ -4,7 +4,7 @@ import '../widgets/custom_navbar.dart';
 import 'widgets/stat_card.dart';
 import 'minhas_visitas.dart';
 import 'cadastrar_consultores.dart';
-import 'todos_clientes_tab.dart';
+import 'todos_consultores_tab.dart'; // alterado
 import 'relatorios_tab.dart';
 
 class HomeGestor extends StatefulWidget {
@@ -198,14 +198,13 @@ class _HomeGestorState extends State<HomeGestor> {
                   child: _buildStatsCardGrid(),
                 ),
               ),
-              // MENU com laterais reduzidas
               SliverPersistentHeader(
                 pinned: true,
                 delegate: _TabsHeaderDelegate(
                   Container(
                     height: 56,
                     alignment: Alignment.centerLeft,
-                    padding: const EdgeInsets.symmetric(horizontal: 4), // era 8
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
                     decoration: BoxDecoration(
                       color: const Color(0xFFdcddde),
                       borderRadius: BorderRadius.circular(12),
@@ -218,7 +217,7 @@ class _HomeGestorState extends State<HomeGestor> {
                         tabBarTheme: const TabBarThemeData(
                           dividerColor: Colors.transparent,
                           indicatorSize: TabBarIndicatorSize.tab,
-                          labelPadding: EdgeInsets.symmetric(horizontal: 10), // era 12
+                          labelPadding: EdgeInsets.symmetric(horizontal: 10),
                           labelColor: Colors.black,
                           unselectedLabelColor: Colors.black54,
                         ),
@@ -233,9 +232,9 @@ class _HomeGestorState extends State<HomeGestor> {
                           boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 2)],
                         ),
                         tabs: [
-                          Tab(text: 'Minhas Visitas'),
-                          Tab(text: 'Cadastrar Cliente'),
-                          Tab(text: 'Meus Clientes'),
+                          Tab(text: 'Visitas da Equipe'),
+                          Tab(text: 'Cadastrar Consultor'),
+                          Tab(text: 'Todos os Consultores'), // alterado
                           Tab(text: 'Exportar Dados'),
                         ],
                       ),
@@ -250,7 +249,7 @@ class _HomeGestorState extends State<HomeGestor> {
               children: [
                 MinhasVisitasPage(),
                 ConsultoresTab(),
-                TodosClientesTab(),
+                TodosConsultoresTab(), // alterado
                 RelatoriosTab(),
               ],
             ),
