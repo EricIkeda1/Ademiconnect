@@ -17,7 +17,6 @@ class _MinhasVisitasPageState extends State<MinhasVisitasPage> with TickerProvid
   final SupabaseClient _client = Supabase.instance.client;
   final _debouncer = _Debouncer(const Duration(milliseconds: 250));
 
-  // Estados de expansão por consultor
   final Map<String, bool> _pastaExpandedPorConsultor = {};
   final Map<String, bool> _proxExpandedPorConsultor = {};
   final Map<String, bool> _finExpandedPorConsultor = {};
@@ -68,7 +67,6 @@ class _MinhasVisitasPageState extends State<MinhasVisitasPage> with TickerProvid
           final nome = c['nome']?.toString();
           if (id != null && uid != null && nome != null) {
             list.add(Consultor(id: id, uid: uid, nome: nome));
-            // Inicializa estados de expansão
             _pastaExpandedPorConsultor[id] = false;
             _proxExpandedPorConsultor[id] = false;
             _finExpandedPorConsultor[id] = false;
@@ -147,12 +145,10 @@ class _MinhasVisitasPageState extends State<MinhasVisitasPage> with TickerProvid
     if (_query.isEmpty) return _consultores;
 
     return _consultores.where((consultor) {
-      // Filtra por nome do consultor
       if (consultor.nome.toLowerCase().contains(_query.toLowerCase())) {
         return true;
       }
 
-      // Filtra por clientes do consultor (se já carregados)
       final clientes = _clientesPorConsultor[consultor.id];
       if (clientes != null) {
         return clientes.any((cliente) =>
@@ -247,7 +243,7 @@ class _MinhasVisitasPageState extends State<MinhasVisitasPage> with TickerProvid
 Widget _buildHeader() {
   final cs = Theme.of(context).colorScheme;
   return Padding(
-    padding: const EdgeInsets.fromLTRB(16, 16, 16, 20), // igual ao Todos os Clientes
+    padding: const EdgeInsets.fromLTRB(16, 16, 16, 20), 
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -260,12 +256,12 @@ Widget _buildHeader() {
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(
-            Icons.calendar_today_rounded, // agenda
+            Icons.calendar_today_rounded,
             color: cs.onPrimaryContainer,
-            size: 28, // mesmo tamanho usado em "Todos os Clientes"
+            size: 28, 
           ),
         ),
-        const SizedBox(width: 16), // mesmo espaçamento
+        const SizedBox(width: 16),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -485,7 +481,6 @@ Widget _buildHeader() {
     final isLoading = _loadingClientes[consultor.id] == true;
     final clientes = _clientesPorConsultor[consultor.id];
 
-    // Inicializa com listas vazias do tipo correto
     List<ClienteVisita> proximas = [];
     List<ClienteVisita> finalizados = [];
 
@@ -504,16 +499,13 @@ Widget _buildHeader() {
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: _AnimatedSizeExpansionCard(
-          // Título da “pasta” com nome do consultor
           title: consultor.nome,
           expanded: pastaExpanded,
           onChanged: (v) async {
-            // Abrir/fechar pasta do consultor
             _pastaExpandedPorConsultor[consultor.id] = v;
             setState(() {});
 
             if (v) {
-              // Recarrega sempre ao abrir (troque por if (clientes == null) se quiser só na primeira vez)
               await _carregarClientesDoConsultor(consultor);
             }
           },
@@ -523,7 +515,6 @@ Widget _buildHeader() {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Subcabeçalho com avatar/contagem
                 Row(
                   children: [
                     Container(
@@ -697,7 +688,6 @@ Widget _buildHeader() {
               const SliverToBoxAdapter(child: SizedBox(height: 12)),
               SliverToBoxAdapter(child: _buildHeader()),
               
-              // Barra de pesquisa
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -726,7 +716,6 @@ Widget _buildHeader() {
                 ),
               ),
 
-              // Lista de consultores
               if (_isLoading)
                 const SliverToBoxAdapter(child: Center(child: CircularProgressIndicator()))
               else if (_error != null)

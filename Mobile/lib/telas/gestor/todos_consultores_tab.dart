@@ -2,16 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ConsultorResumo {
-  final String id;   
-  final String uid;  
+  final String id;
+  final String uid;
   final String nome;
   final bool ativo;
-  ConsultorResumo({required this.id, required this.uid, required this.nome, required this.ativo});
+  const ConsultorResumo({
+    required this.id,
+    required this.uid,
+    required this.nome,
+    required this.ativo,
+  });
 }
 
 class TodosConsultoresTab extends StatefulWidget {
   const TodosConsultoresTab({super.key});
-
   @override
   State<TodosConsultoresTab> createState() => _TodosConsultoresTabState();
 }
@@ -53,11 +57,12 @@ class _TodosConsultoresTabState extends State<TodosConsultoresTab> {
           }
         }
       }
-
       setState(() => _consultores = list);
-    } catch (e) {
+    } on PostgrestException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar consultores: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao carregar consultores: ${e.message}')),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -113,14 +118,18 @@ class _TodosConsultoresTabState extends State<TodosConsultoresTab> {
           const SizedBox(width: 16),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Todos os Consultores',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: cs.onSurface,
-                      )),
+              Text(
+                'Todos os Consultores',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface,
+                    ),
+              ),
               const SizedBox(height: 4),
-              Text('Gerencie perfis, exclusões e transferência de clientes',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+              Text(
+                'Gerencie perfis, exclusões e transferência de clientes',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+              ),
             ]),
           ),
         ],
@@ -140,12 +149,16 @@ class _TodosConsultoresTabState extends State<TodosConsultoresTab> {
           children: [
             Icon(Icons.group_outlined, size: 64, color: cs.onSurface.withOpacity(0.4)),
             const SizedBox(height: 16),
-            Text('Nenhum consultor encontrado',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(color: cs.onSurface.withOpacity(0.7))),
+            Text(
+              'Nenhum consultor encontrado',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(color: cs.onSurface.withOpacity(0.7)),
+            ),
             const SizedBox(height: 8),
-            Text('Verifique os consultores do gestor e as permissões de leitura (RLS).',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.onSurface.withOpacity(0.5))),
+            Text(
+              'Verifique policies de leitura (RLS).',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.onSurface.withOpacity(0.5)),
+            ),
           ],
         ),
       ),
@@ -198,7 +211,7 @@ class _TodosConsultoresTabState extends State<TodosConsultoresTab> {
                 _adminActionTile(
                   icon: Icons.edit_outlined,
                   label: 'Editar perfil e dados',
-                  subtitle: 'Atualize nome, status e informações do consultor',
+                  subtitle: 'Atualize nome e status do consultor',
                   onTap: () => _onEditarConsultor(c),
                 ),
                 const SizedBox(height: 8),
@@ -212,7 +225,7 @@ class _TodosConsultoresTabState extends State<TodosConsultoresTab> {
                 _adminActionTile(
                   icon: Icons.delete_outline_rounded,
                   label: 'Apagar consultor',
-                  subtitle: 'Remove o consultor (prefira transferir clientes antes)',
+                  subtitle: 'Transfira clientes antes de apagar',
                   danger: true,
                   onTap: () => _onApagarConsultor(c),
                 ),
@@ -320,7 +333,6 @@ class _TodosConsultoresTabState extends State<TodosConsultoresTab> {
         ],
       ),
     );
-
     if (ok != true) return;
 
     try {
@@ -332,13 +344,28 @@ class _TodosConsultoresTabState extends State<TodosConsultoresTab> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Consultor atualizado com sucesso.')));
       await _loadConsultores();
-    } catch (e) {
+    } on PostgrestException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao atualizar consultor: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Atualização bloqueada por RLS/SQL: ${e.message}')));
     }
   }
 
   Future<void> _onApagarConsultor(ConsultorResumo c) async {
+    final preRes = await _client
+        .from('clientes')
+        .select('id')
+        .eq('consultor_uid_t', c.uid)
+        .count(CountOption.exact);
+
+    final int count = preRes.count ?? 0;
+    if (count > 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Transfira os clientes antes de apagar o consultor.')),
+      );
+      return;
+    }
+
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -358,64 +385,139 @@ class _TodosConsultoresTabState extends State<TodosConsultoresTab> {
     if (confirmar != true) return;
 
     try {
-      await _client.from('consultores').delete().eq('id', c.id);
+      final del = await _client.from('consultores').delete().eq('id', c.id).select('id');
+      final apagados = (del is List) ? del.length : 0;
+      if (apagados == 0) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Remoção bloqueada por RLS ou registro inexistente.')),
+        );
+        return;
+      }
+
+      final resp = await _client.functions.invoke('delete-user', body: {'uid': c.uid});
+      if (resp.status != 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Falha ao apagar no Auth (${resp.status}): ${resp.data ?? 'sem detalhe'}')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Consultor removido. Conta do Auth excluída.')),
+        );
+      }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Consultor removido.')));
       await _loadConsultores();
-    } catch (e) {
+    } on PostgrestException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao remover consultor: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Remoção bloqueada por RLS/SQL: ${e.message}')));
     }
   }
 
   Future<void> _onTransferirClientes(ConsultorResumo origem) async {
     final destinos = _consultores.where((x) => x.id != origem.id).toList();
     if (destinos.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Não há outro consultor para transferir clientes.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não há outro consultor para transferir clientes.')),
+      );
       return;
     }
-    ConsultorResumo? destinoSel;
+
+    ConsultorResumo? destinoSel = destinos.first;
 
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Transferir clientes'),
-        content: StatefulBuilder(
-          builder: (ctx, setS) => DropdownButtonFormField<ConsultorResumo>(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: const Text('Transferir clientes'),
+          content: DropdownButtonFormField<ConsultorResumo>(
             value: destinoSel,
-            items: destinos.map((d) => DropdownMenuItem(value: d, child: Text(d.nome))).toList(),
+            items: destinos.map((d) {
+              final disabled = d.uid == origem.uid;
+              return DropdownMenuItem(
+                value: disabled ? null : d,
+                enabled: !disabled,
+                child: Text(d.nome + (disabled ? ' (atual)' : '')),
+              );
+            }).toList(),
             onChanged: (v) => setS(() => destinoSel = v),
             decoration: const InputDecoration(labelText: 'Transferir para'),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+            ElevatedButton.icon(
+              onPressed: (destinoSel != null && destinoSel!.uid != origem.uid)
+                  ? () => Navigator.pop(ctx, true)
+                  : null,
+              icon: const Icon(Icons.swap_horiz_rounded),
+              label: const Text('Transferir'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          ElevatedButton.icon(
-            onPressed: destinoSel == null ? null : () => Navigator.pop(ctx, true),
-            icon: const Icon(Icons.swap_horiz_rounded),
-            label: const Text('Transferir'),
-          ),
-        ],
       ),
     );
-
     if (ok != true || destinoSel == null) return;
-    final ConsultorResumo destino = destinoSel!;
 
+    final destino = destinoSel!;
     try {
-      await _client
+      final current = _client.auth.currentSession?.user.id;
+      if (current == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sessão expirada. Faça login novamente.')),
+        );
+        return;
+      }
+
+      final pre = await _client
+          .from('clientes')
+          .select('id')
+          .eq('consultor_uid_t', origem.uid)
+          .count(CountOption.exact);
+      final preCount = pre.count ?? 0;
+      if (preCount == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Origem não possui clientes com esse UID.')),
+        );
+        return;
+      }
+
+      final uids = [origem.uid, destino.uid];
+      final inList = '("${uids.map((e) => e.replaceAll('"', '\\"')).join('","')}")';
+      final scope = await _client
+          .from('consultores')
+          .select('uid')
+          .eq('gestor_id', current)
+          .filter('uid', 'in', inList);
+
+      if (scope is! List || scope.length != 2) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Origem ou destino fora do seu time (RLS).')),
+        );
+        return;
+      }
+
+      final updated = await _client
           .from('clientes')
           .update({'consultor_uid_t': destino.uid})
-          .eq('consultor_uid_t', origem.uid);
+          .eq('consultor_uid_t', origem.uid)
+          .select('id');
 
+      final afetados = (updated is List) ? updated.length : 0;
+      if (afetados == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('RLS bloqueou a transferência ou o filtro não encontrou linhas.')),
+        );
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$afetados clientes transferidos de ${origem.nome} para ${destino.nome}.')),
+      );
+    } on PostgrestException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Clientes transferidos de ${origem.nome} para ${destino.nome}.')),
+        SnackBar(content: Text('Transferência bloqueada por RLS/SQL: ${e.message}')),
       );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao transferir clientes: $e')));
     }
   }
 
