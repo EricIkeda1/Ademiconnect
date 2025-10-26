@@ -14,6 +14,31 @@ const _kSuccess = Color(0xFF2E7D32);
 const _kInfo = Color(0xFF1565C0);
 const _kAccent = Color(0xFF4F46E5);
 
+final DateFormat _fmtHora = DateFormat('HH:mm');
+final DateFormat _fmtA = DateFormat('EEE, d MMM', 'pt_BR');
+final DateFormat _fmtB = DateFormat('EEE, d MMM y', 'pt_BR');
+
+class VisitVM {
+  final String id;
+  final String estabelecimento;
+  final String enderecoCompleto;
+  final String dataFmt;
+  final IconData icone;
+  final String statusTxt;
+  final Color corFundo;
+  final Color corTexto;
+  const VisitVM({
+    required this.id,
+    required this.estabelecimento,
+    required this.enderecoCompleto,
+    required this.dataFmt,
+    required this.icone,
+    required this.statusTxt,
+    required this.corFundo,
+    required this.corTexto,
+  });
+}
+
 class MinhasVisitasTab extends StatefulWidget {
   const MinhasVisitasTab({super.key});
 
@@ -33,7 +58,6 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
 
   List<Map<String, dynamic>>? _cacheProximas;
   List<Map<String, dynamic>>? _cacheFinalizados;
-  Map<String, List<Map<String, dynamic>>>? _cacheTodasAgrupado;
 
   final Set<String> _ruasTodas = <String>{};
   String? _ruaSelecionada;
@@ -61,7 +85,6 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
   void _invalidateCaches() {
     _cacheProximas = null;
     _cacheFinalizados = null;
-    _cacheTodasAgrupado = null;
   }
 
   Stream<List<Map<String, dynamic>>> get _meusClientesStream {
@@ -118,30 +141,18 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
     }
   }
 
-  String _formatarDataVisita(String? dataVisitaStr, String? horaVisitaStr) {
-    if (dataVisitaStr == null || dataVisitaStr.isEmpty) return 'Data não informada';
-    try {
-      DateTime data = DateTime.parse(dataVisitaStr).toLocal();
-      if (horaVisitaStr != null && horaVisitaStr.isNotEmpty) {
-        final p = horaVisitaStr.split(':');
-        final h = int.tryParse(p[0]) ?? 0;
-        final m = p.length > 1 ? int.tryParse(p[1]) ?? 0 : 0;
-        final s = p.length > 2 ? int.tryParse(p[2]) ?? 0 : 0;
-        data = DateTime(data.year, data.month, data.day, h, m, s);
-      }
-      final hoje = DateTime.now();
-      final amanha = DateTime(hoje.year, hoje.month, hoje.day + 1);
-      final horaExibida = DateFormat('HH:mm').format(data);
-      if (data.year == hoje.year && data.month == hoje.month && data.day == hoje.day) {
-        return 'Hoje às $horaExibida';
-      } else if (data.year == amanha.year && data.month == amanha.month && data.day == amanha.day) {
-        return 'Amanhã às $horaExibida';
-      } else {
-        final format = data.year == hoje.year ? 'EEE, d MMM' : 'EEE, d MMM y';
-        return '${_capitalize(DateFormat(format, "pt_BR").format(data))} às $horaExibida';
-      }
-    } catch (_) {
-      return 'Data inválida';
+  String _formatarDataVisitaDT(DateTime? d) {
+    if (d == null) return 'Data não informada';
+    final hoje = DateTime.now();
+    final amanha = DateTime(hoje.year, hoje.month, hoje.day + 1);
+    final horaExibida = _fmtHora.format(d);
+    if (d.year == hoje.year && d.month == hoje.month && d.day == hoje.day) {
+      return 'Hoje às $horaExibida';
+    } else if (d.year == amanha.year && d.month == amanha.month && d.day == amanha.day) {
+      return 'Amanhã às $horaExibida';
+    } else {
+      final base = d.year == hoje.year ? _fmtA : _fmtB;
+      return '${_capitalize(base.format(d))} às $horaExibida';
     }
   }
 
@@ -155,23 +166,22 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
       };
     }
     try {
-      DateTime data = DateTime.parse(dataVisitaStr).toLocal();
+      DateTime d = DateTime.parse(dataVisitaStr).toLocal();
       if (horaVisitaStr != null && horaVisitaStr.isNotEmpty) {
         final p = horaVisitaStr.split(':');
         final h = int.tryParse(p[0]) ?? 0;
         final m = p.length > 1 ? int.tryParse(p[1]) ?? 0 : 0;
         final s = p.length > 2 ? int.tryParse(p[2]) ?? 0 : 0;
-        data = DateTime(data.year, data.month, data.day, h, m, s);
+        d = DateTime(d.year, d.month, d.day, h, m, s);
       } else {
-        data = DateTime(data.year, data.month, data.day, 23, 59, 59);
+        d = DateTime(d.year, d.month, d.day, 23, 59, 59);
       }
       final agora = DateTime.now();
       final hojeInicio = DateTime(agora.year, agora.month, agora.day, 0, 0, 0);
       final hojeFim = DateTime(agora.year, agora.month, agora.day, 23, 59, 59);
-      final ehHoje = (data.isAfter(hojeInicio) && data.isBefore(hojeFim)) ||
-          data.isAtSameMomentAs(hojeInicio) ||
-          data.isAtSameMomentAs(hojeFim);
-      
+      final ehHoje = (d.isAfter(hojeInicio) && d.isBefore(hojeFim)) ||
+          d.isAtSameMomentAs(hojeInicio) ||
+          d.isAtSameMomentAs(hojeFim);
       if (ehHoje) {
         return {
           'icone': Icons.flag_outlined,
@@ -179,7 +189,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
           'corFundo': _kInfo.withOpacity(.10),
           'corTexto': _kInfo,
         };
-      } else if (data.isBefore(hojeInicio)) {
+      } else if (d.isBefore(hojeInicio)) {
         return {
           'icone': Icons.check_circle_outline,
           'texto': 'Realizada',
@@ -309,52 +319,65 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
     final visiveis = termos.where((t) => _query.isEmpty || t.toLowerCase().contains(_query.toLowerCase())).toList();
     if (visiveis.isEmpty) return const SizedBox.shrink();
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (final t in visiveis)
-            Material(
-              color: _ruaSelecionada == t ? _kPrimary.withOpacity(.08) : Colors.white,
+    Widget buildChip(String t) {
+      final selecionado = _ruaSelecionada == t;
+      return Material(
+        color: selecionado ? _kPrimary.withOpacity(.08) : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: () {
+            if (!mounted) return;
+            setState(() {
+              if (_ruaSelecionada != t) {
+                _ruaSelecionada = t;
+                _searchCtrl.text = t;
+                _query = t;
+                _showChips = false;
+              } else {
+                _ruaSelecionada = null;
+                _searchCtrl.clear();
+                _query = '';
+              }
+              _invalidateCaches();
+            });
+          },
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              border: Border.all(color: selecionado ? _kPrimary : _kBorder),
               borderRadius: BorderRadius.circular(8),
-              child: InkWell(
-                onTap: () {
-                  if (!mounted) return;
-                  setState(() {
-                    if (_ruaSelecionada != t) {
-                      _ruaSelecionada = t;
-                      _searchCtrl.text = t;
-                      _query = t;
-                      _showChips = false;
-                    } else {
-                      _ruaSelecionada = null;
-                      _searchCtrl.clear();
-                      _query = '';
-                    }
-                    _invalidateCaches();
-                  });
-                },
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: _ruaSelecionada == t ? _kPrimary : _kBorder),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    t,
-                    style: TextStyle(
-                      color: _ruaSelecionada == t ? _kPrimary : _kText,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
+            ),
+            child: Text(
+              t,
+              style: TextStyle(
+                color: selecionado ? _kPrimary : _kText,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
               ),
             ),
-        ],
+          ),
+        ),
+      );
+    }
+
+    const double alturaChips = 160;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: SizedBox(
+        height: alturaChips,
+        child: Scrollbar(
+          thumbVisibility: true,
+          child: ListView.builder(
+            padding: EdgeInsets.zero,
+            itemCount: visiveis.length,
+            itemBuilder: (context, index) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: buildChip(visiveis[index]),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -366,23 +389,122 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
     return rua.contains(_ruaSelecionada!.toLowerCase());
   }
 
-  Widget _buildVisitaItem(Map<String, dynamic> c) {
-    final endereco = ((c['endereco']?.toString()) ?? '').trim();
-    final estabelecimento = ((c['estabelecimento']?.toString()) ?? '').trim().isEmpty
-        ? 'Estabelecimento não informado'
-        : ((c['estabelecimento']?.toString()) ?? '').trim();
-    final cidade = ((c['cidade']?.toString()) ?? '').trim();
-    final estado = ((c['estado']?.toString()) ?? '').trim();
-    final dataStr = c['data_visita']?.toString();
-    final horaStr = c['hora_visita']?.toString();
+  Widget _skeletonShimmer({required Widget child}) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 900),
+      curve: Curves.easeInOut,
+      builder: (context, value, _) {
+        final shimmer = LinearGradient(
+          colors: [const Color(0xFFEFF2F7), const Color(0xFFF7F8FA), const Color(0xFFEFF2F7)],
+          stops: [0.1, 0.5, 0.9],
+          begin: Alignment(-1 - value, -0.3),
+          end: Alignment(1 + value, 0.3),
+        );
+        return ShaderMask(
+          shaderCallback: (rect) => shimmer.createShader(rect),
+          blendMode: BlendMode.srcATop,
+          child: child,
+        );
+      },
+    );
+  }
 
-    final status = _determinarStatus(dataStr, horaVisitaStr: horaStr);
-    final dataFmt = _formatarDataVisita(dataStr, horaStr);
+  Widget _skeletonBar({double height = 12, double width = double.infinity, BorderRadius? radius}) {
+    return Container(
+      height: height,
+      width: width,
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF2F7),
+        borderRadius: radius ?? BorderRadius.circular(6),
+      ),
+    );
+  }
+
+  Widget _skeletonVisitaItem({Key? key}) {
+    return KeyedSubtree(
+      key: key ?? UniqueKey(),
+      child: _cleanCard(
+        padding: const EdgeInsets.all(14),
+        child: _skeletonShimmer(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Expanded(child: _skeletonBar(height: 14, width: 160)),
+                const SizedBox(width: 12),
+                Container(
+                  height: 22,
+                  width: 90,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF2F7),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 10),
+              _skeletonBar(height: 12, width: 220),
+              const SizedBox(height: 6),
+              _skeletonBar(height: 12, width: 160),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _skeletonBar(height: 12, width: 100),
+                  _skeletonBar(height: 30, width: 80, radius: BorderRadius.circular(8)),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  VisitVM _toVM(Map<String, dynamic> c) {
+    final end = (c['endereco'] ?? '').toString().trim();
+    final cidade = (c['cidade'] ?? '').toString().trim();
+    final estado = (c['estado'] ?? '').toString().trim();
+    final ds = (c['data_visita'] ?? '').toString();
+    final hs = (c['hora_visita'] ?? '').toString();
+    DateTime? d;
+    if (ds.isNotEmpty) {
+      try {
+        d = DateTime.parse(ds).toLocal();
+      } catch (_) {}
+    }
+    if (d != null) {
+      if (hs.isNotEmpty) {
+        final p = hs.split(':');
+        final h = int.tryParse(p[0]) ?? 0;
+        final m = p.length > 1 ? int.tryParse(p[1]) ?? 0 : 0;
+        final s = p.length > 2 ? int.tryParse(p[2]) ?? 0 : 0;
+        d = DateTime(d.year, d.month, d.day, h, m, s);
+      } else {
+        d = DateTime(d.year, d.month, d.day, 23, 59, 59);
+      }
+    }
+    final dataFmt = _formatarDataVisitaDT(d);
+    final s = _determinarStatus(ds, horaVisitaStr: hs);
     final enderecoCompleto = [
-      if (endereco.isNotEmpty) endereco,
+      if (end.isNotEmpty) end,
       if (cidade.isNotEmpty || estado.isNotEmpty) '$cidade - $estado',
-    ].where((e) => e.trim().isNotEmpty).join(', ');
+    ].where((e) => e.isNotEmpty).join(', ');
+    return VisitVM(
+      id: (c['id'] ?? '').toString(),
+      estabelecimento: ((c['estabelecimento'] ?? '').toString().trim().isEmpty)
+          ? 'Estabelecimento não informado'
+          : (c['estabelecimento'] ?? '').toString().trim(),
+      enderecoCompleto: enderecoCompleto,
+      dataFmt: dataFmt,
+      icone: s['icone'] as IconData,
+      statusTxt: s['texto'] as String,
+      corFundo: s['corFundo'] as Color,
+      corTexto: s['corTexto'] as Color,
+    );
+  }
 
+  Widget _buildVisitaVM(VisitVM vm, {bool mostrarRota = true}) {
     return _cleanCard(
       padding: const EdgeInsets.all(14),
       child: Column(
@@ -392,49 +514,35 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
             children: [
               Expanded(
                 child: Text(
-                  estabelecimento,
+                  vm.estabelecimento,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: _kTitle,
-                  ),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _kTitle),
                 ),
               ),
               const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: (status['corFundo'] as Color),
+                  color: vm.corFundo,
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: (status['corTexto'] as Color).withOpacity(.25),
-                  ),
+                  border: Border.all(color: vm.corTexto.withOpacity(.25)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      status['icone'] as IconData,
-                      size: 14,
-                      color: status['corTexto'] as Color,
-                    ),
+                    Icon(vm.icone, size: 14, color: vm.corTexto),
                     const SizedBox(width: 6),
                     Text(
-                      status['texto'] as String,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: status['corTexto'] as Color,
-                      ),
+                      vm.statusTxt,
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: vm.corTexto),
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          if (enderecoCompleto.isNotEmpty) ...[
+          if (vm.enderecoCompleto.isNotEmpty) ...[
             const SizedBox(height: 8),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -443,14 +551,10 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    enderecoCompleto,
+                    vm.enderecoCompleto,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: _kText,
-                      height: 1.4,
-                    ),
+                    style: const TextStyle(fontSize: 13, color: _kText, height: 1.4),
                   ),
                 ),
               ],
@@ -461,16 +565,9 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
             children: [
               const Icon(Icons.access_time, size: 16, color: _kMuted),
               const SizedBox(width: 6),
-              Text(
-                dataFmt,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: _kTitle,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              Text(vm.dataFmt, style: const TextStyle(fontSize: 13, color: _kTitle, fontWeight: FontWeight.w500)),
               const Spacer(),
-              if (enderecoCompleto.trim().length > 3)
+              if (mostrarRota && vm.enderecoCompleto.trim().length > 3)
                 TextButton.icon(
                   style: TextButton.styleFrom(
                     foregroundColor: _kPrimary,
@@ -480,15 +577,9 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
                       side: const BorderSide(color: _kBorder),
                     ),
                   ),
-                  onPressed: () => _abrirNoGoogleMaps(enderecoCompleto),
+                  onPressed: () => _abrirNoGoogleMaps(vm.enderecoCompleto),
                   icon: const Icon(Icons.map_outlined, size: 16),
-                  label: const Text(
-                    'Rota',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  label: const Text('Rota', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
                 ),
             ],
           ),
@@ -497,19 +588,14 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
     );
   }
 
-  Widget _buildVisitasList(List<Map<String, dynamic>> itens) {
+  Widget _buildVisitasVMList(List<VisitVM> itens, {bool mostrarRota = true}) {
     return ListView.builder(
       physics: const NeverScrollableScrollPhysics(),
       shrinkWrap: true,
       itemCount: itens.length,
       padding: EdgeInsets.zero,
-      itemBuilder: (_, i) => _buildVisitaItem(itens[i]),
+      itemBuilder: (_, i) => _buildVisitaVM(itens[i], mostrarRota: mostrarRota),
     );
-  }
-
-  String _abreviarUidComoNome(String uid) {
-    if (uid.isEmpty) return 'Consultor';
-    return 'Consultor ${uid.substring(0, uid.length >= 6 ? 6 : uid.length)}';
   }
 
   Widget _buildTodasVisitasSection() {
@@ -517,7 +603,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
       stream: _todasVisitasStream,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return _expansionSkeleton(title: 'Todas as Visitas');
+          return Column(children: List.generate(3, (i) => _skeletonVisitaItem(key: ValueKey('sk_all_$i'))));
         }
         if (snap.hasError) {
           return _errorBox('Erro: ${snap.error}');
@@ -532,85 +618,73 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
           return rua.contains(_query.toLowerCase());
         }
 
-        final filtrados = todos.where((c) => matchesTextoRua(c) && _matchChipsRua(c)).toList();
-
-        if (_cacheTodasAgrupado == null) {
-          final map = <String, List<Map<String, dynamic>>>{};
-          for (final c in filtrados) {
-            final uid = (c['consultor_uid_t']?.toString() ?? '');
-            (map[uid] ??= []).add(c);
+        bool isAgendado(Map<String, dynamic> c) {
+          final ds = c['data_visita']?.toString();
+          DateTime? data;
+          if (ds != null && ds.isNotEmpty) {
+            try {
+              data = DateTime.parse(ds).toLocal();
+            } catch (_) {}
           }
-          _cacheTodasAgrupado = map;
+          final hs = c['hora_visita']?.toString();
+          if (data != null) {
+            if (hs != null && hs.isNotEmpty) {
+              final p = hs.split(':');
+              final h = int.tryParse(p[0]) ?? 0;
+              final m = p.length > 1 ? int.tryParse(p[1]) ?? 0 : 0;
+              final s = p.length > 2 ? int.tryParse(p[2]) ?? 0 : 0;
+              data = DateTime(data.year, data.month, data.day, h, m, s);
+            } else {
+              data = DateTime(data.year, data.month, data.day, 23, 59, 59);
+            }
+          }
+
+          final agora = DateTime.now();
+          final hojeInicio = DateTime(agora.year, agora.month, agora.day, 0, 0, 0);
+          final hojeFim = DateTime(agora.year, agora.month, agora.day, 23, 59, 59);
+
+          if (data == null) return false;
+
+          final ehHoje = (data.isAfter(hojeInicio) && data.isBefore(hojeFim)) ||
+              data.isAtSameMomentAs(hojeInicio) ||
+              data.isAtSameMomentAs(hojeFim);
+
+          return data.isAfter(hojeFim) && !ehHoje;
         }
 
-        final grupos = _cacheTodasAgrupado!;
+        final agendadosFiltrados = todos
+            .where((c) => matchesTextoRua(c) && _matchChipsRua(c) && isAgendado(c))
+            .map(_toVM)
+            .toList();
+
+        if (_todosExpanded) {
+          _ruasTodas
+            ..clear()
+            ..addAll(
+              agendadosFiltrados.map((vm) => vm.enderecoCompleto.split(',').first.trim()).where((s) => s.isNotEmpty),
+            );
+        }
+
+        final count = agendadosFiltrados.length;
+
         return _animatedExpansionCard(
+          key: const ValueKey('sec_todas'),
           title: 'Todas as Visitas',
-          subtitle: '${filtrados.length} registros',
+          subtitle: '$count agendadas',
           icon: Icons.groups_outlined,
           iconColor: _kAccent,
           expanded: _todosExpanded,
           onChanged: (v) => setState(() => _todosExpanded = v),
+          placeholderChild: Column(children: List.generate(2, (i) => _skeletonVisitaItem(key: ValueKey('ph_all_$i')))),
           child: _todosExpanded
-              ? Column(
-                  children: grupos.entries.map((entry) {
-                    final uid = entry.key;
-                    final itens = entry.value;
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: _kBg,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: _kBorder),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: const BoxDecoration(
-                                  color: _kAccent,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _abreviarUidComoNome(uid),
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: _kTitle,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: _kAccent.withOpacity(.1),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                                child: Text(
-                                  '${itens.length}',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: _kAccent,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        _buildVisitasList(itens),
-                      ],
-                    );
-                  }).toList(),
-                )
+              ? (count == 0
+                  ? _emptyBox(
+                      icon: Icons.event_note,
+                      title: 'Sem visitas agendadas',
+                      subtitle: _query.isEmpty && (_ruaSelecionada == null || _ruaSelecionada!.isEmpty)
+                          ? 'Nenhum agendamento futuro encontrado'
+                          : 'Nenhum resultado com esse filtro')
+                  : _buildVisitasVMList(agendadosFiltrados, mostrarRota: false))
               : const SizedBox.shrink(),
         );
       },
@@ -619,30 +693,25 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
 
   Widget _expansionSkeleton({required String title}) {
     return _cleanCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: _kTitle,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ...List.generate(
-            2,
-            (i) => Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              height: 72,
-              decoration: BoxDecoration(
-                color: _kBg,
-                borderRadius: BorderRadius.circular(8),
+      child: _skeletonShimmer(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _skeletonBar(height: 16, width: 140),
+            const SizedBox(height: 12),
+            ...List.generate(
+              2,
+              (i) => Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                height: 72,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF2F7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -663,24 +732,9 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
             child: Icon(icon, size: 28, color: _kMuted),
           ),
           const SizedBox(height: 16),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: _kTitle,
-            ),
-          ),
+          Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _kTitle)),
           const SizedBox(height: 6),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 13,
-              color: _kText,
-              height: 1.5,
-            ),
-          ),
+          Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: _kText, height: 1.5)),
         ],
       ),
     );
@@ -699,21 +753,14 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
         children: [
           const Icon(Icons.error_outline, color: Color(0xFFD32F2F), size: 18),
           const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              msg,
-              style: const TextStyle(
-                color: Color(0xFFD32F2F),
-                fontSize: 13,
-              ),
-            ),
-          ),
+          Expanded(child: Text(msg, style: const TextStyle(color: Color(0xFFD32F2F), fontSize: 13))),
         ],
       ),
     );
   }
 
   Widget _animatedExpansionCard({
+    Key? key,
     required String title,
     String? subtitle,
     IconData? icon,
@@ -721,8 +768,11 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
     required bool expanded,
     required ValueChanged<bool> onChanged,
     required Widget child,
+    bool isLoading = false,
+    Widget? placeholderChild, 
   }) {
     return _AnimatedSizeExpansionCard(
+      key: key,
       title: title,
       subtitle: subtitle,
       icon: icon,
@@ -731,6 +781,8 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
       onChanged: onChanged,
       child: child,
       vsync: this,
+      isLoading: isLoading,
+      placeholderChild: placeholderChild, 
     );
   }
 
@@ -754,22 +806,12 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Pesquisar',
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                        color: _kTitle,
-                      ),
-                    ),
+                    const Text('Pesquisar', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: _kTitle)),
                     const SizedBox(height: 10),
                     TextField(
                       controller: _searchCtrl,
                       textInputAction: TextInputAction.search,
-                      decoration: _obterDecoracaoCampo(
-                        'Nome da rua',
-                        hint: 'Digite para filtrar...',
-                      ),
+                      decoration: _obterDecoracaoCampo('Nome da rua', hint: 'Digite para filtrar...'),
                       onTap: () => setState(() => _showChips = true),
                       onSubmitted: (_) => setState(() => _showChips = false),
                     ),
@@ -785,9 +827,39 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return Column(
                       children: [
-                        _expansionSkeleton(title: 'Próximas Visitas'),
-                        _expansionSkeleton(title: 'Todas as Visitas'),
-                        _expansionSkeleton(title: 'Visitas Finalizadas'),
+                        _animatedExpansionCard(
+                          key: const ValueKey('sec_proximas'),
+                          title: 'Próximas Visitas',
+                          icon: Icons.event_available_outlined,
+                          iconColor: _kSuccess,
+                          expanded: _proxExpanded,
+                          onChanged: (v) => setState(() => _proxExpanded = v),
+                          isLoading: _proxExpanded,
+                          placeholderChild: Column(children: List.generate(3, (i) => _skeletonVisitaItem(key: ValueKey('sk_prox_$i')))),
+                          child: const SizedBox.shrink(),
+                        ),
+                        _animatedExpansionCard(
+                          key: const ValueKey('sec_todas'),
+                          title: 'Todas as Visitas',
+                          icon: Icons.groups_outlined,
+                          iconColor: _kAccent,
+                          expanded: _todosExpanded,
+                          onChanged: (v) => setState(() => _todosExpanded = v),
+                          isLoading: _todosExpanded,
+                          placeholderChild: Column(children: List.generate(3, (i) => _skeletonVisitaItem(key: ValueKey('sk_all_$i')))),
+                          child: const SizedBox.shrink(),
+                        ),
+                        _animatedExpansionCard(
+                          key: const ValueKey('sec_finalizadas'),
+                          title: 'Visitas Finalizadas',
+                          icon: Icons.check_circle_outline,
+                          iconColor: _kText,
+                          expanded: _finExpanded,
+                          onChanged: (v) => setState(() => _finExpanded = v),
+                          isLoading: _finExpanded,
+                          placeholderChild: Column(children: List.generate(3, (i) => _skeletonVisitaItem(key: ValueKey('sk_fin_$i')))),
+                          child: const SizedBox.shrink(),
+                        ),
                       ],
                     );
                   }
@@ -797,9 +869,6 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
                   }
 
                   final all = snapshot.data ?? [];
-                  _ruasTodas
-                    ..clear()
-                    ..addAll(all.map((c) => (c['endereco'] ?? '').toString()).where((s) => s.trim().isNotEmpty));
 
                   bool matchesTextoRua(Map<String, dynamic> c) {
                     if (_query.isEmpty) return true;
@@ -807,8 +876,14 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
                     final rua = ((any is String) ? any : (any?.toString() ?? '')).toLowerCase();
                     return rua.contains(_query.toLowerCase());
                   }
-
                   final base = all.where((c) => matchesTextoRua(c) && _matchChipsRua(c)).toList();
+
+                  _ruasTodas
+                    ..clear()
+                    ..addAll(
+                      base.map((c) => (c['endereco'] ?? '').toString().trim())
+                          .where((s) => s.isNotEmpty),
+                    );
 
                   final agora = DateTime.now();
                   final hojeIni = DateTime(agora.year, agora.month, agora.day, 0, 0, 0);
@@ -837,18 +912,23 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
                   _cacheProximas ??= base.where((c) => !isPassado(c)).toList();
                   _cacheFinalizados ??= base.where(isPassado).toList();
 
-                  final countProx = _cacheProximas!.length;
-                  final countFin = _cacheFinalizados!.length;
+                  final vmsProx = _cacheProximas!.map(_toVM).toList();
+                  final vmsFin = _cacheFinalizados!.map(_toVM).toList();
+
+                  final countProx = vmsProx.length;
+                  final countFin = vmsFin.length;
 
                   return Column(
                     children: [
                       _animatedExpansionCard(
+                        key: const ValueKey('sec_proximas'),
                         title: 'Próximas Visitas',
                         subtitle: '$countProx agendadas',
                         icon: Icons.event_available_outlined,
                         iconColor: _kSuccess,
                         expanded: _proxExpanded,
                         onChanged: (v) => setState(() => _proxExpanded = v),
+                        placeholderChild: Column(children: List.generate(2, (i) => _skeletonVisitaItem(key: ValueKey('ph_prox_$i')))),
                         child: _proxExpanded
                             ? (countProx == 0
                                 ? _emptyBox(
@@ -857,17 +937,19 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
                                     subtitle: _query.isEmpty && (_ruaSelecionada == null || _ruaSelecionada!.isEmpty)
                                         ? 'Cadastre clientes para agendar visitas'
                                         : 'Nenhum resultado encontrado')
-                                : _buildVisitasList(_cacheProximas!))
+                                : _buildVisitasVMList(vmsProx))
                             : const SizedBox.shrink(),
                       ),
                       _buildTodasVisitasSection(),
                       _animatedExpansionCard(
+                        key: const ValueKey('sec_finalizadas'),
                         title: 'Visitas Finalizadas',
                         subtitle: '$countFin concluídas',
                         icon: Icons.check_circle_outline,
                         iconColor: _kText,
                         expanded: _finExpanded,
                         onChanged: (v) => setState(() => _finExpanded = v),
+                        placeholderChild: Column(children: List.generate(2, (i) => _skeletonVisitaItem(key: ValueKey('ph_fin_$i')))),
                         child: _finExpanded
                             ? (countFin == 0
                                 ? _emptyBox(
@@ -876,7 +958,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
                                     subtitle: _query.isEmpty && (_ruaSelecionada == null || _ruaSelecionada!.isEmpty)
                                         ? 'Visitas concluídas aparecerão aqui'
                                         : 'Nenhum resultado encontrado')
-                                : _buildVisitasList(_cacheFinalizados!))
+                                : _buildVisitasVMList(vmsFin, mostrarRota: false))
                             : const SizedBox.shrink(),
                       ),
                     ],
@@ -901,8 +983,11 @@ class _AnimatedSizeExpansionCard extends StatefulWidget {
   final ValueChanged<bool> onChanged;
   final Widget child;
   final TickerProvider vsync;
+  final bool isLoading;
+  final Widget? placeholderChild; 
 
   const _AnimatedSizeExpansionCard({
+    super.key,
     required this.title,
     this.subtitle,
     this.icon,
@@ -911,6 +996,8 @@ class _AnimatedSizeExpansionCard extends StatefulWidget {
     required this.onChanged,
     required this.child,
     required this.vsync,
+    this.isLoading = false,
+    this.placeholderChild, 
   });
 
   @override
@@ -918,23 +1005,29 @@ class _AnimatedSizeExpansionCard extends StatefulWidget {
 }
 
 class _AnimatedSizeExpansionCardState extends State<_AnimatedSizeExpansionCard>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _ctrl;
   late Animation<double> _turns;
+  late AnimationController _fadeCtrl;
+  late Animation<double> _fadeAnim;
   late bool _expandedLocal;
+  DateTime? _lastTap;
+  bool _showRealChild = false;
 
   @override
   void initState() {
     super.initState();
     _expandedLocal = widget.expanded;
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 200),
-    );
-    _turns = Tween<double>(begin: 0.0, end: 0.5).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
-    );
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
+    _turns = Tween<double>(begin: 0.0, end: 0.5).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
     if (_expandedLocal) _ctrl.value = 1.0;
+
+    _fadeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
+    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeInOut);
+    if (_expandedLocal) {
+      _fadeCtrl.value = 1.0;
+      _showRealChild = true;
+    }
   }
 
   @override
@@ -946,12 +1039,23 @@ class _AnimatedSizeExpansionCardState extends State<_AnimatedSizeExpansionCard>
   }
 
   void _toggle({bool? explicit}) {
+    final now = DateTime.now();
+    if (_lastTap != null && now.difference(_lastTap!) < const Duration(milliseconds: 350)) return;
+    _lastTap = now;
+
     setState(() {
       _expandedLocal = explicit ?? !_expandedLocal;
       if (_expandedLocal) {
+        _showRealChild = false;
         _ctrl.forward();
+        _fadeCtrl.forward(from: 0);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() => _showRealChild = true);
+        });
       } else {
         _ctrl.reverse();
+        _fadeCtrl.reverse(from: 1);
       }
       widget.onChanged(_expandedLocal);
     });
@@ -960,11 +1064,14 @@ class _AnimatedSizeExpansionCardState extends State<_AnimatedSizeExpansionCard>
   @override
   void dispose() {
     _ctrl.dispose();
+    _fadeCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final child = _showRealChild ? widget.child : (widget.placeholderChild ?? const SizedBox(height: 80));
+
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       decoration: BoxDecoration(
@@ -991,11 +1098,7 @@ class _AnimatedSizeExpansionCardState extends State<_AnimatedSizeExpansionCard>
                           color: (widget.iconColor ?? _kPrimary).withOpacity(.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Icon(
-                          widget.icon,
-                          size: 18,
-                          color: widget.iconColor ?? _kPrimary,
-                        ),
+                        child: Icon(widget.icon, size: 18, color: widget.iconColor ?? _kPrimary),
                       ),
                       const SizedBox(width: 12),
                     ],
@@ -1003,34 +1106,25 @@ class _AnimatedSizeExpansionCardState extends State<_AnimatedSizeExpansionCard>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            widget.title,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: _kTitle,
-                            ),
-                          ),
+                          Text(widget.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _kTitle)),
                           if (widget.subtitle != null) ...[
                             const SizedBox(height: 2),
-                            Text(
-                              widget.subtitle!,
-                              style: const TextStyle(
-                                fontSize: 12.5,
-                                color: _kText,
-                              ),
-                            ),
+                            Text(widget.subtitle!, style: const TextStyle(fontSize: 12.5, color: _kText)),
                           ],
                         ],
                       ),
                     ),
+                    if (widget.isLoading) ...[
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: _kMuted),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     RotationTransition(
                       turns: _turns,
-                      child: const Icon(
-                        Icons.keyboard_arrow_down,
-                        color: _kMuted,
-                        size: 22,
-                      ),
+                      child: const Icon(Icons.keyboard_arrow_down, color: _kMuted, size: 22),
                     ),
                   ],
                 ),
@@ -1042,10 +1136,8 @@ class _AnimatedSizeExpansionCardState extends State<_AnimatedSizeExpansionCard>
             curve: Curves.easeInOut,
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
-              constraints: _expandedLocal
-                  ? const BoxConstraints()
-                  : const BoxConstraints(maxHeight: 0.0),
-              child: widget.child,
+              constraints: _expandedLocal ? const BoxConstraints() : const BoxConstraints(maxHeight: 0.0),
+              child: FadeTransition(opacity: _fadeAnim, child: child),
             ),
           ),
         ],
