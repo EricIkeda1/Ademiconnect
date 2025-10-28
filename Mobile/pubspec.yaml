@@ -38,8 +38,10 @@ dependencies:
   flutter_local_notifications: ^19.4.2
   timezone: ^0.10.1
 
-  # OPCIONAL: verificação de internet real (em vez de DNS lookup manual)
-  # internet_connection_checker_plus: ^2.5.1
+  badges: ^3.1.2
+
+  characters: ^1.4.0
+
 
 dev_dependencies:
   flutter_test:

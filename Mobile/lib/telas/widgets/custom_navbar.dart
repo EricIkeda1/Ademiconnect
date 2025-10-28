@@ -1,8 +1,10 @@
+// lib/telas/widgets/custom_navbar.dart
 import 'package:flutter/material.dart';
 
 class CustomNavbar extends StatelessWidget implements PreferredSizeWidget {
   final String nome;
   final String cargo;
+  final TabController? tabController;
   final List<Tab>? tabs;
   final bool tabsNoAppBar;
   final VoidCallback? onLogout;
@@ -13,6 +15,7 @@ class CustomNavbar extends StatelessWidget implements PreferredSizeWidget {
     super.key,
     required this.nome,
     required this.cargo,
+    this.tabController,
     this.tabs,
     this.tabsNoAppBar = true,
     this.onLogout,
@@ -30,13 +33,13 @@ class CustomNavbar extends StatelessWidget implements PreferredSizeWidget {
     final double logoHeight = lerpDouble(32, 24, t);
 
     const Color cinzaBrand = Color(0xFF939598);
-
     final scale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
     final double nomeSize = 16.0 * scale;
     final double cargoSize = 12.0 * scale;
 
     return PreferredSize(
-      preferredSize: Size.fromHeight(toolbarHeight + (tabsNoAppBar && tabs != null ? 60 : 0)),
+      preferredSize: Size.fromHeight(
+          toolbarHeight + (tabsNoAppBar && tabs != null ? 60 : 0)),
       child: AppBar(
         automaticallyImplyLeading: false,
         backgroundColor: Colors.white,
@@ -107,34 +110,42 @@ class CustomNavbar extends StatelessWidget implements PreferredSizeWidget {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF231F20),
                     side: const BorderSide(color: Color(0xFF231F20)),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    textStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    textStyle:
+                        const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6)),
                   ),
-                  onPressed: onLogout ?? () => Navigator.pushReplacementNamed(context, '/login'),
+                  onPressed:
+                      onLogout ?? () => Navigator.pushReplacementNamed(context, '/login'),
                 ),
               ),
             ),
           ],
         ),
-        bottom: tabsNoAppBar && tabs != null
+        bottom: tabsNoAppBar && tabs != null && tabController != null
             ? PreferredSize(
                 preferredSize: const Size.fromHeight(60),
                 child: Container(
-                  color: cinzaBrand, 
-                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                  color: cinzaBrand,
+                  padding: const EdgeInsets.all(10),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: Colors.transparent, 
+                      color: Colors.transparent,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: TabBar(
+                      controller: tabController,
                       isScrollable: true,
-                      labelPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      labelPadding:
+                          const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                       labelColor: Colors.black,
                       unselectedLabelColor: Colors.white,
-                      labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-                      unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                      labelStyle:
+                          const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                      unselectedLabelStyle:
+                          const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                       indicator: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(22),
@@ -162,7 +173,8 @@ class CustomNavbar extends StatelessWidget implements PreferredSizeWidget {
   }
 
   @override
-  Size get preferredSize => Size.fromHeight(68 + (tabsNoAppBar && tabs != null ? 60 : 0));
+  Size get preferredSize =>
+      Size.fromHeight(68 + (tabsNoAppBar && tabs != null ? 60 : 0));
 }
 
 double lerpDouble(double a, double b, double t) => a + (b - a) * t;
