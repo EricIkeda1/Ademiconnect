@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+import 'dart:ui';
 import 'package:flutter/material.dart';
 
 class MenuInferior extends StatefulWidget {
@@ -17,12 +19,18 @@ class MenuInferior extends StatefulWidget {
 }
 
 class _MenuInferiorState extends State<MenuInferior> {
-  // Cores
+  // Paleta
   static const _bg = Color(0xFFFFFFFF);
-  static const _pillA = Color(0xFFEA3124);
-  static const _pillB = Color(0xFFD03025);
-  static const _off = Color(0xFF6B6B6B);
+  static const _pillA = Color(0xFFED3B2E);
+  static const _pillB = Color(0xFFCC2B22);
+  static const _halo = Color(0x33ED3B2E);
   static const _shadow = Color(0x14000000);
+
+  // Geometrias
+  static const double _barH = 74;
+  static const double _pillH = 56;
+  static const double _pillW = 100;
+  static const double _padBottom = 10;
 
   final _items = const [
     _Item(icon: Icons.people_alt_rounded, label: 'Leads'),
@@ -30,13 +38,6 @@ class _MenuInferiorState extends State<MenuInferior> {
     _Item(icon: Icons.place_rounded, label: 'Endereços'),
     _Item(icon: Icons.file_download_rounded, label: 'Exportar'),
   ];
-
-  // Geometria ajustada para o mesmo tamanho da imagem
-  static const double _barH = 68; // altura total da barra
-  static const double _pillH = 54; // altura do "pill" vermelho
-  static const double _pillW = 90; // largura do "pill"
-  static const double _pillRadius = 20;
-  static const double _padBottom = 10;
 
   double _page = 0;
 
@@ -55,25 +56,17 @@ class _MenuInferiorState extends State<MenuInferior> {
 
   void _onScroll() {
     final p = widget.controller.page;
-    if (p != null && p != _page) setState(() => _page = p);
+    if (p != null && p != _page) {
+      setState(() => _page = p);
+    }
   }
 
   Rect _pillRect(Size size) {
     final count = _items.length;
     final slotW = size.width / count;
     final double y = (_barH - _pillH) / 2;
-    final double x =
-        (_page.clamp(0.0, (count - 1).toDouble()) * slotW) + (slotW - _pillW) / 2;
+    final double x = (_page.clamp(0.0, (count - 1).toDouble()) * slotW) + (slotW - _pillW) / 2;
     return Rect.fromLTWH(x, y, _pillW, _pillH);
-  }
-
-  void _onDragEnd(DragEndDetails d) {
-    final target = _page.round();
-    widget.controller.animateToPage(
-      target,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-    );
   }
 
   @override
@@ -82,52 +75,59 @@ class _MenuInferiorState extends State<MenuInferior> {
       top: false,
       child: LayoutBuilder(
         builder: (context, cons) {
-          final pill = _pillRect(Size(cons.maxWidth, _barH));
-          final current = (widget.controller.page ??
-                  widget.controller.initialPage.toDouble())
-              .round();
+          final size = Size(cons.maxWidth, _barH);
+          final pill = _pillRect(size);
+          final isDragging = (_page - _page.round()).abs() > 0.001;
+          final frac = (_page - _page.floor()).clamp(0.0, 1.0);
+          final goingRight = _page >= _page.floorToDouble();
+
+          // Micro inércia
+          final inertia = (goingRight ? frac : - (1 - frac)) * 8.0;
 
           return Container(
             decoration: const BoxDecoration(
               color: _bg,
-              boxShadow: [
-                BoxShadow(color: _shadow, blurRadius: 4, offset: Offset(0, -1)),
-              ],
+              boxShadow: [BoxShadow(color: _shadow, blurRadius: 6, offset: Offset(0, -2))],
             ),
             height: _barH + _padBottom,
             padding: const EdgeInsets.only(bottom: _padBottom),
             child: Stack(
-              alignment: Alignment.center,
               children: [
-                // Fundo gradiente do item ativo
+                // Halo (luz) com parallax
                 Positioned(
-                  left: pill.left,
-                  top: pill.top,
-                  width: pill.width,
-                  height: pill.height,
-                  child: IgnorePointer(
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
+                  left: pill.left - 18 + inertia,
+                  top: pill.top - 10,
+                  width: pill.width + 36,
+                  height: pill.height + 20,
+                  child: ImageFiltered(
+                    imageFilter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                    child: Container(
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [_pillA, _pillB],
-                        ),
-                        borderRadius: BorderRadius.circular(_pillRadius),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x33000000),
-                            blurRadius: 10,
-                            offset: Offset(0, 3),
-                          ),
-                        ],
+                        color: _halo,
+                        borderRadius: BorderRadius.circular(28),
                       ),
                     ),
                   ),
                 ),
 
-                // Itens inativos
+                // Pill "liquid morph"
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      painter: _LiquidPillPainter(
+                        page: _page,
+                        count: _items.length,
+                        pillH: _pillH,
+                        pillW: _pillW,
+                        barH: _barH,
+                        colorA: _pillA,
+                        colorB: _pillB,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Itens clicáveis + animação de proximidade
                 Row(
                   children: List.generate(_items.length, (i) {
                     return Expanded(
@@ -136,32 +136,15 @@ class _MenuInferiorState extends State<MenuInferior> {
                         onTap: () => widget.onChanged(i),
                         child: SizedBox(
                           height: _barH,
-                          child: Center(child: _ItemOff(item: _items[i])),
+                          child: _AnimatedItem(
+                            item: _items[i],
+                            index: i,
+                            page: _page,
+                          ),
                         ),
                       ),
                     );
                   }),
-                ),
-
-                // Item ativo
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: Row(
-                      children: List.generate(_items.length, (i) {
-                        final active = current == i;
-                        return Expanded(
-                          child: AnimatedOpacity(
-                            duration: const Duration(milliseconds: 120),
-                            opacity: active ? 1.0 : 0.0,
-                            child: SizedBox(
-                              height: _barH,
-                              child: Center(child: _ItemOn(item: _items[i])),
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
                 ),
               ],
             ),
@@ -178,52 +161,122 @@ class _Item {
   const _Item({required this.icon, required this.label});
 }
 
-class _ItemOff extends StatelessWidget {
+// Ícone e label com micro-escala e cross-fade conforme proximidade
+class _AnimatedItem extends StatelessWidget {
   final _Item item;
-  const _ItemOff({required this.item});
+  final int index;
+  final double page;
+  const _AnimatedItem({required this.item, required this.index, required this.page});
+
+  static const Color _inactive = Color(0xFF6B6B6B);
 
   @override
   Widget build(BuildContext context) {
-    const color = Color(0xFF6B6B6B);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(item.icon, size: 24, color: color),
-        const SizedBox(height: 6),
-        Text(
-          item.label,
-          style: const TextStyle(
-            fontSize: 11,
-            color: color,
-            fontWeight: FontWeight.w500,
+    final dist = (page - index).abs().clamp(0.0, 1.0);
+    final t = 1.0 - Curves.easeOut.transform(dist); // 0..1 (1 = ativo)
+
+    final iconSize = lerpDouble(24, 28, t)!;
+    final labelSize = lerpDouble(11, 12.5, t)!;
+    final iconColor = Color.lerp(_inactive, Colors.white, t)!;
+    final labelColor = Color.lerp(_inactive, Colors.white, t)!;
+    final fontWeight = t > 0.6 ? FontWeight.w700 : FontWeight.w500;
+
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Transform.scale(
+            scale: lerpDouble(1.0, 1.05, t)!,
+            child: Icon(item.icon, size: iconSize, color: iconColor),
           ),
-        ),
-      ],
+          const SizedBox(height: 6),
+          AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 120),
+            style: TextStyle(fontSize: labelSize, color: labelColor, fontWeight: fontWeight),
+            child: Text(item.label),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _ItemOn extends StatelessWidget {
-  final _Item item;
-  const _ItemOn({required this.item});
+// Painter da pílula com morph orgânico entre posições
+class _LiquidPillPainter extends CustomPainter {
+  final double page;
+  final int count;
+  final double pillH;
+  final double pillW;
+  final double barH;
+  final Color colorA, colorB;
+
+  _LiquidPillPainter({
+    required this.page,
+    required this.count,
+    required this.pillH,
+    required this.pillW,
+    required this.barH,
+    required this.colorA,
+    required this.colorB,
+  });
 
   @override
-  Widget build(BuildContext context) {
-    const white = Colors.white;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(item.icon, size: 26, color: white),
-        const SizedBox(height: 6),
-        Text(
-          item.label,
-          style: const TextStyle(
-            fontSize: 11.5,
-            color: white,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
+  void paint(Canvas canvas, Size size) {
+    final slotW = size.width / count;
+    final y = (barH - pillH) / 2;
+    final base = page.floor().clamp(0, count - 1);
+    final frac = (page - base).clamp(0.0, 1.0);
+    final startX = (base * slotW) + (slotW - pillW) / 2;
+    final endX = (((base + 1).clamp(0, count - 1)) * slotW) + (slotW - pillW) / 2;
+
+    // Largura orgânica: leve estiramento no meio da transição
+    final stretch = 1 + 0.08 * math.sin(frac * math.pi);
+    final w = pillW * stretch;
+    final x = lerpDouble(startX, endX, frac)! + (pillW - w) / 2;
+
+    final r = RRect.fromRectAndRadius(
+      Rect.fromLTWH(x, y, w, pillH),
+      const Radius.circular(22),
     );
+
+    // Gradiente animado
+    final shader = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        Color.lerp(colorA, colorB, 0.2 + 0.8 * frac)!,
+        Color.lerp(colorB, colorA, 0.2 + 0.8 * frac)!,
+      ],
+    ).createShader(r.outerRect);
+
+    final paint = Paint()
+      ..shader = shader
+      ..style = PaintingStyle.fill;
+
+    // Borda e glow sutis
+    final light = Paint()
+      ..color = Colors.white.withOpacity(0.08)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+
+    final glow = Paint()
+      ..color = Colors.white.withOpacity(0.06)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6;
+
+    canvas.drawRRect(r, paint);
+    canvas.drawRRect(r, glow);
+    canvas.drawRRect(r, light);
+  }
+
+  @override
+  bool shouldRepaint(covariant _LiquidPillPainter old) {
+    return old.page != page ||
+        old.count != count ||
+        old.pillH != pillH ||
+        old.pillW != pillW ||
+        old.barH != barH ||
+        old.colorA != colorA ||
+        old.colorB != colorB;
   }
 }

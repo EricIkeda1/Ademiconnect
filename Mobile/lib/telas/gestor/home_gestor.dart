@@ -6,9 +6,7 @@ import 'components/editar.dart' as comps;
 import 'components/gestor_navbar.dart';
 import 'components/gestor_header_row.dart';
 import 'components/menu_inferior.dart';
-
 import 'telas/lista_consultor.dart';
-import 'telas/nova_tela_branca.dart';
 
 class HomeGestor extends StatefulWidget {
   const HomeGestor({super.key});
@@ -171,6 +169,29 @@ class _HomeGestorState extends State<HomeGestor> {
     return true;
   }
 
+  Widget _withGlobalSwipe({required Widget child, required int pageCount}) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragEnd: (details) async {
+        final vx = details.velocity.pixelsPerSecond.dx;
+        final current = _pageController.page ?? _tab.toDouble();
+        int target = current.round();
+
+        if (vx.abs() >= 450) {
+          if (vx < 0) target = (current.floor() + 1);
+          if (vx > 0) target = (current.ceil() - 1);
+        }
+        target = target.clamp(0, pageCount - 1);
+        await _pageController.animateToPage(
+          target,
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+        );
+      },
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Theme(
@@ -186,73 +207,85 @@ class _HomeGestorState extends State<HomeGestor> {
         onWillPop: _onWillPop,
         child: Scaffold(
           appBar: const GestorNavbar(),
-          body: Column(
+          body: Stack(
             children: [
-              if (_tab == 0)
-                Container(
-                  color: branco,
-                  child: GestorHeaderRow(
-                    total: _ids.length,
-                    onAvisos: () {},
+              Positioned.fill(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 84),
+                  child: _withGlobalSwipe(
+                    pageCount: 4,
+                    child: Column(
+                      children: [
+                        if (_tab == 0)
+                          Container(
+                            color: branco,
+                            child: GestorHeaderRow(
+                              total: _ids.length,
+                              onAvisos: () {},
+                            ),
+                          ),
+                        if (_tab == 0) const SizedBox(height: 6),
+                        Expanded(
+                          child: PageView(
+                            controller: _pageController,
+                            onPageChanged: (i) => setState(() => _tab = i),
+                            children: [
+                              _LeadsTab(
+                                loading: _loading,
+                                erro: _erro,
+                                leads: _leads,
+                                idsCount: _ids.length,
+                                hasMore: _hasMore,
+                                loadingMore: _loadingMore,
+                                expandirTodos: _expandirTodos,
+                                onRefresh: _refresh,
+                                onCarregarMais: _carregarLeads,
+                                onEditar: _abrirEditar,
+                                onTransferir: _abrirTransferir,
+                                setExpandirTodos: (v) => setState(() => _expandirTodos = v),
+                              ),
+                              Navigator(
+                                key: _consultoresNavKey,
+                                onGenerateRoute: (settings) =>
+                                    MaterialPageRoute(builder: (_) => const ConsultoresRoot()),
+                              ),
+                              Navigator(
+                                key: _enderecosNavKey,
+                                onGenerateRoute: (_) =>
+                                    MaterialPageRoute(builder: (_) => const Center(child: Text('Endereços'))),
+                              ),
+                              Navigator(
+                                key: _exportarNavKey,
+                                onGenerateRoute: (_) =>
+                                    MaterialPageRoute(builder: (_) => const Center(child: Text('Exportar'))),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              if (_tab == 0) const SizedBox(height: 6),
-              Expanded(
-                child: PageView(
+              ),
+
+              // Navbar inferior
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: MenuInferior(
+                  index: _tab,
                   controller: _pageController,
-                  physics: const NeverScrollableScrollPhysics(),
-                  onPageChanged: (i) => setState(() => _tab = i),
-                  children: [
-                    _LeadsTab(
-                      loading: _loading,
-                      erro: _erro,
-                      leads: _leads,
-                      idsCount: _ids.length,
-                      hasMore: _hasMore,
-                      loadingMore: _loadingMore,
-                      expandirTodos: _expandirTodos,
-                      onRefresh: _refresh,
-                      onCarregarMais: _carregarLeads,
-                      onEditar: _abrirEditar,
-                      onTransferir: _abrirTransferir,
-                      setExpandirTodos: (v) => setState(() => _expandirTodos = v),
-                    ),
-                    Navigator(
-                      key: _consultoresNavKey,
-                      onGenerateRoute: (settings) {
-                        return MaterialPageRoute(
-                          builder: (_) => ConsultoresRoot(
-                              onCadastrar: () {}), 
-                        );
-                      },
-                    ),
-                    Navigator(
-                      key: _enderecosNavKey,
-                      onGenerateRoute: (_) =>
-                          MaterialPageRoute(builder: (_) => const Center(child: Text('Endereços'))),
-                    ),
-                    Navigator(
-                      key: _exportarNavKey,
-                      onGenerateRoute: (_) =>
-                          MaterialPageRoute(builder: (_) => const Center(child: Text('Exportar'))),
-                    ),
-                  ],
+                  onChanged: (i) {
+                    _pageController.animateToPage(
+                      i,
+                      duration: const Duration(milliseconds: 260),
+                      curve: Curves.easeOutCubic,
+                    );
+                  },
                 ),
               ),
             ],
           ),
-          bottomNavigationBar: MenuInferior(
-            index: _tab,
-            controller: _pageController,
-            onChanged: (i) {
-              _pageController.animateToPage(
-                i,
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOutCubic,
-              );
-            },
-          ),
-          floatingActionButton: null, 
+          floatingActionButton: null,
         ),
       ),
     );
@@ -340,172 +373,6 @@ class _HomeGestorState extends State<HomeGestor> {
   }
 }
 
-class _LeadsTab extends StatelessWidget {
-  final bool loading;
-  final String? erro;
-  final List<Map<String, dynamic>> leads;
-  final int idsCount;
-  final bool hasMore;
-  final bool loadingMore;
-  final bool expandirTodos;
-  final Future<void> Function() onRefresh;
-  final Future<void> Function({bool initial}) onCarregarMais;
-  final void Function(Map<String, dynamic>, int) onEditar;
-  final void Function(Map<String, dynamic>) onTransferir;
-  final void Function(bool) setExpandirTodos;
-
-  const _LeadsTab({
-    super.key,
-    required this.loading,
-    required this.erro,
-    required this.leads,
-    required this.idsCount,
-    required this.hasMore,
-    required this.loadingMore,
-    required this.expandirTodos,
-    required this.onRefresh,
-    required this.onCarregarMais,
-    required this.onEditar,
-    required this.onTransferir,
-    required this.setExpandirTodos,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (loading) return const Center(child: CircularProgressIndicator());
-    if (erro != null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(erro!, style: const TextStyle(color: Colors.red)),
-            const SizedBox(height: 12),
-            ElevatedButton(onPressed: onRefresh, child: const Text('Tentar novamente')),
-          ],
-        ),
-      );
-    }
-
-    final total = idsCount;
-    final mostrarLimite = !expandirTodos && total > 10;
-    final itemCount = mostrarLimite ? 11 : leads.length;
-
-    return RefreshIndicator(
-      onRefresh: () async {
-        setExpandirTodos(false);
-        await onRefresh();
-      },
-      child: NotificationListener<ScrollNotification>(
-        onNotification: (n) {
-          if (n.metrics.pixels >= n.metrics.maxScrollExtent - 200 &&
-              hasMore &&
-              !loadingMore) {
-            onCarregarMais(initial: false);
-          }
-          return false;
-        },
-        child: ListView.separated(
-          key: ValueKey('tab_leads_${expandirTodos ? 'all' : 'top10'}'),
-          padding: const EdgeInsets.only(top: 0, bottom: 80),
-          itemCount: itemCount,
-          separatorBuilder: (_, __) => const SizedBox(height: 6),
-          itemBuilder: (context, idx) {
-            if (mostrarLimite) {
-              if (idx < 10) {
-                final c = leads[idx];
-                return widgets.LeadCard(
-                  nome: c['nome'] as String,
-                  telefone: c['tel'] as String,
-                  endereco: c['end'] as String,
-                  consultor: (c['cons'] as String?) ?? '',
-                  observacao: c['obs'] as String,
-                  dias: (c['dias'] as int?) ?? 0,
-                  urgente: (c['urgente'] as bool?) ?? false,
-                  alerta: (c['alerta'] as bool?) ?? false,
-                  onEditar: () => onEditar(c, idx),
-                  onTransferir: () => onTransferir(c),
-                );
-              }
-              if (idx == 10) {
-                return _CardVerMais(
-                  restante: total - 10,
-                  onTap: () => setExpandirTodos(true),
-                );
-              }
-            }
-
-            final c = leads[idx];
-            return widgets.LeadCard(
-              nome: c['nome'] as String,
-              telefone: c['tel'] as String,
-              endereco: c['end'] as String,
-              consultor: (c['cons'] as String?) ?? '',
-              observacao: c['obs'] as String,
-              dias: (c['dias'] as int?) ?? 0,
-              urgente: (c['urgente'] as bool?) ?? false,
-              alerta: (c['alerta'] as bool?) ?? false,
-              onEditar: () => onEditar(c, idx),
-              onTransferir: () => onTransferir(c),
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------- Auxiliares ----------------
-class _ClienteMini {
-  final dynamic id;
-  final String? nome;
-  final String? telefone;
-  const _ClienteMini({required this.id, this.nome, this.telefone});
-}
-
-class _CardVerMais extends StatelessWidget {
-  final int restante;
-  final VoidCallback onTap;
-  const _CardVerMais({super.key, required this.restante, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    const branco = Color(0xFFFFFFFF);
-    const texto = Color(0xFF231F20);
-    const borda = Color(0xFFDFDFDF);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Material(
-        color: branco,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: borda, width: 1),
-        ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Ver mais',
-                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: texto),
-                  ),
-                ),
-                Text('($restante)', style: const TextStyle(color: texto)),
-                const SizedBox(width: 8),
-                const Icon(Icons.expand_more, color: texto),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class TransferirLeadDialog extends StatefulWidget {
   final _ClienteMini lead;
   final String consultorAtualNome;
@@ -531,10 +398,6 @@ class _TransferirLeadDialogState extends State<TransferirLeadDialog> {
   String? _erro;
   List<Map<String, dynamic>> _consultores = [];
   String? _selecionado;
-
-  static const corFundo = Color(0xFFFFFFFF);
-  static const corTexto = Color(0xFF231F20);
-  static const corVermelho = Color(0xFFEA3124);
 
   @override
   void initState() {
@@ -598,6 +461,169 @@ class _TransferirLeadDialogState extends State<TransferirLeadDialog> {
           child: const Text('Confirmar'),
         ),
       ],
+    );
+  }
+}
+
+class _LeadsTab extends StatelessWidget {
+  final bool loading;
+  final String? erro;
+  final List<Map<String, dynamic>> leads;
+  final int idsCount;
+  final bool hasMore;
+  final bool loadingMore;
+  final bool expandirTodos;
+  final Future<void> Function() onRefresh;
+  final Future<void> Function({bool initial}) onCarregarMais;
+  final void Function(Map<String, dynamic>, int) onEditar;
+  final void Function(Map<String, dynamic>) onTransferir;
+  final void Function(bool) setExpandirTodos;
+
+  const _LeadsTab({
+    super.key,
+    required this.loading,
+    required this.erro,
+    required this.leads,
+    required this.idsCount,
+    required this.hasMore,
+    required this.loadingMore,
+    required this.expandirTodos,
+    required this.onRefresh,
+    required this.onCarregarMais,
+    required this.onEditar,
+    required this.onTransferir,
+    required this.setExpandirTodos,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) return const Center(child: CircularProgressIndicator());
+    if (erro != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(erro!, style: const TextStyle(color: Colors.red)),
+            const SizedBox(height: 12),
+            ElevatedButton(onPressed: onRefresh, child: const Text('Tentar novamente')),
+          ],
+        ),
+      );
+    }
+
+    final total = idsCount;
+    final mostrarLimite = !expandirTodos && total > 10;
+    final itemCount = mostrarLimite ? 11 : leads.length;
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        setExpandirTodos(false);
+        await onRefresh();
+      },
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (n) {
+          if (n.metrics.pixels >= n.metrics.maxScrollExtent - 200 && hasMore && !loadingMore) {
+            onCarregarMais(initial: false);
+          }
+          return false;
+        },
+        child: ListView.separated(
+          key: ValueKey('tab_leads_${expandirTodos ? 'all' : 'top10'}'),
+          padding: const EdgeInsets.only(top: 0, bottom: 80),
+          itemCount: itemCount,
+          separatorBuilder: (_, __) => const SizedBox(height: 6),
+          itemBuilder: (context, idx) {
+            if (mostrarLimite) {
+              if (idx < 10) {
+                final c = leads[idx];
+                return widgets.LeadCard(
+                  nome: c['nome'] as String,
+                  telefone: c['tel'] as String,
+                  endereco: c['end'] as String,
+                  consultor: (c['cons'] as String?) ?? '',
+                  observacao: c['obs'] as String,
+                  dias: (c['dias'] as int?) ?? 0,
+                  urgente: (c['urgente'] as bool?) ?? false,
+                  alerta: (c['alerta'] as bool?) ?? false,
+                  onEditar: () => onEditar(c, idx),
+                  onTransferir: () => onTransferir(c),
+                );
+              }
+              if (idx == 10) {
+                return _CardVerMais(
+                  restante: total - 10,
+                  onTap: () => setExpandirTodos(true),
+                );
+              }
+            }
+
+            final c = leads[idx];
+            return widgets.LeadCard(
+              nome: c['nome'] as String,
+              telefone: c['tel'] as String,
+              endereco: c['end'] as String,
+              consultor: (c['cons'] as String?) ?? '',
+              observacao: c['obs'] as String,
+              dias: (c['dias'] as int?) ?? 0,
+              urgente: (c['urgente'] as bool?) ?? false,
+              alerta: (c['alerta'] as bool?) ?? false,
+              onEditar: () => onEditar(c, idx),
+              onTransferir: () => onTransferir(c),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _ClienteMini {
+  final dynamic id;
+  final String? nome;
+  final String? telefone;
+  const _ClienteMini({required this.id, this.nome, this.telefone});
+}
+
+class _CardVerMais extends StatelessWidget {
+  final int restante;
+  final VoidCallback onTap;
+  const _CardVerMais({super.key, required this.restante, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    const branco = Color(0xFFFFFFFF);
+    const texto = Color(0xFF231F20);
+    const borda = Color(0xFFDFDFDF);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Material(
+        color: branco,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: borda, width: 1),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Ver mais',
+                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: texto),
+                  ),
+                ),
+                Text('($restante)', style: const TextStyle(color: texto)),
+                const SizedBox(width: 8),
+                const Icon(Icons.expand_more, color: texto),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
