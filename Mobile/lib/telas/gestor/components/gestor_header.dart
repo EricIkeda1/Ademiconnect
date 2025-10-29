@@ -1,4 +1,3 @@
-// lib/telas/gestor/components/gestor_header_row.dart
 import 'package:flutter/material.dart';
 
 class GestorHeaderRow extends StatelessWidget {

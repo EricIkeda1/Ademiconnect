@@ -5,6 +5,12 @@ import 'package:email_validator/email_validator.dart';
 
 const String SENHA_PADRAO = 'Ademicon123456';
 
+// Tokens específicos do link Voltar
+const double _backIconSize = 18;
+const double _backGap = 6;
+const double _backFontSize = 13.5;
+const Color _backColor = Color(0xFFEA3124); // cor da marca
+
 class BrPhoneTextInputFormatter extends TextInputFormatter {
   const BrPhoneTextInputFormatter();
 
@@ -13,14 +19,9 @@ class BrPhoneTextInputFormatter extends TextInputFormatter {
     final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
     final isCell = digits.length > 10;
     final mask = isCell ? '(##) #####-####' : '(##) ####-####';
-
     final masked = _applyMask(digits, mask);
     final cursor = masked.length.clamp(0, masked.length);
-
-    return TextEditingValue(
-      text: masked,
-      selection: TextSelection.collapsed(offset: cursor),
-    );
+    return TextEditingValue(text: masked, selection: TextSelection.collapsed(offset: cursor));
   }
 
   String _applyMask(String digits, String mask) {
@@ -104,7 +105,6 @@ class _CadastrarConsultorPageState extends State<CadastrarConsultorPage> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
-
     try {
       final user = _client.auth.currentSession?.user;
       final gestorId = user?.id ?? '';
@@ -180,22 +180,39 @@ class _CadastrarConsultorPageState extends State<CadastrarConsultorPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Link Voltar com mesma cor e tamanho
+                  InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => Navigator.of(context).maybePop(),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.arrow_back_rounded, color: _backColor, size: _backIconSize),
+                          SizedBox(width: _backGap),
+                          Text(
+                            'Voltar para lista de consultores',
+                            style: TextStyle(
+                              color: _backColor,
+                              fontSize: _backFontSize,
+                              fontWeight: FontWeight.w600,
+                              height: 1.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Cabeçalho com ícone
                   Row(
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back_rounded, color: _textPrimary),
-                        splashRadius: 22,
-                        onPressed: () => Navigator.of(context).maybePop(),
-                        tooltip: 'Voltar',
-                      ),
-                      const SizedBox(width: 4),
                       Container(
                         width: 48,
                         height: 48,
-                        decoration: BoxDecoration(
-                          color: _chipBg,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                        decoration: BoxDecoration(color: _chipBg, borderRadius: BorderRadius.circular(12)),
                         child: const Icon(Icons.person_add_alt_1, color: _chipIcon),
                       ),
                       const SizedBox(width: 10),
@@ -203,15 +220,11 @@ class _CadastrarConsultorPageState extends State<CadastrarConsultorPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Cadastrar Consultor',
-                              style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w700, color: _textPrimary),
-                            ),
+                            Text('Cadastrar Consultor',
+                                style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w700, color: _textPrimary)),
                             SizedBox(height: 2),
-                            Text(
-                              'Preencha os dados do novo consultor da equipe',
-                              style: TextStyle(color: Colors.black54, fontSize: 13.5),
-                            ),
+                            Text('Preencha os dados do novo consultor da equipe',
+                                style: TextStyle(color: Colors.black54, fontSize: 13.5)),
                           ],
                         ),
                       ),
@@ -219,6 +232,7 @@ class _CadastrarConsultorPageState extends State<CadastrarConsultorPage> {
                   ),
                   const SizedBox(height: 14),
 
+                  // Card do formulário
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -289,6 +303,7 @@ class _CadastrarConsultorPageState extends State<CadastrarConsultorPage> {
                   ),
                   const SizedBox(height: 14),
 
+                  // Botão cadastrar
                   SizedBox(
                     height: 52,
                     width: double.infinity,
@@ -369,7 +384,7 @@ class _SectionLabel extends StatelessWidget {
           width: 26,
           height: 26,
           decoration: const BoxDecoration(color: Color(0xFFFFE9E7), shape: BoxShape.circle),
-          child: Icon(icon, size: 16, color: Color(0xFFE24B3C)),
+          child: Icon(icon, size: 16, color: const Color(0xFFE24B3C)),
         ),
         const SizedBox(width: 8),
         Text(text, style: const TextStyle(fontWeight: FontWeight.w700)),

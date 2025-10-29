@@ -4,7 +4,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class GestorNavbar extends StatefulWidget implements PreferredSizeWidget {
   const GestorNavbar({super.key});
 
-  // Mantém compacto; ajuste para 68 se quiser mais respiro
   @override
   Size get preferredSize => const Size.fromHeight(64);
 
@@ -92,17 +91,15 @@ class _GestorNavbarState extends State<GestorNavbar> {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // AUMENTO DA LOGO (de 26 -> 34)
               const IgnorePointer(
                 ignoring: true,
                 child: Image(
                   image: AssetImage('assets/Logo.png'),
-                  height: 34, // aumente para 36–40 se quiser ainda maior
+                  height: 34,
                   fit: BoxFit.contain,
                 ),
               ),
 
-              // Lado esquerdo: nome/cargo (compacto)
               Row(
                 children: [
                   const SizedBox(width: 8),
@@ -137,7 +134,6 @@ class _GestorNavbarState extends State<GestorNavbar> {
                     ],
                   ),
                   const Spacer(),
-                  // Botão "Sair" compacto
                   Material(
                     color: Colors.transparent,
                     child: InkWell(

@@ -18,11 +18,10 @@ class GestorHeaderRow extends StatelessWidget {
     const vermelhoClaro = Color(0xFFEA3124);
 
     return Container(
-      color: branco, // igual aos cards
+      color: branco, 
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: Row(
         children: [
-          // 3 total
           Container(
             height: 32,
             decoration: BoxDecoration(
@@ -39,7 +38,6 @@ class GestorHeaderRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          // Avisos
           Container(
             height: 32,
             decoration: BoxDecoration(
