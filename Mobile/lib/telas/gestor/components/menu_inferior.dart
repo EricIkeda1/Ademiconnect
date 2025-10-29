@@ -19,14 +19,12 @@ class MenuInferior extends StatefulWidget {
 }
 
 class _MenuInferiorState extends State<MenuInferior> {
-  // Paleta
   static const _bg = Color(0xFFFFFFFF);
   static const _pillA = Color(0xFFED3B2E);
   static const _pillB = Color(0xFFCC2B22);
   static const _halo = Color(0x33ED3B2E);
   static const _shadow = Color(0x14000000);
 
-  // Geometrias
   static const double _barH = 74;
   static const double _pillH = 56;
   static const double _pillW = 100;
@@ -77,11 +75,9 @@ class _MenuInferiorState extends State<MenuInferior> {
         builder: (context, cons) {
           final size = Size(cons.maxWidth, _barH);
           final pill = _pillRect(size);
-          final isDragging = (_page - _page.round()).abs() > 0.001;
           final frac = (_page - _page.floor()).clamp(0.0, 1.0);
           final goingRight = _page >= _page.floorToDouble();
 
-          // Micro inércia
           final inertia = (goingRight ? frac : - (1 - frac)) * 8.0;
 
           return Container(
@@ -93,7 +89,6 @@ class _MenuInferiorState extends State<MenuInferior> {
             padding: const EdgeInsets.only(bottom: _padBottom),
             child: Stack(
               children: [
-                // Halo (luz) com parallax
                 Positioned(
                   left: pill.left - 18 + inertia,
                   top: pill.top - 10,
@@ -110,7 +105,6 @@ class _MenuInferiorState extends State<MenuInferior> {
                   ),
                 ),
 
-                // Pill "liquid morph"
                 Positioned.fill(
                   child: IgnorePointer(
                     child: CustomPaint(
@@ -127,7 +121,6 @@ class _MenuInferiorState extends State<MenuInferior> {
                   ),
                 ),
 
-                // Itens clicáveis + animação de proximidade
                 Row(
                   children: List.generate(_items.length, (i) {
                     return Expanded(
@@ -161,7 +154,6 @@ class _Item {
   const _Item({required this.icon, required this.label});
 }
 
-// Ícone e label com micro-escala e cross-fade conforme proximidade
 class _AnimatedItem extends StatelessWidget {
   final _Item item;
   final int index;
@@ -173,7 +165,7 @@ class _AnimatedItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dist = (page - index).abs().clamp(0.0, 1.0);
-    final t = 1.0 - Curves.easeOut.transform(dist); // 0..1 (1 = ativo)
+    final t = 1.0 - Curves.easeOut.transform(dist); 
 
     final iconSize = lerpDouble(24, 28, t)!;
     final labelSize = lerpDouble(11, 12.5, t)!;
@@ -201,7 +193,6 @@ class _AnimatedItem extends StatelessWidget {
   }
 }
 
-// Painter da pílula com morph orgânico entre posições
 class _LiquidPillPainter extends CustomPainter {
   final double page;
   final int count;
@@ -229,7 +220,6 @@ class _LiquidPillPainter extends CustomPainter {
     final startX = (base * slotW) + (slotW - pillW) / 2;
     final endX = (((base + 1).clamp(0, count - 1)) * slotW) + (slotW - pillW) / 2;
 
-    // Largura orgânica: leve estiramento no meio da transição
     final stretch = 1 + 0.08 * math.sin(frac * math.pi);
     final w = pillW * stretch;
     final x = lerpDouble(startX, endX, frac)! + (pillW - w) / 2;
@@ -239,7 +229,6 @@ class _LiquidPillPainter extends CustomPainter {
       const Radius.circular(22),
     );
 
-    // Gradiente animado
     final shader = LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
@@ -253,7 +242,6 @@ class _LiquidPillPainter extends CustomPainter {
       ..shader = shader
       ..style = PaintingStyle.fill;
 
-    // Borda e glow sutis
     final light = Paint()
       ..color = Colors.white.withOpacity(0.08)
       ..style = PaintingStyle.stroke

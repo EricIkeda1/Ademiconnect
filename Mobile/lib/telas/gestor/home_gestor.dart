@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
 import '../widgets/lead_card.dart' as widgets;
 import 'components/editar.dart' as comps;
 import 'components/gestor_navbar.dart';
 import 'components/gestor_header_row.dart';
 import 'components/menu_inferior.dart';
 import 'telas/lista_consultor.dart';
+import 'telas/enderecos.dart';
+import 'telas/exportar.dart';  
 
 class HomeGestor extends StatefulWidget {
-  const HomeGestor({super.key});
+  const HomeGestor({super.key, this.initialTab = 0});
+  final int initialTab;
+
   @override
   State<HomeGestor> createState() => _HomeGestorState();
 }
@@ -21,8 +24,8 @@ class _HomeGestorState extends State<HomeGestor> {
   static const Color borda = Color(0xFFDFDFDF);
   static const Color cinzaPlaceholder = Color(0xFF9FA3A9);
 
-  int _tab = 0;
-  late final PageController _pageController = PageController(initialPage: _tab);
+  late int _tab;
+  late final PageController _pageController;
 
   final GlobalKey<NavigatorState> _leadsNavKey = GlobalKey<NavigatorState>();
   final GlobalKey<NavigatorState> _consultoresNavKey = GlobalKey<NavigatorState>();
@@ -50,6 +53,9 @@ class _HomeGestorState extends State<HomeGestor> {
   @override
   void initState() {
     super.initState();
+    _tab = widget.initialTab;
+    _pageController = PageController(initialPage: _tab);
+
     _searchCtrl.addListener(() {
       setState(() {
         _query = _searchCtrl.text.trim();
@@ -340,12 +346,12 @@ class _HomeGestorState extends State<HomeGestor> {
                               Navigator(
                                 key: _enderecosNavKey,
                                 onGenerateRoute: (_) =>
-                                    MaterialPageRoute(builder: (_) => const Center(child: Text('Endereços'))),
+                                    MaterialPageRoute(builder: (_) => const EnderecosPage()),
                               ),
                               Navigator(
                                 key: _exportarNavKey,
                                 onGenerateRoute: (_) =>
-                                    MaterialPageRoute(builder: (_) => const Center(child: Text('Exportar'))),
+                                    MaterialPageRoute(builder: (_) => const ExportarPage()),
                               ),
                             ],
                           ),
@@ -414,11 +420,11 @@ class _HomeGestorState extends State<HomeGestor> {
         _leads[index] = {
           ..._leads[index],
           'nome': result['nome'],
-          'tel': result['telefone'],
+          'telefone': result['telefone'],
           'end': result['endereco'],
           'bairro': result['bairro'],
           'dias': result['diasPAP'],
-          'obs': result['observacoes'],
+          'observacoes': result['observacoes'],
         };
         _aplicarFiltro();
       });
