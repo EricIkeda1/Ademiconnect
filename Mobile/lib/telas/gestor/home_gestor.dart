@@ -18,6 +18,8 @@ class _HomeGestorState extends State<HomeGestor> {
   static const Color branco = Color(0xFFFFFFFF);
   static const Color fundoApp = Color(0xFFF7F7F7);
   static const Color preto09 = Color(0xFF231F20);
+  static const Color borda = Color(0xFFDFDFDF);
+  static const Color cinzaPlaceholder = Color(0xFF9FA3A9);
 
   int _tab = 0;
   late final PageController _pageController = PageController(initialPage: _tab);
@@ -39,16 +41,60 @@ class _HomeGestorState extends State<HomeGestor> {
   bool _loadingMore = false;
   bool _expandirTodos = false;
 
+  int _totalDb = 0;
+
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _query = '';
+  List<Map<String, dynamic>> _filteredLeads = [];
+
   @override
   void initState() {
     super.initState();
+    _searchCtrl.addListener(() {
+      setState(() {
+        _query = _searchCtrl.text.trim();
+        _aplicarFiltro();
+      });
+    });
+    _carregarTotalDb();
     _carregarLeads(initial: true);
   }
 
   @override
   void dispose() {
     _pageController.dispose();
+    _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _aplicarFiltro() {
+    if (_query.isEmpty) {
+      _filteredLeads = List<Map<String, dynamic>>.from(_leads);
+      return;
+    }
+    final q = _query.toLowerCase();
+    _filteredLeads = _leads.where((e) {
+      final nomeLead = (e['nome'] as String?)?.toLowerCase() ?? '';
+      final nomeCons = (e['cons'] as String?)?.toLowerCase() ?? '';
+      return nomeLead.contains(q) || nomeCons.contains(q);
+    }).toList();
+  }
+
+  Future<void> _carregarTotalDb() async {
+    try {
+      final res = await _sb.rpc('get_clientes_total');
+      final total = (res is int)
+          ? res
+          : (res is num)
+              ? res.toInt()
+              : 0;
+      setState(() => _totalDb = total);
+    } catch (_) {
+      try {
+        final rows = await _sb.from('clientes').select('id');
+        setState(() => _totalDb = rows.length);
+      } catch (__){}
+    }
   }
 
   Future<void> _carregarLeads({bool initial = false}) async {
@@ -119,6 +165,7 @@ class _HomeGestorState extends State<HomeGestor> {
         _hasMore = rows.length == _pageSize;
         _loading = false;
         _loadingMore = false;
+        _aplicarFiltro();
       });
     } catch (e) {
       setState(() {
@@ -152,7 +199,13 @@ class _HomeGestorState extends State<HomeGestor> {
 
   bool _isAlerta(dynamic dataVisita) => _calcDias(dataVisita) > 60;
 
-  Future<void> _refresh() async => _carregarLeads(initial: true);
+  Future<void> _refresh() async {
+    _searchCtrl.clear();
+    await Future.wait([
+      _carregarTotalDb(),
+      _carregarLeads(initial: true),
+    ]);
+  }
 
   Future<bool> _onWillPop() async {
     final currentKey = <GlobalKey<NavigatorState>>[
@@ -192,6 +245,36 @@ class _HomeGestorState extends State<HomeGestor> {
     );
   }
 
+  Widget _buildSearchBar() {
+    return Container(
+      color: branco,
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+      child: SizedBox(
+        height: 44,
+        child: TextField(
+          controller: _searchCtrl,
+          textInputAction: TextInputAction.search,
+          decoration: InputDecoration(
+            hintText: 'Pesquisar por lead ou consultor...',
+            hintStyle: const TextStyle(color: cinzaPlaceholder, fontSize: 14),
+            prefixIcon: const Icon(Icons.search, color: cinzaPlaceholder),
+            filled: true,
+            fillColor: const Color(0xFFF3F4F6),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: borda, width: 1),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFFED1C24), width: 1.2),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Theme(
@@ -219,9 +302,14 @@ class _HomeGestorState extends State<HomeGestor> {
                         if (_tab == 0)
                           Container(
                             color: branco,
-                            child: GestorHeaderRow(
-                              total: _ids.length,
-                              onAvisos: () {},
+                            child: Column(
+                              children: [
+                                GestorHeaderRow(
+                                  total: _query.isEmpty ? _totalDb : _filteredLeads.length,
+                                  onAvisos: () {},
+                                ),
+                                _buildSearchBar(),
+                              ],
                             ),
                           ),
                         if (_tab == 0) const SizedBox(height: 6),
@@ -233,8 +321,8 @@ class _HomeGestorState extends State<HomeGestor> {
                               _LeadsTab(
                                 loading: _loading,
                                 erro: _erro,
-                                leads: _leads,
-                                idsCount: _ids.length,
+                                leads: _query.isEmpty ? _leads : _filteredLeads,
+                                idsCount: _query.isEmpty ? _totalDb : _filteredLeads.length,
                                 hasMore: _hasMore,
                                 loadingMore: _loadingMore,
                                 expandirTodos: _expandirTodos,
@@ -268,7 +356,6 @@ class _HomeGestorState extends State<HomeGestor> {
                 ),
               ),
 
-              // Navbar inferior
               Align(
                 alignment: Alignment.bottomCenter,
                 child: MenuInferior(
@@ -333,6 +420,7 @@ class _HomeGestorState extends State<HomeGestor> {
           'dias': result['diasPAP'],
           'obs': result['observacoes'],
         };
+        _aplicarFiltro();
       });
 
       try {
@@ -369,6 +457,7 @@ class _HomeGestorState extends State<HomeGestor> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Lead transferido com sucesso')),
       );
+      _carregarTotalDb();
     }
   }
 }
