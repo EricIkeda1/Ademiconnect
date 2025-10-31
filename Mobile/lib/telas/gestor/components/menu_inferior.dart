@@ -142,89 +142,142 @@ class _MenuInferiorState extends State<MenuInferior> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: LayoutBuilder(
-        builder: (context, cons) {
-          final pill = _pillRect(Size(cons.maxWidth, _barH));
+    // Opcional: ripple mais suave global sem mudar aparência
+    final theme = Theme.of(context).copyWith(
+      splashFactory: InkSparkle.constantTurbulenceSeedSplashFactory,
+      splashColor: Colors.white.withOpacity(0.08),
+      highlightColor: Colors.white.withOpacity(0.04),
+    );
 
-          final base = _lastStableIndex.toDouble();
-          final next = (_page >= base) ? base + 1.0 : base - 1.0;
-          final spanStart = (_page >= base) ? base : next;
-          final spanEnd = (_page >= base) ? next : base;
-          final fracRaw =
-              ((_page - spanStart) / (spanEnd - spanStart)).clamp(0.0, 1.0);
-          final eased = Curves.easeInOut.transform(fracRaw);
-          final goingRight = _page >= base;
-          final inertia = (goingRight ? eased : -(1 - eased)) * 8.0;
+    return Theme(
+      data: theme,
+      child: SafeArea(
+        top: false,
+        child: LayoutBuilder(
+          builder: (context, cons) {
+            final pill = _pillRect(Size(cons.maxWidth, _barH));
 
-          return Container(
-            decoration: const BoxDecoration(
-              color: _bg,
-              boxShadow: [
-                BoxShadow(color: _shadow, blurRadius: 6, offset: Offset(0, -2))
-              ],
-            ),
-            height: _barH + _padBottom,
-            padding: const EdgeInsets.only(bottom: _padBottom),
-            child: Stack(
-              children: [
-                Positioned(
-                  left: pill.left - 18 + inertia,
-                  top: pill.top - 10,
-                  width: pill.width + 36,
-                  height: pill.height + 20,
-                  child: ImageFiltered(
-                    imageFilter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: _halo,
-                        borderRadius: BorderRadius.circular(28),
+            final base = _lastStableIndex.toDouble();
+            final next = (_page >= base) ? base + 1.0 : base - 1.0;
+            final spanStart = (_page >= base) ? base : next;
+            final spanEnd = (_page >= base) ? next : base;
+            final fracRaw =
+                ((_page - spanStart) / (spanEnd - spanStart)).clamp(0.0, 1.0);
+            final eased = Curves.easeInOut.transform(fracRaw);
+            final goingRight = _page >= base;
+            // Inércia levemente modulada pela fração para sensação orgânica
+            final inertia =
+                (goingRight ? eased : -(1 - eased)) * (8.0 * (1.0 + 0.4 * ((-_page + base).abs() + (_page - base).abs()) * 0.5));
+
+            // Respiração do halo
+            final blur = lerpDouble(12, 18, eased)!;
+            final dy = lerpDouble(-2, -3, eased)!;
+
+            return Container(
+              decoration: const BoxDecoration(
+                color: _bg,
+                boxShadow: [
+                  BoxShadow(color: _shadow, blurRadius: 6, offset: Offset(0, -2))
+                ],
+              ),
+              height: _barH + _padBottom,
+              padding: const EdgeInsets.only(bottom: _padBottom),
+              child: Stack(
+                children: [
+                  // Highlight radial por slot ativo (puramente visual)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Row(
+                        children: List.generate(_items.length, (i) {
+                          final dist = (_page - i).abs().clamp(0.0, 1.0);
+                          final ti = 1.0 - Curves.easeOut.transform(dist);
+                          return Expanded(
+                            child: AnimatedOpacity(
+                              duration: const Duration(milliseconds: 180),
+                              curve: Curves.easeOut,
+                              opacity: lerpDouble(0.0, 1.0, ti * 0.6)!,
+                              child: const DecoratedBox(
+                                decoration: BoxDecoration(
+                                  // RadialGradient leve
+                                  gradient: RadialGradient(
+                                    center: Alignment(0, 0.4),
+                                    radius: 0.85,
+                                    colors: [
+                                      Color(0x14FFFFFF), // ~0.08 ao somar com opacity
+                                      Colors.transparent,
+                                    ],
+                                    stops: [0.0, 1.0],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
                       ),
                     ),
                   ),
-                ),
 
-                // Pílula líquida
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: CustomPaint(
-                      painter: _LiquidPillPainter(
-                        page: _page,
-                        count: _items.length,
-                        pillH: _pillH,
-                        pillW: _pillW,
-                        barH: _barH,
-                        colorA: _pillA,
-                        colorB: _pillB,
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Itens clicáveis
-                Row(
-                  children: List.generate(_items.length, (i) {
-                    return Expanded(
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(18),
-                        onTap: () => _handleTap(i),
-                        child: SizedBox(
-                          height: _barH,
-                          child: _AnimatedItem(
-                            item: _items[i],
-                            index: i,
-                            page: _page,
-                          ),
+                  // Halo com blur dinâmico e leve deslocamento
+                  Positioned(
+                    left: pill.left - 18 + inertia,
+                    top: pill.top - 10 + dy,
+                    width: pill.width + 36,
+                    height: pill.height + 20,
+                    child: ImageFiltered(
+                      imageFilter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: _halo,
+                          borderRadius: BorderRadius.circular(28),
                         ),
                       ),
-                    );
-                  }),
-                ),
-              ],
-            ),
-          );
-        },
+                    ),
+                  ),
+
+                  // Pílula líquida (painter intacto)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: CustomPaint(
+                        painter: _LiquidPillPainter(
+                          page: _page,
+                          count: _items.length,
+                          pillH: _pillH,
+                          pillW: _pillW,
+                          barH: _barH,
+                          colorA: _pillA,
+                          colorB: _pillB,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Itens clicáveis com Material + ripple
+                  Row(
+                    children: List.generate(_items.length, (i) {
+                      return Expanded(
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(18),
+                            onTap: () => _handleTap(i),
+                            child: SizedBox(
+                              height: _barH,
+                              child: _AnimatedItem(
+                                item: _items[i],
+                                index: i,
+                                page: _page,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -259,19 +312,36 @@ class _AnimatedItem extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Transform.scale(
-            scale: lerpDouble(1.0, 1.05, t)!,
-            child: Icon(item.icon, size: iconSize, color: iconColor),
+          // Micro slide + fade no ícone
+          AnimatedSlide(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            offset: Offset(0, lerpDouble(0.10, 0.0, t)!), // ~3–4 px
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOut,
+              opacity: lerpDouble(0.85, 1.0, t)!,
+              child: Transform.scale(
+                scale: lerpDouble(1.0, 1.05, t)!,
+                child: Icon(item.icon, size: iconSize, color: iconColor),
+              ),
+            ),
           ),
           const SizedBox(height: 6),
-          AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 120),
-            style: TextStyle(
-              fontSize: labelSize,
-              color: labelColor,
-              fontWeight: fontWeight,
+          // Texto mantém AnimatedDefaultTextStyle, com micro slide
+          AnimatedSlide(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            offset: Offset(0, lerpDouble(-0.06, 0.0, t)!), // contra-movimento sutil
+            child: AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 120),
+              style: TextStyle(
+                fontSize: labelSize,
+                color: labelColor,
+                fontWeight: fontWeight,
+              ),
+              child: Text(item.label),
             ),
-            child: Text(item.label),
           ),
         ],
       ),

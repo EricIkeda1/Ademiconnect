@@ -89,12 +89,9 @@ class _HomeGestorState extends State<HomeGestor> {
     }).toList();
   }
 
-  // UIDs (auth) dos consultores do meu time
   Future<List<String>> _uidsConsultoresDoMeuTime() async {
-    final rows = await _sb
-        .from('consultores')
-        .select('uid')
-        .eq('gestor_id', _gestorId);
+    final rows =
+        await _sb.from('consultores').select('uid').eq('gestor_id', _gestorId);
     return (rows as List)
         .map((r) => r['uid'] as String?)
         .whereType<String>()
@@ -138,7 +135,6 @@ class _HomeGestorState extends State<HomeGestor> {
 
       final start = _page * _pageSize;
 
-      // 1) UIDs dos consultores do meu time
       final consUids = await _uidsConsultoresDoMeuTime();
       if (consUids.isEmpty) {
         setState(() {
@@ -150,10 +146,10 @@ class _HomeGestorState extends State<HomeGestor> {
         return;
       }
 
-      // 2) Busca todos os clientes por UID do time e pagina em memória
       final rowsAll = await _sb
           .from('clientes')
-          .select('id, nome, endereco, bairro, telefone, data_visita, observacoes, consultor_uid_t')
+          .select(
+              'id, nome, endereco, bairro, telefone, data_visita, observacoes, consultor_uid_t')
           .inFilter('consultor_uid_t', consUids)
           .order('data_visita', ascending: false, nullsFirst: true);
 
@@ -180,10 +176,18 @@ class _HomeGestorState extends State<HomeGestor> {
         });
       }
 
-      final uids = batch.map((e) => e['consUid']).where((e) => e != null).toSet().cast<String>().toList();
+      final uids = batch
+          .map((e) => e['consUid'])
+          .where((e) => e != null)
+          .toSet()
+          .cast<String>()
+          .toList();
       final nomeMap = <String, String>{};
       if (uids.isNotEmpty) {
-        final consRowsUid = await _sb.from('consultores').select('uid, nome').inFilter('uid', uids);
+        final consRowsUid = await _sb
+            .from('consultores')
+            .select('uid, nome')
+            .inFilter('uid', uids);
         for (final c in (consRowsUid as List)) {
           final uid = c['uid'] as String?;
           final nome = c['nome'] as String?;
@@ -300,14 +304,16 @@ class _HomeGestorState extends State<HomeGestor> {
             prefixIcon: const Icon(Icons.search, color: cinzaPlaceholder),
             filled: true,
             fillColor: const Color(0xFFF3F4F6),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: borda, width: 1),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFFED1C24), width: 1.2),
+              borderSide:
+                  const BorderSide(color: Color(0xFFED1C24), width: 1.2),
             ),
           ),
         ),
@@ -345,7 +351,9 @@ class _HomeGestorState extends State<HomeGestor> {
                             child: Column(
                               children: [
                                 GestorHeaderRow(
-                                  total: _query.isEmpty ? _totalDb : _filteredLeads.length,
+                                  total: _query.isEmpty
+                                      ? _totalDb
+                                      : _filteredLeads.length,
                                   onAvisos: () {},
                                 ),
                                 _buildSearchBar(),
@@ -361,8 +369,12 @@ class _HomeGestorState extends State<HomeGestor> {
                               _LeadsTab(
                                 loading: _loading,
                                 erro: _erro,
-                                leads: _query.isEmpty ? _leads : _filteredLeads,
-                                idsCount: _query.isEmpty ? _totalDb : _filteredLeads.length,
+                                leads: _query.isEmpty
+                                    ? _leads
+                                    : _filteredLeads,
+                                idsCount: _query.isEmpty
+                                    ? _totalDb
+                                    : _filteredLeads.length,
                                 hasMore: _hasMore,
                                 loadingMore: _loadingMore,
                                 expandirTodos: _expandirTodos,
@@ -370,23 +382,26 @@ class _HomeGestorState extends State<HomeGestor> {
                                 onCarregarMais: _carregarLeads,
                                 onEditar: _abrirEditar,
                                 onTransferir: _abrirTransferir,
-                                setExpandirTodos: (v) => setState(() => _expandirTodos = v),
+                                setExpandirTodos: (v) =>
+                                    setState(() => _expandirTodos = v),
                               ),
                               const VendasPage(),
                               Navigator(
                                 key: _consultoresNavKey,
                                 onGenerateRoute: (settings) =>
-                                    MaterialPageRoute(builder: (_) => const ConsultoresRoot()),
+                                    MaterialPageRoute(
+                                        builder: (_) =>
+                                            const ConsultoresRoot()),
                               ),
                               Navigator(
                                 key: _enderecosNavKey,
-                                onGenerateRoute: (_) =>
-                                    MaterialPageRoute(builder: (_) => const EnderecosPage()),
+                                onGenerateRoute: (_) => MaterialPageRoute(
+                                    builder: (_) => const EnderecosPage()),
                               ),
                               Navigator(
                                 key: _exportarNavKey,
-                                onGenerateRoute: (_) =>
-                                    MaterialPageRoute(builder: (_) => const ExportarPage()),
+                                onGenerateRoute: (_) => MaterialPageRoute(
+                                    builder: (_) => const ExportarPage()),
                               ),
                             ],
                           ),
@@ -432,7 +447,8 @@ class _HomeGestorState extends State<HomeGestor> {
           maxChildSize: 0.95,
           builder: (_, scrollController) {
             return ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
               child: SingleChildScrollView(
                 controller: scrollController,
                 child: comps.EditarLeadSheet(
@@ -479,19 +495,37 @@ class _HomeGestorState extends State<HomeGestor> {
   Future<void> _abrirTransferir(Map<String, dynamic> c) async {
     final consultorAtualNome = (c['cons'] as String?) ?? '-';
 
-    final ok = await showDialog<bool>(
+    final ok = await showGeneralDialog<bool>(
       context: context,
-      barrierDismissible: true,
-      builder: (_) => TransferirLeadDialog(
-        lead: _ClienteMini(id: c['id'], nome: c['nome'], telefone: c['tel']),
-        consultorAtualNome: consultorAtualNome,
-        onConfirmar: (novoUid) async {
-          await _sb.from('clientes').update({'consultor_uid_t': novoUid}).eq('id', c['id']);
-          setState(() {
-            c['consUid'] = novoUid;
-          });
-        },
-      ),
+      barrierDismissible: true,  
+      barrierLabel: 'Transferir Lead',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 160),
+      pageBuilder: (ctx, a1, a2) {
+        return TLTransferirLeadDialog(
+          lead: TLCliente(id: c['id'], nome: c['nome'], telefone: c['tel']),
+          consultorAtualNome: consultorAtualNome,
+          onConfirmar: (novoUid) async {
+            await _sb
+                .from('clientes')
+                .update({'consultor_uid_t': novoUid}).eq('id', c['id']);
+            setState(() {
+              c['consUid'] = novoUid;
+            });
+          },
+        );
+      },
+      transitionBuilder: (ctx, anim, _, child) {
+        final curved =
+            CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween(begin: 0.98, end: 1.0).animate(curved),
+            child: child,
+          ),
+        );
+      },
     );
 
     if (ok == true && mounted) {
@@ -500,103 +534,6 @@ class _HomeGestorState extends State<HomeGestor> {
       );
       _carregarTotalDb();
     }
-  }
-}
-
-class TransferirLeadDialog extends StatefulWidget {
-  final _ClienteMini lead;
-  final String consultorAtualNome;
-  final Future<void> Function(String consultorUid) onConfirmar;
-
-  const TransferirLeadDialog({
-    super.key,
-    required this.lead,
-    required this.consultorAtualNome,
-    required this.onConfirmar,
-  });
-
-  @override
-  State<TransferirLeadDialog> createState() => _TransferirLeadDialogState();
-}
-
-class _TransferirLeadDialogState extends State<TransferirLeadDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _sb = Supabase.instance.client;
-
-  bool _loading = true;
-  bool _sending = false;
-  String? _erro;
-  List<Map<String, dynamic>> _consultores = [];
-  String? _selecionado;
-
-  String get _gestorId => _sb.auth.currentUser!.id;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadConsultores();
-  }
-
-  Future<void> _loadConsultores() async {
-    setState(() => _loading = true);
-    try {
-      final rows = await _sb
-          .from('consultores')
-          .select('uid, nome')
-          .eq('gestor_id', _gestorId);
-      setState(() {
-        _consultores = List<Map<String, dynamic>>.from(rows as List);
-        _loading = false;
-      });
-    } catch (_) {
-      setState(() {
-        _erro = 'Erro ao carregar consultores';
-        _loading = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Transferir Lead'),
-      content: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _erro != null
-              ? Text(_erro!)
-              : Form(
-                  key: _formKey,
-                  child: DropdownButtonFormField<String>(
-                    value: _selecionado,
-                    items: _consultores
-                        .map(
-                          (c) => DropdownMenuItem(
-                            value: c['uid'] as String,
-                            child: Text(c['nome'] as String),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) => setState(() => _selecionado = v),
-                    decoration: const InputDecoration(labelText: 'Novo Consultor'),
-                  ),
-                ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancelar'),
-        ),
-        TextButton(
-          onPressed: _selecionado == null || _sending
-              ? null
-              : () async {
-                  setState(() => _sending = true);
-                  await widget.onConfirmar(_selecionado!);
-                  if (mounted) Navigator.of(context).pop(true);
-                },
-          child: const Text('Confirmar'),
-        ),
-      ],
-    );
   }
 }
 
@@ -640,7 +577,8 @@ class _LeadsTab extends StatelessWidget {
           children: [
             Text(erro!, style: const TextStyle(color: Colors.red)),
             const SizedBox(height: 12),
-            ElevatedButton(onPressed: onRefresh, child: const Text('Tentar novamente')),
+            ElevatedButton(
+                onPressed: onRefresh, child: const Text('Tentar novamente')),
           ],
         ),
       );
@@ -657,7 +595,9 @@ class _LeadsTab extends StatelessWidget {
       },
       child: NotificationListener<ScrollNotification>(
         onNotification: (n) {
-          if (n.metrics.pixels >= n.metrics.maxScrollExtent - 200 && hasMore && !loadingMore) {
+          if (n.metrics.pixels >= n.metrics.maxScrollExtent - 200 &&
+              hasMore &&
+              !loadingMore) {
             onCarregarMais(initial: false);
           }
           return false;
@@ -712,13 +652,6 @@ class _LeadsTab extends StatelessWidget {
   }
 }
 
-class _ClienteMini {
-  final dynamic id;
-  final String? nome;
-  final String? telefone;
-  const _ClienteMini({required this.id, this.nome, this.telefone});
-}
-
 class _CardVerMais extends StatelessWidget {
   final int restante;
   final VoidCallback onTap;
@@ -748,7 +681,10 @@ class _CardVerMais extends StatelessWidget {
                 const Expanded(
                   child: Text(
                     'Ver mais',
-                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: texto),
+                    style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        color: texto),
                   ),
                 ),
                 Text('($restante)', style: const TextStyle(color: texto)),
@@ -758,6 +694,334 @@ class _CardVerMais extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class TLCliente {
+  final dynamic id;
+  final String? nome;
+  final String? telefone;
+  TLCliente({required this.id, this.nome, this.telefone});
+}
+
+class TLTransferirLeadDialog extends StatefulWidget {
+  final TLCliente lead;
+  final String consultorAtualNome;
+  final Future<void> Function(String consultorUid) onConfirmar;
+
+  const TLTransferirLeadDialog({
+    super.key,
+    required this.lead,
+    required this.consultorAtualNome,
+    required this.onConfirmar,
+  });
+
+  @override
+  State<TLTransferirLeadDialog> createState() => _TLTransferirLeadDialogState();
+}
+
+class _TLTransferirLeadDialogState extends State<TLTransferirLeadDialog>
+    with TickerProviderStateMixin {
+  final _formKey = GlobalKey<FormState>();
+  final _sb = Supabase.instance.client;
+
+  bool _loading = true;
+  bool _sending = false;
+  String? _erro;
+  List<Map<String, dynamic>> _consultores = [];
+  String? _selecionado;
+
+  static const branco = Color(0xFFFFFFFF);
+  static const texto = Color(0xFF231F20);
+  static const vermelho = Color(0xFFEA3124);
+  static const bordaCinza = Color(0xFFE8E8E8);
+
+  static const double kMaxWidth = 520;
+  static const double kMinBodyHeight = 220;
+  static const EdgeInsets kInsetPadding =
+      EdgeInsets.symmetric(horizontal: 28, vertical: 24);
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarConsultores();
+  }
+
+  Future<void> _carregarConsultores() async {
+    try {
+      final rows = await _sb
+          .from('consultores')
+          .select('uid, nome')
+          .eq('ativo', true)
+          .order('nome');
+      setState(() {
+        _consultores = List<Map<String, dynamic>>.from(rows);
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _erro = 'Erro ao carregar consultores';
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _confirmar() async {
+    if (!_formKey.currentState!.validate()) return;
+    final uid = _selecionado;
+    if (uid == null) return;
+
+    setState(() => _sending = true);
+    try {
+      await widget.onConfirmar(uid);
+      if (mounted) Navigator.of(context).pop(true);
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: kInsetPadding,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: kMaxWidth),
+          child: Material(
+            color: branco,
+            elevation: 6,
+            shadowColor: Colors.black26,
+            borderRadius: BorderRadius.circular(14),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(0, 12, 0, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 26,
+                            height: 26,
+                            decoration: BoxDecoration(
+                              color: const Color(0x1AEA3124),
+                              borderRadius: BorderRadius.circular(13),
+                            ),
+                            alignment: Alignment.center,
+                            child: const Icon(Icons.sync_alt_rounded,
+                                color: vermelho, size: 16),
+                          ),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'Transferir Lead',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: texto,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, color: texto, size: 20),
+                            onPressed: () => Navigator.of(context).pop(),
+                            tooltip: 'Fechar',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: branco,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: bordaCinza, width: 1),
+                      ),
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(widget.lead.nome ?? '-',
+                              style: const TextStyle(
+                                  fontSize: 14.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: texto)),
+                          const SizedBox(height: 4),
+                          if ((widget.lead.telefone ?? '').isNotEmpty)
+                            Text(widget.lead.telefone!,
+                                style: const TextStyle(
+                                    fontSize: 13.5, color: texto)),
+                          const SizedBox(height: 4),
+                          Text('Consultor atual: ${widget.consultorAtualNome}',
+                              style: const TextStyle(
+                                  fontSize: 13, color: Color(0xFF6B6B6E))),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'Transferir para',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: texto,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: DropdownButtonFormField<String>(
+                        value: _selecionado,
+                        isExpanded: true,
+                        icon: const Icon(Icons.expand_more,
+                            color: Color(0xFF6B6B6E)),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 11),
+                          fillColor: branco,
+                          filled: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide:
+                                const BorderSide(color: bordaCinza, width: 1),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide:
+                                const BorderSide(color: bordaCinza, width: 1),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide:
+                                const BorderSide(color: vermelho, width: 1.2),
+                          ),
+                        ),
+                        hint: const Text('Selecione o consultor',
+                            style: TextStyle(color: Color(0xFF9A9AA0))),
+                        items: _consultores
+                            .map((c) => DropdownMenuItem<String>(
+                                  value: c['uid'] as String,
+                                  child: Text(c['nome'] as String),
+                                ))
+                            .toList(),
+                        onChanged: (v) => setState(() => _selecionado = v),
+                        validator: (v) =>
+                            v == null ? 'Selecione um consultor' : null,
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 44,
+                        child: _TLGradientConfirmButton(
+                          enabled: !_sending && _selecionado != null,
+                          onPressed: _sending || _selecionado == null
+                              ? null
+                              : _confirmar,
+                          child: _sending
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Icon(Icons.sync_alt_rounded,
+                                        size: 18, color: Colors.white),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Confirmar Transferência',
+                                      style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w700),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TLGradientConfirmButton extends StatelessWidget {
+  final VoidCallback? onPressed;
+  final Widget child;
+  final bool enabled;
+  const _TLGradientConfirmButton({
+    required this.onPressed,
+    required this.child,
+    required this.enabled,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final enabledGradient = const LinearGradient(
+      colors: [
+        Color(0xFFF15A24),
+        Color(0xFFEA3124),
+      ],
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+    );
+
+    final disabledColor = const Color(0xFFEEC5C2);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: enabled ? enabledGradient : null,
+        color: enabled ? null : disabledColor,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          disabledForegroundColor: Colors.white70,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: EdgeInsets.zero,
+        ),
+        child: child,
       ),
     );
   }

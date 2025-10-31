@@ -5,11 +5,10 @@ import 'package:email_validator/email_validator.dart';
 
 const String SENHA_PADRAO = 'Ademicon123456';
 
-// Tokens específicos do link Voltar
 const double _backIconSize = 18;
 const double _backGap = 6;
 const double _backFontSize = 13.5;
-const Color _backColor = Color(0xFFEA3124); // cor da marca
+const Color _backColor = Color(0xFFEA3124);
 
 class BrPhoneTextInputFormatter extends TextInputFormatter {
   const BrPhoneTextInputFormatter();
@@ -180,7 +179,6 @@ class _CadastrarConsultorPageState extends State<CadastrarConsultorPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Link Voltar com mesma cor e tamanho
                   InkWell(
                     borderRadius: BorderRadius.circular(8),
                     onTap: () => Navigator.of(context).maybePop(),
@@ -206,7 +204,6 @@ class _CadastrarConsultorPageState extends State<CadastrarConsultorPage> {
                   ),
                   const SizedBox(height: 10),
 
-                  // Cabeçalho com ícone
                   Row(
                     children: [
                       Container(
@@ -232,7 +229,6 @@ class _CadastrarConsultorPageState extends State<CadastrarConsultorPage> {
                   ),
                   const SizedBox(height: 14),
 
-                  // Card do formulário
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -303,7 +299,6 @@ class _CadastrarConsultorPageState extends State<CadastrarConsultorPage> {
                   ),
                   const SizedBox(height: 14),
 
-                  // Botão cadastrar
                   SizedBox(
                     height: 52,
                     width: double.infinity,
