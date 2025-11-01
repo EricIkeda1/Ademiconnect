@@ -27,6 +27,9 @@ class VisitVM {
   final String statusTxt;
   final Color corFundo;
   final Color corTexto;
+  final String? negociacaoRaw;
+  final String? valorPropostaFmt;
+
   const VisitVM({
     required this.id,
     required this.estabelecimento,
@@ -36,12 +39,13 @@ class VisitVM {
     required this.statusTxt,
     required this.corFundo,
     required this.corTexto,
+    this.negociacaoRaw,
+    this.valorPropostaFmt,
   });
 }
 
 class MinhasVisitasTab extends StatefulWidget {
   const MinhasVisitasTab({super.key});
-
   @override
   State<MinhasVisitasTab> createState() => _MinhasVisitasTabState();
 }
@@ -62,6 +66,9 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
   final Set<String> _ruasTodas = <String>{};
   String? _ruaSelecionada;
 
+  // canal realtime para invalidar caches e forçar rebuild do StreamBuilder
+  RealtimeChannel? _chan;
+
   @override
   void initState() {
     super.initState();
@@ -74,12 +81,34 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
         _invalidateCaches();
       });
     });
+    _subscribeRealtime();
   }
 
   @override
   void dispose() {
     _searchCtrl.dispose();
+    if (_chan != null) {
+      _client.removeChannel(_chan!);
+      _chan = null;
+    }
     super.dispose();
+  }
+
+  void _subscribeRealtime() {
+    _chan = _client
+        .channel('realtime:clientes')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'clientes',
+          callback: (payload) {
+            // qualquer insert/update/delete invalida os caches e rebuilda
+            if (mounted) {
+              setState(_invalidateCaches);
+            }
+          },
+        )
+        .subscribe();
   }
 
   void _invalidateCaches() {
@@ -87,12 +116,13 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
     _cacheFinalizados = null;
   }
 
+  // Compatível: select(...).eq(...).order(...).asStream()
   Stream<List<Map<String, dynamic>>> get _meusClientesStream {
     final user = _client.auth.currentSession?.user;
     if (user == null) return const Stream<List<Map<String, dynamic>>>.empty();
     return _client
         .from('clientes')
-        .select('*')
+        .select('id, estabelecimento, endereco, cidade, estado, data_visita, hora_visita, consultor_uid_t, status_negociacao, valor_proposta')
         .eq('consultor_uid_t', user.id)
         .order('data_visita', ascending: false)
         .order('hora_visita', ascending: false)
@@ -102,7 +132,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
   Stream<List<Map<String, dynamic>>> get _todasVisitasStream {
     return _client
         .from('clientes')
-        .select('id, estabelecimento, endereco, cidade, estado, data_visita, hora_visita, consultor_uid_t')
+        .select('id, estabelecimento, endereco, cidade, estado, data_visita, hora_visita, consultor_uid_t, status_negociacao, valor_proposta')
         .order('data_visita', ascending: false)
         .order('hora_visita', ascending: false)
         .asStream();
@@ -116,7 +146,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
     final androidWeb = Uri.parse('https://maps.google.com/?q=$q');
     final iosGmm = Uri.parse('comgooglemaps://?q=$q');
     final iosApple = Uri.parse('http://maps.apple.com/?q=$q');
-    
+
     try {
       if (platform == TargetPlatform.android) {
         if (await canLaunchUrl(androidGeo)) { await launchUrl(androidGeo); return; }
@@ -128,15 +158,11 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
       final web = Uri.parse('https://www.google.com/maps/search/?api=1&query=$q');
       final ok = await launchUrl(web, mode: LaunchMode.externalApplication);
       if (!ok && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Não foi possível abrir o Maps')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Não foi possível abrir o Maps')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao abrir o Maps: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao abrir o Maps: $e')));
       }
     }
   }
@@ -179,9 +205,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
       final agora = DateTime.now();
       final hojeInicio = DateTime(agora.year, agora.month, agora.day, 0, 0, 0);
       final hojeFim = DateTime(agora.year, agora.month, agora.day, 23, 59, 59);
-      final ehHoje = (d.isAfter(hojeInicio) && d.isBefore(hojeFim)) ||
-          d.isAtSameMomentAs(hojeInicio) ||
-          d.isAtSameMomentAs(hojeFim);
+      final ehHoje = (d.isAfter(hojeInicio) && d.isBefore(hojeFim)) || d.isAtSameMomentAs(hojeInicio) || d.isAtSameMomentAs(hojeFim);
       if (ehHoje) {
         return {
           'icone': Icons.flag_outlined,
@@ -214,6 +238,52 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
     }
   }
 
+  Map<String, dynamic> _statusNegociacaoChip(String? raw) {
+    final s = ((raw == null || raw.trim().isEmpty) ? 'novo' : raw.trim()).toLowerCase();
+
+    IconData ic = Icons.info_outline;
+    Color fg = _kText;
+    Color bg = _kText.withOpacity(.08);
+    String txt = 'Sem status';
+
+    switch (s) {
+      case 'novo':
+        ic = Icons.fiber_new_outlined;
+        fg = _kInfo;
+        bg = _kInfo.withOpacity(.10);
+        txt = 'Novo';
+        break;
+      case 'em_negociacao':
+      case 'em negociação':
+        ic = Icons.handshake_outlined;
+        fg = _kAccent;
+        bg = _kAccent.withOpacity(.10);
+        txt = 'Em negociação';
+        break;
+      case 'proposta_enviada':
+      case 'proposta enviada':
+        ic = Icons.mark_email_read_outlined;
+        fg = _kPrimary;
+        bg = _kPrimary.withOpacity(.10);
+        txt = 'Proposta enviada';
+        break;
+      case 'fechado':
+      case 'venda':
+        ic = Icons.check_circle_outline;
+        fg = _kSuccess;
+        bg = _kSuccess.withOpacity(.10);
+        txt = 'Fechado';
+        break;
+      case 'perdido':
+        ic = Icons.cancel_outlined;
+        fg = const Color(0xFFD32F2F);
+        bg = const Color(0x1AD32F2F).withOpacity(.10);
+        txt = 'Perdido';
+        break;
+    }
+    return {'icone': ic, 'texto': txt, 'corFundo': bg, 'corTexto': fg};
+  }
+
   String _capitalize(String text) => text.isEmpty ? text : text[0].toUpperCase() + text.substring(1);
 
   InputDecoration _obterDecoracaoCampo(String label, {String? hint}) {
@@ -223,18 +293,9 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
       filled: true,
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: _kBorder),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: _kBorder),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: _kPrimary, width: 2),
-      ),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _kBorder)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _kBorder)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _kPrimary, width: 2)),
       suffixIcon: _query.isEmpty
           ? const Icon(Icons.search, color: _kMuted, size: 20)
           : IconButton(
@@ -257,11 +318,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
     return Container(
       margin: margin ?? const EdgeInsets.fromLTRB(16, 0, 16, 12),
       padding: padding ?? const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _kCard,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _kBorder),
-      ),
+      decoration: BoxDecoration(color: _kCard, borderRadius: BorderRadius.circular(10), border: Border.all(color: _kBorder)),
       child: child,
     );
   }
@@ -274,11 +331,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: _kBorder),
-              borderRadius: BorderRadius.circular(8),
-            ),
+            decoration: BoxDecoration(color: Colors.white, border: Border.all(color: _kBorder), borderRadius: BorderRadius.circular(8)),
             child: const Icon(Icons.calendar_today_outlined, color: _kPrimary, size: 20),
           ),
           const SizedBox(width: 12),
@@ -286,24 +339,9 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Minhas Visitas',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: _kTitle,
-                    letterSpacing: -0.2,
-                  ),
-                ),
+                Text('Minhas Visitas', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: _kTitle, letterSpacing: -0.2)),
                 SizedBox(height: 2),
-                Text(
-                  'Agenda e acompanhamento',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    color: _kText,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
+                Text('Agenda e acompanhamento', style: TextStyle(fontSize: 12.5, color: _kText, fontWeight: FontWeight.w400)),
               ],
             ),
           ),
@@ -344,38 +382,23 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
           borderRadius: BorderRadius.circular(8),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              border: Border.all(color: selecionado ? _kPrimary : _kBorder),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              t,
-              style: TextStyle(
-                color: selecionado ? _kPrimary : _kText,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+            decoration: BoxDecoration(border: Border.all(color: selecionado ? _kPrimary : _kBorder), borderRadius: BorderRadius.circular(8)),
+            child: Text(t, style: TextStyle(color: selecionado ? _kPrimary : _kText, fontSize: 12.5, fontWeight: FontWeight.w500)),
           ),
         ),
       );
     }
 
-    const double alturaChips = 160;
-
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: SizedBox(
-        height: alturaChips,
+        height: 160,
         child: Scrollbar(
           thumbVisibility: true,
           child: ListView.builder(
             padding: EdgeInsets.zero,
             itemCount: visiveis.length,
-            itemBuilder: (context, index) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: buildChip(visiveis[index]),
-            ),
+            itemBuilder: (context, index) => Padding(padding: const EdgeInsets.only(bottom: 8), child: buildChip(visiveis[index])),
           ),
         ),
       ),
@@ -397,28 +420,17 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
       builder: (context, value, _) {
         final shimmer = LinearGradient(
           colors: [const Color(0xFFEFF2F7), const Color(0xFFF7F8FA), const Color(0xFFEFF2F7)],
-          stops: [0.1, 0.5, 0.9],
+          stops: const [0.1, 0.5, 0.9],
           begin: Alignment(-1 - value, -0.3),
           end: Alignment(1 + value, 0.3),
         );
-        return ShaderMask(
-          shaderCallback: (rect) => shimmer.createShader(rect),
-          blendMode: BlendMode.srcATop,
-          child: child,
-        );
+        return ShaderMask(shaderCallback: (rect) => shimmer.createShader(rect), blendMode: BlendMode.srcATop, child: child);
       },
     );
   }
 
   Widget _skeletonBar({double height = 12, double width = double.infinity, BorderRadius? radius}) {
-    return Container(
-      height: height,
-      width: width,
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF2F7),
-        borderRadius: radius ?? BorderRadius.circular(6),
-      ),
-    );
+    return Container(height: height, width: width, decoration: BoxDecoration(color: const Color(0xFFEFF2F7), borderRadius: radius ?? BorderRadius.circular(6)));
   }
 
   Widget _skeletonVisitaItem({Key? key}) {
@@ -433,27 +445,17 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
               Row(children: [
                 Expanded(child: _skeletonBar(height: 14, width: 160)),
                 const SizedBox(width: 12),
-                Container(
-                  height: 22,
-                  width: 90,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEFF2F7),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
+                Container(height: 22, width: 90, decoration: BoxDecoration(color: const Color(0xFFEFF2F7), borderRadius: BorderRadius.circular(999))),
               ]),
               const SizedBox(height: 10),
               _skeletonBar(height: 12, width: 220),
               const SizedBox(height: 6),
               _skeletonBar(height: 12, width: 160),
               const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _skeletonBar(height: 12, width: 100),
-                  _skeletonBar(height: 30, width: 80, radius: BorderRadius.circular(8)),
-                ],
-              ),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                _skeletonBar(height: 12, width: 100),
+                _skeletonBar(height: 30, width: 80, radius: BorderRadius.circular(8)),
+              ]),
             ],
           ),
         ),
@@ -469,9 +471,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
     final hs = (c['hora_visita'] ?? '').toString();
     DateTime? d;
     if (ds.isNotEmpty) {
-      try {
-        d = DateTime.parse(ds).toLocal();
-      } catch (_) {}
+      try { d = DateTime.parse(ds).toLocal(); } catch (_) {}
     }
     if (d != null) {
       if (hs.isNotEmpty) {
@@ -490,6 +490,19 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
       if (end.isNotEmpty) end,
       if (cidade.isNotEmpty || estado.isNotEmpty) '$cidade - $estado',
     ].where((e) => e.isNotEmpty).join(', ');
+
+    String? valorFmt;
+    final vp = c['valor_proposta'];
+    if (vp != null) {
+      try {
+        final num n = (vp is num) ? vp : num.parse(vp.toString());
+        valorFmt = NumberFormat.simpleCurrency(locale: 'pt_BR').format(n);
+      } catch (_) {
+        final s = vp.toString().trim();
+        if (s.isNotEmpty) valorFmt = s;
+      }
+    }
+
     return VisitVM(
       id: (c['id'] ?? '').toString(),
       estabelecimento: ((c['estabelecimento'] ?? '').toString().trim().isEmpty)
@@ -501,10 +514,14 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
       statusTxt: s['texto'] as String,
       corFundo: s['corFundo'] as Color,
       corTexto: s['corTexto'] as Color,
+      negociacaoRaw: (c['status_negociacao'] as String?)?.trim(),
+      valorPropostaFmt: valorFmt,
     );
   }
 
   Widget _buildVisitaVM(VisitVM vm, {bool mostrarRota = true}) {
+    final sn = _statusNegociacaoChip(vm.negociacaoRaw);
+
     return _cleanCard(
       padding: const EdgeInsets.all(14),
       child: Column(
@@ -513,12 +530,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
           Row(
             children: [
               Expanded(
-                child: Text(
-                  vm.estabelecimento,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _kTitle),
-                ),
+                child: Text(vm.estabelecimento, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _kTitle)),
               ),
               const SizedBox(width: 8),
               Container(
@@ -528,17 +540,25 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
                   borderRadius: BorderRadius.circular(999),
                   border: Border.all(color: vm.corTexto.withOpacity(.25)),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(vm.icone, size: 14, color: vm.corTexto),
-                    const SizedBox(width: 6),
-                    Text(
-                      vm.statusTxt,
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: vm.corTexto),
-                    ),
-                  ],
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(vm.icone, size: 14, color: vm.corTexto),
+                  const SizedBox(width: 6),
+                  Text(vm.statusTxt, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: vm.corTexto)),
+                ]),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: sn['corFundo'] as Color,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: (sn['corTexto'] as Color).withOpacity(.25)),
                 ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(sn['icone'] as IconData, size: 14, color: sn['corTexto'] as Color),
+                  const SizedBox(width: 6),
+                  Text(sn['texto'] as String, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: sn['corTexto'] as Color)),
+                ]),
               ),
             ],
           ),
@@ -550,12 +570,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
                 const Icon(Icons.location_on_outlined, size: 16, color: _kMuted),
                 const SizedBox(width: 6),
                 Expanded(
-                  child: Text(
-                    vm.enderecoCompleto,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13, color: _kText, height: 1.4),
-                  ),
+                  child: Text(vm.enderecoCompleto, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: _kText, height: 1.4)),
                 ),
               ],
             ),
@@ -572,10 +587,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
                   style: TextButton.styleFrom(
                     foregroundColor: _kPrimary,
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      side: const BorderSide(color: _kBorder),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: _kBorder)),
                   ),
                   onPressed: () => _abrirNoGoogleMaps(vm.enderecoCompleto),
                   icon: const Icon(Icons.map_outlined, size: 16),
@@ -583,6 +595,14 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
                 ),
             ],
           ),
+          if ((vm.valorPropostaFmt ?? '').isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(children: [
+              const Icon(Icons.attach_money, size: 16, color: _kMuted),
+              const SizedBox(width: 6),
+              Text('Proposta: ${vm.valorPropostaFmt}', style: const TextStyle(fontSize: 13, color: _kTitle)),
+            ]),
+          ],
         ],
       ),
     );
@@ -609,6 +629,10 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
           return _errorBox('Erro: ${snap.error}');
         }
 
+        // sempre resetar para refletir mudanças
+        _cacheProximas = null;
+        _cacheFinalizados = null;
+
         final todos = snap.data ?? [];
 
         bool matchesTextoRua(Map<String, dynamic> c) {
@@ -622,9 +646,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
           final ds = c['data_visita']?.toString();
           DateTime? data;
           if (ds != null && ds.isNotEmpty) {
-            try {
-              data = DateTime.parse(ds).toLocal();
-            } catch (_) {}
+            try { data = DateTime.parse(ds).toLocal(); } catch (_) {}
           }
           final hs = c['hora_visita']?.toString();
           if (data != null) {
@@ -652,17 +674,12 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
           return data.isAfter(hojeFim) && !ehHoje;
         }
 
-        final agendadosFiltrados = todos
-            .where((c) => matchesTextoRua(c) && _matchChipsRua(c) && isAgendado(c))
-            .map(_toVM)
-            .toList();
+        final agendadosFiltrados = todos.where((c) => matchesTextoRua(c) && _matchChipsRua(c) && isAgendado(c)).map(_toVM).toList();
 
         if (_todosExpanded) {
           _ruasTodas
             ..clear()
-            ..addAll(
-              agendadosFiltrados.map((vm) => vm.enderecoCompleto.split(',').first.trim()).where((s) => s.isNotEmpty),
-            );
+            ..addAll(agendadosFiltrados.map((vm) => vm.enderecoCompleto.split(',').first.trim()).where((s) => s.isNotEmpty));
         }
 
         final count = agendadosFiltrados.length;
@@ -691,46 +708,12 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
     );
   }
 
-  Widget _expansionSkeleton({required String title}) {
-    return _cleanCard(
-      child: _skeletonShimmer(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _skeletonBar(height: 16, width: 140),
-            const SizedBox(height: 12),
-            ...List.generate(
-              2,
-              (i) => Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                height: 72,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEFF2F7),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _emptyBox({required IconData icon, required String title, required String subtitle}) {
     return Container(
       padding: const EdgeInsets.all(32),
       child: Column(
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: _kBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _kBorder),
-            ),
-            child: Icon(icon, size: 28, color: _kMuted),
-          ),
+          Container(width: 56, height: 56, decoration: BoxDecoration(color: _kBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: _kBorder)), child: Icon(icon, size: 28, color: _kMuted)),
           const SizedBox(height: 16),
           Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _kTitle)),
           const SizedBox(height: 6),
@@ -744,11 +727,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFDECEC),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE57373)),
-      ),
+      decoration: BoxDecoration(color: const Color(0xFFFDECEC), borderRadius: BorderRadius.circular(8), border: Border.all(color: const Color(0xFFE57373))),
       child: Row(
         children: [
           const Icon(Icons.error_outline, color: Color(0xFFD32F2F), size: 18),
@@ -769,7 +748,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
     required ValueChanged<bool> onChanged,
     required Widget child,
     bool isLoading = false,
-    Widget? placeholderChild, 
+    Widget? placeholderChild,
   }) {
     return _AnimatedSizeExpansionCard(
       key: key,
@@ -782,7 +761,7 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
       child: child,
       vsync: this,
       isLoading: isLoading,
-      placeholderChild: placeholderChild, 
+      placeholderChild: placeholderChild,
     );
   }
 
@@ -868,6 +847,10 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
                     return _errorBox('Erro: ${snapshot.error}');
                   }
 
+                  // reset a cada emissão
+                  _cacheProximas = null;
+                  _cacheFinalizados = null;
+
                   final all = snapshot.data ?? [];
 
                   bool matchesTextoRua(Map<String, dynamic> c) {
@@ -880,14 +863,10 @@ class _MinhasVisitasTabState extends State<MinhasVisitasTab> with TickerProvider
 
                   _ruasTodas
                     ..clear()
-                    ..addAll(
-                      base.map((c) => (c['endereco'] ?? '').toString().trim())
-                          .where((s) => s.isNotEmpty),
-                    );
+                    ..addAll(base.map((c) => (c['endereco'] ?? '').toString().trim()).where((s) => s.isNotEmpty));
 
                   final agora = DateTime.now();
                   final hojeIni = DateTime(agora.year, agora.month, agora.day, 0, 0, 0);
-
                   bool isPassado(Map<String, dynamic> c) {
                     final ds = c['data_visita']?.toString();
                     if (ds == null || ds.isEmpty) return false;
@@ -984,7 +963,7 @@ class _AnimatedSizeExpansionCard extends StatefulWidget {
   final Widget child;
   final TickerProvider vsync;
   final bool isLoading;
-  final Widget? placeholderChild; 
+  final Widget? placeholderChild;
 
   const _AnimatedSizeExpansionCard({
     super.key,
@@ -997,15 +976,14 @@ class _AnimatedSizeExpansionCard extends StatefulWidget {
     required this.child,
     required this.vsync,
     this.isLoading = false,
-    this.placeholderChild, 
+    this.placeholderChild,
   });
 
   @override
   State<_AnimatedSizeExpansionCard> createState() => _AnimatedSizeExpansionCardState();
 }
 
-class _AnimatedSizeExpansionCardState extends State<_AnimatedSizeExpansionCard>
-    with TickerProviderStateMixin {
+class _AnimatedSizeExpansionCardState extends State<_AnimatedSizeExpansionCard> with TickerProviderStateMixin {
   late AnimationController _ctrl;
   late Animation<double> _turns;
   late AnimationController _fadeCtrl;
@@ -1074,11 +1052,7 @@ class _AnimatedSizeExpansionCardState extends State<_AnimatedSizeExpansionCard>
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      decoration: BoxDecoration(
-        color: _kCard,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _kBorder),
-      ),
+      decoration: BoxDecoration(color: _kCard, borderRadius: BorderRadius.circular(10), border: Border.all(color: _kBorder)),
       child: Column(
         children: [
           Material(
@@ -1094,10 +1068,7 @@ class _AnimatedSizeExpansionCardState extends State<_AnimatedSizeExpansionCard>
                       Container(
                         width: 36,
                         height: 36,
-                        decoration: BoxDecoration(
-                          color: (widget.iconColor ?? _kPrimary).withOpacity(.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+                        decoration: BoxDecoration(color: (widget.iconColor ?? _kPrimary).withOpacity(.1), borderRadius: BorderRadius.circular(8)),
                         child: Icon(widget.icon, size: 18, color: widget.iconColor ?? _kPrimary),
                       ),
                       const SizedBox(width: 12),
@@ -1115,17 +1086,10 @@ class _AnimatedSizeExpansionCardState extends State<_AnimatedSizeExpansionCard>
                       ),
                     ),
                     if (widget.isLoading) ...[
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: _kMuted),
-                      ),
+                      const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: _kMuted)),
                       const SizedBox(width: 8),
                     ],
-                    RotationTransition(
-                      turns: _turns,
-                      child: const Icon(Icons.keyboard_arrow_down, color: _kMuted, size: 22),
-                    ),
+                    RotationTransition(turns: _turns, child: const Icon(Icons.keyboard_arrow_down, color: _kMuted, size: 22)),
                   ],
                 ),
               ),
