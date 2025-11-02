@@ -19,19 +19,12 @@ class _VendasPageState extends State<VendasPage> {
   double mediaMensal = 0;
   double melhorMesValor = 0;
   int periodoMeses = 6;
-  double percentualMeta = 1.0;
 
-  List<String> meses = const [];
-  List<double> realizado = const [];
-  List<double> meta = const [];
+  List<String> meses = [];
+  List<double> realizado = [];
 
   final Color primary = const Color(0xFFDC2C2C);
   final Color primaryLight = const Color(0xFFF06666);
-  final Gradient headerBg = const LinearGradient(
-    colors: [Color(0xFFF7F9FB), Color(0xFFFFFFFF)],
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-  );
 
   String moeda(double v) => NumberFormat.simpleCurrency(locale: 'pt_BR').format(v);
 
@@ -44,35 +37,45 @@ class _VendasPageState extends State<VendasPage> {
 
   @override
   void dispose() {
-    if (_chan != null) _client.removeChannel(_chan!);
+    if (_chan != null) {
+      _client.removeChannel(_chan!);
+    }
     super.dispose();
   }
 
   void _inscreverRealtime() {
-    _chan = _client
-        .channel('realtime:dash_vendas_finalizadas')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'clientes',
-          callback: (_) {
-            _carregarDados();
-          },
-        )
-        .subscribe();
+    try {
+      _chan = _client
+          .channel('realtime:dash_vendas_finalizadas')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'clientes',
+            callback: (_) {
+              if (mounted) {
+                _carregarDados();
+              }
+            },
+          )
+          .subscribe();
+    } catch (e) {
+    }
   }
 
   Future<void> _carregarDados() async {
     try {
       final mensal = await _client
           .from('vendas_mensais')
-          .select('mes_ord, mes_abrev, realizado, meta')
+          .select('mes_ord, mes_abrev, realizado')
           .order('mes_ord', ascending: true);
 
       if (mensal is List && mensal.isNotEmpty) {
-        meses = mensal.map((e) => (e['mes_abrev'] ?? '').toString()).toList().cast<String>();
-        realizado = mensal.map((e) => (e['realizado'] ?? 0).toDouble()).toList().cast<double>();
-        meta = mensal.map((e) => (e['meta'] ?? 0).toDouble()).toList().cast<double>();
+        if (mounted) {
+          setState(() {
+            meses = mensal.map((e) => (e['mes_abrev'] ?? '').toString()).toList().cast<String>();
+            realizado = mensal.map((e) => (e['realizado'] ?? 0).toDouble()).toList().cast<double>();
+          });
+        }
       } else {
         await _agregarLocalmenteApenasFinalizadas();
       }
@@ -80,20 +83,22 @@ class _VendasPageState extends State<VendasPage> {
       final kpis = await _client.from('vendas_kpis').select().limit(1);
       if (kpis is List && kpis.isNotEmpty) {
         final k = kpis.first as Map<String, dynamic>;
-        totalVendas = (k['total_vendas'] ?? 0).toDouble();
-        mediaMensal = (k['media_mensal'] ?? 0).toDouble();
-        melhorMesValor = (k['melhor_mes'] ?? 0).toDouble();
-        periodoMeses = (k['periodo_meses'] ?? 6).toInt();
-        percentualMeta = (k['percentual_meta'] ?? 1.0).toDouble();
+        if (mounted) {
+          setState(() {
+            totalVendas = (k['total_vendas'] ?? 0).toDouble();
+            mediaMensal = (k['media_mensal'] ?? 0).toDouble();
+            melhorMesValor = (k['melhor_mes'] ?? 0).toDouble();
+            periodoMeses = (k['periodo_meses'] ?? 6).toInt();
+          });
+        }
       } else {
         _calcularKpisFallback();
       }
+
     } catch (_) {
       await _agregarLocalmenteApenasFinalizadas();
       _calcularKpisFallback();
     }
-
-    if (mounted) setState(() {});
   }
 
   Future<void> _agregarLocalmenteApenasFinalizadas() async {
@@ -101,118 +106,133 @@ class _VendasPageState extends State<VendasPage> {
     final inicio = DateTime(now.year, now.month - 5, 1);
     final inicioStr = DateFormat('yyyy-MM-dd').format(inicio);
 
-    final res = await _client
-        .from('clientes')
-        .select('data_visita, status_negociacao, valor_proposta')
-        .filter('status_negociacao', 'in', '("fechado","fechada","venda")')
-        .gte('data_visita', inicioStr)
-        .order('data_visita', ascending: true);
+    try {
+      final res = await _client
+          .from('clientes')
+          .select('data_visita, status_negociacao, valor_proposta')
+          .filter('status_negociacao', 'in', '("fechado","fechada","venda")')
+          .gte('data_visita', inicioStr)
+          .order('data_visita', ascending: true);
 
-    final Map<String, double> somaMes = {};
-    final Map<String, double> metaMes = {};
-    final DateFormat abrev = DateFormat('MMM', 'pt_BR');
+      final Map<String, double> somaMes = {};
+      final DateFormat abrev = DateFormat('MMM', 'pt_BR');
 
-    for (var i = 0; i < 6; i++) {
-      final d = DateTime(now.year, now.month - 5 + i, 1);
-      final key = abrev.format(d);
-      somaMes[key] = 0;
-      metaMes[key] = 50000;
-    }
-
-    if (res is List) {
-      for (final row in res) {
-        final ds = (row['data_visita'] ?? '').toString();
-        if (ds.isEmpty) continue;
-        final d = DateTime.tryParse(ds)?.toLocal();
-        if (d == null) continue;
-
-        final key = abrev.format(DateTime(d.year, d.month, 1));
-
-        final rawValor = row['valor_proposta'];
-        final v = switch (rawValor) {
-          num n => n.toDouble(),
-          String s => double.tryParse(s.replaceAll('.', '').replaceAll(',', '.')) ?? 0.0,
-          _ => 0.0,
-        };
-
-        somaMes.update(key, (old) => old + v, ifAbsent: () => v);
+      for (var i = 0; i < 6; i++) {
+        final d = DateTime(now.year, now.month - 5 + i, 1);
+        final key = abrev.format(d);
+        somaMes[key] = 0;
       }
-    }
 
-    meses = somaMes.keys.toList()
-      ..sort((a, b) {
-        final order = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-        return order.indexOf(a.toLowerCase()).compareTo(order.indexOf(b.toLowerCase()));
-      });
+      if (res is List) {
+        for (final row in res) {
+          final ds = (row['data_visita'] ?? '').toString();
+          if (ds.isEmpty) continue;
+          final d = DateTime.tryParse(ds)?.toLocal();
+          if (d == null) continue;
 
-    realizado = meses.map((m) => somaMes[m] ?? 0).toList();
-    meta = meses.map((m) => metaMes[m] ?? 0).toList();
+          final key = abrev.format(DateTime(d.year, d.month, 1));
+
+          final rawValor = row['valor_proposta'];
+          final v = switch (rawValor) {
+            num n => n.toDouble(),
+            String s => double.tryParse(s.replaceAll('.', '').replaceAll(',', '.')) ?? 0.0,
+            _ => 0.0,
+          };
+
+          somaMes.update(key, (old) => old + v, ifAbsent: () => v);
+        }
+      }
+
+      final sortedMeses = somaMes.keys.toList()
+        ..sort((a, b) {
+          final order = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+          return order.indexOf(a.toLowerCase()).compareTo(order.indexOf(b.toLowerCase()));
+        });
+
+      if (mounted) {
+        setState(() {
+          meses = sortedMeses;
+          realizado = sortedMeses.map((m) => somaMes[m] ?? 0).toList();
+        });
+      }
+    } catch (e) {    }
   }
 
   void _calcularKpisFallback() {
-    totalVendas = realizado.fold<double>(0, (a, b) => a + b);
-    periodoMeses = meses.isEmpty ? 6 : meses.length;
-    mediaMensal = periodoMeses == 0 ? 0 : totalVendas / periodoMeses;
-    melhorMesValor = realizado.isEmpty ? 0 : realizado.reduce((a, b) => a > b ? a : b);
-    final totalMeta = meta.fold<double>(0, (a, b) => a + b);
-    percentualMeta = totalMeta == 0 ? 1.0 : (totalVendas / totalMeta);
+    if (mounted) {
+      setState(() {
+        totalVendas = realizado.fold<double>(0, (a, b) => a + b);
+        periodoMeses = meses.isEmpty ? 6 : meses.length;
+        mediaMensal = periodoMeses == 0 ? 0 : totalVendas / periodoMeses;
+        melhorMesValor = realizado.isEmpty ? 0 : realizado.reduce((a, b) => a > b ? a : b);
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final safe = MediaQuery.of(context).padding;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
-      body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            const SliverAppBar(pinned: false, backgroundColor: Colors.white, elevation: 0, toolbarHeight: 0),
-            SliverToBoxAdapter(
-              child: Container(
-                decoration: BoxDecoration(gradient: headerBg),
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-                child: _HeaderRow(
-                  title: 'Dashboard de Vendas',
-                  badgeText: '${(percentualMeta * 100).toStringAsFixed(1)}% da meta',
-                  showConsultor: consultor.isNotEmpty,
-                  consultorText: 'Consultor: $consultor',
-                  primary: primary,
-                  primaryLight: primaryLight,
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          SliverAppBar(
+            pinned: false, 
+            backgroundColor: Colors.white, 
+            elevation: 0, 
+            toolbarHeight: 0,
+            collapsedHeight: 0,
+            expandedHeight: 0,
+          ),
+          SliverToBoxAdapter(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFF7F9FB), Color(0xFFFFFFFF)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                 ),
               ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(12, 6, 12, safe.bottom + 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _CardsGrid(
-                      children: [
-                        _BigKpiCard(
-                          title: 'Total Vendas',
-                          value: moeda(totalVendas),
-                          icon: Icons.attach_money_rounded,
-                          gradient: LinearGradient(colors: [primary, primaryLight], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                        ),
-                        _KpiCard(title: 'Média Mensal', value: moeda(mediaMensal), icon: Icons.track_changes_rounded),
-                        _KpiCard(title: 'Melhor Mês', value: moeda(melhorMesValor), icon: Icons.emoji_events_outlined),
-                        _KpiCard(title: 'Período', value: '$periodoMeses meses', icon: Icons.event_note_outlined),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    _ChartCard(
-                      title: 'Evolução de Vendas',
-                      subtitle: 'Somente vendas finalizadas entram nos totais e metas',
-                      child: _BarrasVendasChart(meses: meses, realizado: realizado, meta: meta, primary: primary),
-                    ),
-                  ],
-                ),
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+              child: _HeaderRow(
+                title: 'Dashboard de Vendas',
+                showConsultor: false,
+                consultorText: '',
+                primary: primary,
+                primaryLight: primaryLight,
               ),
             ),
-          ],
-        ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _CardsGrid(
+                    children: [
+                      _BigKpiCard(
+                        title: 'Total Vendas',
+                        value: moeda(totalVendas),
+                        icon: Icons.attach_money_rounded,
+                        gradient: LinearGradient(colors: [primary, primaryLight], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                      ),
+                      _KpiCard(title: 'Média Mensal', value: moeda(mediaMensal), icon: Icons.track_changes_rounded),
+                      _KpiCard(title: 'Melhor Mês', value: moeda(melhorMesValor), icon: Icons.emoji_events_outlined),
+                      _KpiCard(title: 'Período', value: '$periodoMeses meses', icon: Icons.event_note_outlined),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _ChartCard(
+                    title: 'Evolução de Vendas',
+                    subtitle: 'Somente vendas finalizadas entram nos totais - Dados Gerais',
+                    child: _BarrasVendasChart(meses: meses, realizado: realizado, primary: primary),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -220,7 +240,6 @@ class _VendasPageState extends State<VendasPage> {
 
 class _HeaderRow extends StatelessWidget {
   final String title;
-  final String badgeText;
   final bool showConsultor;
   final String consultorText;
   final Color primary;
@@ -228,7 +247,6 @@ class _HeaderRow extends StatelessWidget {
 
   const _HeaderRow({
     required this.title,
-    required this.badgeText,
     required this.primary,
     required this.primaryLight,
     this.showConsultor = false,
@@ -275,30 +293,7 @@ class _HeaderRow extends StatelessWidget {
             ],
           ),
         ),
-        _MetaBadge(text: badgeText, color: const Color(0xFFDAF5D7), textColor: const Color(0xFF1E7B34)),
       ],
-    );
-  }
-}
-
-class _MetaBadge extends StatelessWidget {
-  final String text;
-  final Color color;
-  final Color textColor;
-  const _MetaBadge({required this.text, required this.color, required this.textColor});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 28,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 4, offset: Offset(0, 1))],
-      ),
-      child: Text(text, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: textColor, fontWeight: FontWeight.w700)),
     );
   }
 }
@@ -459,9 +454,8 @@ class _ChartCard extends StatelessWidget {
 class _BarrasVendasChart extends StatelessWidget {
   final List<String> meses;
   final List<double> realizado;
-  final List<double> meta;
   final Color primary;
-  const _BarrasVendasChart({required this.meses, required this.realizado, required this.meta, required this.primary});
+  const _BarrasVendasChart({required this.meses, required this.realizado, required this.primary});
 
   @override
   Widget build(BuildContext context) {
@@ -472,15 +466,9 @@ class _BarrasVendasChart extends StatelessWidget {
         barRods: [
           BarChartRodData(
             toY: (realizado[i] / 1000).clamp(0, double.infinity),
-            width: 14,
+            width: 20,
             borderRadius: BorderRadius.circular(4),
             gradient: LinearGradient(colors: [primary, primary.withOpacity(.85)], begin: Alignment.bottomCenter, end: Alignment.topCenter),
-          ),
-          BarChartRodData(
-            toY: (meta[i] / 1000).clamp(0, double.infinity),
-            width: 14,
-            borderRadius: BorderRadius.circular(4),
-            color: Colors.grey.shade300,
           ),
         ],
       );
@@ -488,12 +476,13 @@ class _BarrasVendasChart extends StatelessWidget {
 
     final maxY = [
       ...realizado.map((e) => e / 1000),
-      ...meta.map((e) => e / 1000),
       10,
     ].reduce((a, b) => a > b ? a : b) * 1.1;
 
     return BarChart(
       BarChartData(
+        barTouchData: BarTouchData(enabled: false),
+        
         gridData: FlGridData(
           show: true,
           drawVerticalLine: false,
@@ -531,6 +520,9 @@ class _BarrasVendasChart extends StatelessWidget {
         ),
         barGroups: barGroups,
       ),
+      
+      swapAnimationDuration: Duration.zero,
+      swapAnimationCurve: Curves.linear,
     );
   }
 }

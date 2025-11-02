@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'cadastrar_consultor.dart';
 
 const _brandRed = Color(0xFFEA3124);
@@ -233,7 +234,6 @@ class _ConsultoresRootState extends State<ConsultoresRoot> {
                 ..._consultores.map(
                   (c) => _ConsultorCard(
                     c: c,
-                    onStatus: () {},
                     onEditar: () => _openEditarConsultor(c),
                     onApagar: () => _confirmarExcluir(c),
                   ),
@@ -266,13 +266,11 @@ class _ConsultorView {
 
 class _ConsultorCard extends StatelessWidget {
   final _ConsultorView c;
-  final VoidCallback onStatus;
   final VoidCallback onEditar;
   final VoidCallback onApagar;
   const _ConsultorCard({
     super.key,
     required this.c,
-    required this.onStatus,
     required this.onEditar,
     required this.onApagar,
   });
@@ -300,14 +298,6 @@ class _ConsultorCard extends StatelessWidget {
                 Expanded(child: _NomeMatricula(nome: c.nome, matricula: c.matricula)),
                 Row(
                   children: [
-                    PillButton(
-                      onPressed: onStatus,
-                      icon: const Icon(Icons.stacked_bar_chart_rounded, size: 16, color: _brandRed),
-                      label: 'Status',
-                      radius: 10,
-                      dense: true,
-                    ),
-                    const SizedBox(width: 8),
                     PillIconButton(
                       onPressed: onEditar,
                       icon: Icons.edit_outlined,
@@ -575,7 +565,8 @@ class _EditarConsultorDialogState extends State<_EditarConsultorDialog> {
                         Row(
                           children: [
                             Container(
-                              width: 40, height: 40,
+                              width: 40, 
+                              height: 40,
                               decoration: BoxDecoration(color: const Color(0xFFFFECEA), borderRadius: BorderRadius.circular(10)),
                               child: const Icon(Icons.edit, color: _brandRed),
                             ),
@@ -599,7 +590,7 @@ class _EditarConsultorDialogState extends State<_EditarConsultorDialog> {
                         ),
                         const SizedBox(height: 12),
 
-                        const _FieldLabel(icon: Icons.person_outline, text: 'Nome Completo', requiredMark: true),
+                        _FieldLabel(icon: Icons.person_outline, text: 'Nome Completo', requiredMark: true),
                         const SizedBox(height: 6),
                         TextFormField(
                           controller: _nomeCtrl,
@@ -609,7 +600,7 @@ class _EditarConsultorDialogState extends State<_EditarConsultorDialog> {
                         ),
                         const SizedBox(height: 10),
 
-                        const _FieldLabel(icon: Icons.phone_outlined, text: 'Telefone', requiredMark: true),
+                        _FieldLabel(icon: Icons.phone_outlined, text: 'Telefone', requiredMark: true),
                         const SizedBox(height: 6),
                         TextFormField(
                           controller: _telCtrl,
@@ -626,7 +617,7 @@ class _EditarConsultorDialogState extends State<_EditarConsultorDialog> {
                         ),
                         const SizedBox(height: 10),
 
-                        const _FieldLabel(icon: Icons.alternate_email, text: 'Email', requiredMark: true),
+                        _FieldLabel(icon: Icons.alternate_email, text: 'Email', requiredMark: true),
                         const SizedBox(height: 6),
                         TextFormField(
                           controller: _emailCtrl,
@@ -641,7 +632,7 @@ class _EditarConsultorDialogState extends State<_EditarConsultorDialog> {
                         ),
                         const SizedBox(height: 10),
 
-                        const _FieldLabel(icon: Icons.tag, text: 'Matrícula', requiredMark: false, hintExtra: '(opcional)'),
+                        _FieldLabel(icon: Icons.tag, text: 'Matrícula', requiredMark: false, hintExtra: '(opcional)'),
                         const SizedBox(height: 6),
                         TextFormField(
                           controller: _matCtrl,
@@ -686,8 +677,7 @@ class _EditarConsultorDialogState extends State<_EditarConsultorDialog> {
                                     icon: const Icon(Icons.save, color: Colors.white),
                                     label: _saving
                                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                        : const Text('Salvar Alterações',
-                                            style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
+                                        : const Text('Salvar Alterações', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.transparent,
                                       shadowColor: Colors.transparent,
@@ -718,6 +708,7 @@ class _FieldLabel extends StatelessWidget {
   final String text;
   final bool requiredMark;
   final String? hintExtra;
+
   const _FieldLabel({required this.icon, required this.text, required this.requiredMark, this.hintExtra});
 
   @override
@@ -812,7 +803,9 @@ class _ConfirmExcluirDialog extends StatelessWidget {
                         end: Alignment.centerRight,
                       ),
                       borderRadius: BorderRadius.circular(12),
-                      boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 6, offset: Offset(0, 3))],
+                      boxShadow: const [
+                        BoxShadow(color: Color(0x33000000), blurRadius: 6, offset: Offset(0, 3)),
+                      ],
                     ),
                     child: ElevatedButton.icon(
                       onPressed: () => Navigator.of(context).pop(true),

@@ -5,6 +5,7 @@ import 'components/editar.dart' as comps;
 import 'components/gestor_navbar.dart';
 import 'components/gestor_header_row.dart';
 import 'components/menu_inferior.dart';
+import 'components/avisos.dart';
 import 'telas/lista_consultor.dart';
 import 'telas/enderecos.dart';
 import 'telas/exportar.dart';
@@ -321,6 +322,21 @@ class _HomeGestorState extends State<HomeGestor> {
     );
   }
 
+  Future<void> _abrirAvisosMock() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: const AvisosSheetMock(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Theme(
@@ -354,7 +370,7 @@ class _HomeGestorState extends State<HomeGestor> {
                                   total: _query.isEmpty
                                       ? _totalDb
                                       : _filteredLeads.length,
-                                  onAvisos: () {},
+                                  onAvisos: _abrirAvisosMock, 
                                 ),
                                 _buildSearchBar(),
                               ],
