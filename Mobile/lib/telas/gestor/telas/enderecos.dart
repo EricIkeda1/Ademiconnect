@@ -9,29 +9,111 @@ const Color kShadow10 = Color(0x1A000000);
 
 class BairroResumo {
   final String nome;
-  final List<String> ruas;
-  const BairroResumo({required this.nome, required this.ruas});
+  final List<String> enderecos; // Exibição final por item
+  const BairroResumo({required this.nome, required this.enderecos});
 }
 
 class _EnderecoRepo {
   final SupabaseClient sb;
   _EnderecoRepo(this.sb);
 
+  String _cleanTail(String s) => s.replaceFirst(RegExp(r',\s*$'), '').trimRight();
+  String _cleanHead(String s) => s.replaceFirst(RegExp(r'^\s*,\s*'), '').trimLeft();
+
+  // Remove vírgula imediatamente após o tipo no INÍCIO do logradouro
+  // Cobre "R.,", "Av.,", "Rua,", "Avenida," etc.
+  String _fixCommaAfterTypeAtStart(String s) {
+    // tipos abreviados com ponto
+    final reDot = RegExp(r'^\s*(R\.|Av\.|Rod\.|Al\.|Trav\.)\s*,\s*', caseSensitive: false);
+    // tipos por extenso sem ponto
+    final reFull = RegExp(r'^\s*(Rua|Avenida|Rodovia|Alameda|Travessa)\s*,\s*', caseSensitive: false);
+
+    var out = s;
+    out = out.replaceFirstMapped(reDot, (m) => '${m.group(1)} ');
+    out = out.replaceFirstMapped(reFull, (m) => '${m.group(1)} ');
+    return out;
+  }
+
+  // Remove vírgula antes de tipos no meio da string (", Av." -> " Av.")
+  String _removeCommaBeforeTypes(String s) {
+    final pattern = RegExp(
+      r',\s*(?=(R\.|Av\.|Rod\.|Al\.|Trav\.|Rua|Avenida|Rodovia|Alameda|Travessa)\b)',
+      caseSensitive: false,
+    );
+    return s.replaceAll(pattern, ' ');
+  }
+
+  // Exibe: logradouro, endereco, numero, complemento (se existirem)
+  String _fmtLogEndNumCompl({
+    required String logradouro,
+    required String endereco,
+    required String numero,
+    required String complemento,
+  }) {
+    // 1) Normaliza logradouro no começo
+    var l = _fixCommaAfterTypeAtStart(_cleanTail(logradouro));
+
+    // 2) Demais campos
+    final e = _cleanTail(endereco);
+    final n = numero.trim();
+    final c = complemento.trim();
+
+    // 3) Monta com vírgulas apenas entre partes existentes
+    final partes = <String>[];
+    if (l.isNotEmpty) partes.add(l);
+    if (e.isNotEmpty) partes.add(e);
+    if (n.isNotEmpty) partes.add(n);
+    if (c.isNotEmpty) partes.add(c);
+
+    var out = partes.join(', ');
+
+    // 4) Limpezas finais sem remover separadores válidos
+    out = _cleanHead(out);
+    out = _cleanTail(out);
+    out = _removeCommaBeforeTypes(out);
+    out = out.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+    return out;
+  }
+
   Future<Map<String, List<BairroResumo>>> listarPorCidades({double similaridade = 0.62}) async {
-    final rows = await sb.rpc('rpc_cidades_bairros_ruas', params: {
-      'min_similaridade': similaridade,
-    });
+    final rows = await sb.rpc('rpc_cidades_bairros_ruas', params: {'min_similaridade': similaridade});
 
     final mapa = <String, List<BairroResumo>>{};
     for (final r in (rows as List)) {
       final cidade = (r['cidade'] ?? 'Sem cidade').toString();
       final bairro = (r['bairro'] ?? 'Sem bairro').toString();
-      final ruas = ((r['ruas'] as List?) ?? const [])
-          .map((e) => (e ?? '').toString())
-          .where((s) => s.trim().isNotEmpty)
+
+      final lista = (r['ruas'] as List? ?? const [])
+          .where((e) => e != null)
+          .map((e) {
+            if (e is Map) {
+              final m = Map<String, dynamic>.from(e);
+              final logradouro = (m['logradouro'] ?? m['rua'] ?? '').toString();
+              final endereco   = (m['endereco'] ?? '').toString();
+              final numero     = (m['numero'] ?? '').toString();
+              final compl      = (m['complemento'] ?? '').toString();
+
+              return _fmtLogEndNumCompl(
+                logradouro: logradouro,
+                endereco: endereco,
+                numero: numero,
+                complemento: compl,
+              );
+            } else if (e is String) {
+              var s = _fixCommaAfterTypeAtStart(_cleanTail(e.toString()));
+              s = _removeCommaBeforeTypes(s);
+              s = _cleanHead(s);
+              return s.trim();
+            } else {
+              return '';
+            }
+          })
+          .where((s) => s.isNotEmpty)
           .toList();
-      (mapa[cidade] ??= []).add(BairroResumo(nome: bairro, ruas: ruas));
+
+      (mapa[cidade] ??= []).add(BairroResumo(nome: bairro, enderecos: lista));
     }
+
     for (final e in mapa.entries) {
       e.value.sort((a, b) => a.nome.compareTo(b.nome));
     }
@@ -56,7 +138,11 @@ class _EnderecosPageState extends State<EnderecosPage> {
     _future = _repo.listarPorCidades();
   }
 
-  void _recarregar() => setState(() => _future = _repo.listarPorCidades());
+  void _recarregar() {
+    setState(() {
+      _future = _repo.listarPorCidades();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +161,7 @@ class _EnderecosPageState extends State<EnderecosPage> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Visualize e gerencie as cidades, bairros e ruas do sistema',
+            'Visualize e gerencie as cidades, bairros e endereços do sistema',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurface.withOpacity(0.6)),
           ),
         ]),
@@ -115,7 +201,9 @@ class _EnderecosPageState extends State<EnderecosPage> {
                   final cidades = mapa.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
 
                   return RefreshIndicator(
-                    onRefresh: () async => _recarregar(),
+                    onRefresh: () async {
+                      _recarregar();
+                    },
                     child: ListView.separated(
                       padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
                       itemCount: cidades.length,
@@ -124,12 +212,12 @@ class _EnderecosPageState extends State<EnderecosPage> {
                         final cidade = cidades[i].key;
                         final bairros = cidades[i].value;
                         final totalBairros = bairros.length;
-                        final totalRuas = bairros.fold<int>(0, (acc, b) => acc + b.ruas.length);
+                        final totalEnderecos = bairros.fold<int>(0, (acc, b) => acc + b.enderecos.length);
                         return _CidadeCard(
                           cidade: cidade,
                           bairros: bairros,
                           totalBairros: totalBairros,
-                          totalRuas: totalRuas,
+                          totalEnderecos: totalEnderecos,
                         );
                       },
                     ),
@@ -148,12 +236,12 @@ class _CidadeCard extends StatefulWidget {
   final String cidade;
   final List<BairroResumo> bairros;
   final int totalBairros;
-  final int totalRuas;
+  final int totalEnderecos;
   const _CidadeCard({
     required this.cidade,
     required this.bairros,
     required this.totalBairros,
-    required this.totalRuas,
+    required this.totalEnderecos,
   });
 
   @override
@@ -219,7 +307,7 @@ class _CidadeCardState extends State<_CidadeCard> {
                           const SizedBox(width: 12),
                           const Icon(Icons.route_outlined, size: 14, color: Color(0x99000000)),
                           const SizedBox(width: 4),
-                          Text('${widget.totalRuas} ruas',
+                          Text('${widget.totalEnderecos} endereços',
                               style: const TextStyle(fontSize: 12.5, color: Color(0x99000000))),
                         ],
                       ),
@@ -293,7 +381,7 @@ class _BairroCardState extends State<_BairroCard> {
                       Text(widget.bairro.nome,
                           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF231F20))),
                       const SizedBox(height: 2),
-                      Text('${widget.bairro.ruas.length} ruas',
+                      Text('${widget.bairro.enderecos.length} endereços',
                           style: const TextStyle(fontSize: 12.5, color: Color(0x99000000))),
                     ]),
                   ),
@@ -307,8 +395,8 @@ class _BairroCardState extends State<_BairroCard> {
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
               child: Column(
-                children: widget.bairro.ruas
-                    .map((r) => Container(
+                children: widget.bairro.enderecos
+                    .map((end) => Container(
                           height: 40,
                           margin: const EdgeInsets.only(top: 8),
                           alignment: Alignment.centerLeft,
@@ -318,7 +406,7 @@ class _BairroCardState extends State<_BairroCard> {
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(color: const Color(0xFFDFDFDF)),
                           ),
-                          child: Text(r, style: const TextStyle(color: Color(0xFF231F20))),
+                          child: Text(end, style: const TextStyle(color: Color(0xFF231F20))),
                         ))
                     .toList(),
               ),

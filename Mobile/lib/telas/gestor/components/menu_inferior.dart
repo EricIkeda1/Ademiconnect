@@ -7,10 +7,9 @@ class MenuInferior extends StatefulWidget {
   final ValueChanged<int> onChanged;
   final PageController controller;
 
-  // Callbacks específicos por item (opcionais)
   final VoidCallback? onLeads;
   final VoidCallback? onVendas;
-  final VoidCallback? onConsultores; // ação trocada aqui
+  final VoidCallback? onConsultores;
   final VoidCallback? onEnderecos;
   final VoidCallback? onExportar;
 
@@ -42,7 +41,6 @@ class _MenuInferiorState extends State<MenuInferior> {
   static const double _pillW = 100;
   static const double _padBottom = 10;
 
-  // Ícones; Consultores -> person_rounded como na referência
   final _items = const [
     _Item(icon: Icons.people_alt_rounded, label: 'Leads'),
     _Item(icon: Icons.show_chart_rounded, label: 'Vendas'),
@@ -118,7 +116,6 @@ class _MenuInferiorState extends State<MenuInferior> {
     return Rect.fromLTWH(x, y, _pillW, _pillH);
   }
 
-  // Dispara callbacks específicos e o onChanged padrão
   void _handleTap(int i) {
     switch (i) {
       case 0:
@@ -128,7 +125,7 @@ class _MenuInferiorState extends State<MenuInferior> {
         widget.onVendas?.call();
         break;
       case 2:
-        widget.onConsultores?.call(); // novo comportamento
+        widget.onConsultores?.call();
         break;
       case 3:
         widget.onEnderecos?.call();
@@ -142,7 +139,6 @@ class _MenuInferiorState extends State<MenuInferior> {
 
   @override
   Widget build(BuildContext context) {
-    // Opcional: ripple mais suave global sem mudar aparência
     final theme = Theme.of(context).copyWith(
       splashFactory: InkSparkle.constantTurbulenceSeedSplashFactory,
       splashColor: Colors.white.withOpacity(0.08),
@@ -165,11 +161,9 @@ class _MenuInferiorState extends State<MenuInferior> {
                 ((_page - spanStart) / (spanEnd - spanStart)).clamp(0.0, 1.0);
             final eased = Curves.easeInOut.transform(fracRaw);
             final goingRight = _page >= base;
-            // Inércia levemente modulada pela fração para sensação orgânica
             final inertia =
                 (goingRight ? eased : -(1 - eased)) * (8.0 * (1.0 + 0.4 * ((-_page + base).abs() + (_page - base).abs()) * 0.5));
 
-            // Respiração do halo
             final blur = lerpDouble(12, 18, eased)!;
             final dy = lerpDouble(-2, -3, eased)!;
 
@@ -184,7 +178,6 @@ class _MenuInferiorState extends State<MenuInferior> {
               padding: const EdgeInsets.only(bottom: _padBottom),
               child: Stack(
                 children: [
-                  // Highlight radial por slot ativo (puramente visual)
                   Positioned.fill(
                     child: IgnorePointer(
                       child: Row(
@@ -198,12 +191,11 @@ class _MenuInferiorState extends State<MenuInferior> {
                               opacity: lerpDouble(0.0, 1.0, ti * 0.6)!,
                               child: const DecoratedBox(
                                 decoration: BoxDecoration(
-                                  // RadialGradient leve
                                   gradient: RadialGradient(
                                     center: Alignment(0, 0.4),
                                     radius: 0.85,
                                     colors: [
-                                      Color(0x14FFFFFF), // ~0.08 ao somar com opacity
+                                      Color(0x14FFFFFF), 
                                       Colors.transparent,
                                     ],
                                     stops: [0.0, 1.0],
@@ -217,7 +209,6 @@ class _MenuInferiorState extends State<MenuInferior> {
                     ),
                   ),
 
-                  // Halo com blur dinâmico e leve deslocamento
                   Positioned(
                     left: pill.left - 18 + inertia,
                     top: pill.top - 10 + dy,
@@ -234,7 +225,6 @@ class _MenuInferiorState extends State<MenuInferior> {
                     ),
                   ),
 
-                  // Pílula líquida (painter intacto)
                   Positioned.fill(
                     child: IgnorePointer(
                       child: CustomPaint(
@@ -251,7 +241,6 @@ class _MenuInferiorState extends State<MenuInferior> {
                     ),
                   ),
 
-                  // Itens clicáveis com Material + ripple
                   Row(
                     children: List.generate(_items.length, (i) {
                       return Expanded(
@@ -312,11 +301,10 @@ class _AnimatedItem extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Micro slide + fade no ícone
           AnimatedSlide(
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOut,
-            offset: Offset(0, lerpDouble(0.10, 0.0, t)!), // ~3–4 px
+            offset: Offset(0, lerpDouble(0.10, 0.0, t)!), 
             child: AnimatedOpacity(
               duration: const Duration(milliseconds: 160),
               curve: Curves.easeOut,
@@ -328,11 +316,10 @@ class _AnimatedItem extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          // Texto mantém AnimatedDefaultTextStyle, com micro slide
           AnimatedSlide(
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOut,
-            offset: Offset(0, lerpDouble(-0.06, 0.0, t)!), // contra-movimento sutil
+            offset: Offset(0, lerpDouble(-0.06, 0.0, t)!), 
             child: AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 120),
               style: TextStyle(

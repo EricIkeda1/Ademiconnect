@@ -54,6 +54,51 @@ class _HomeGestorState extends State<HomeGestor> {
 
   String get _gestorId => _sb.auth.currentUser!.id;
 
+  String _cleanTail(String s) => s.replaceFirst(RegExp(r',\s*$'), '').trimRight();
+  String _cleanHead(String s) => s.replaceFirst(RegExp(r'^\s*,\s*'), '').trimLeft();
+
+  String _fixCommaAfterTypeAtStart(String s) {
+    final reDot = RegExp(r'^\s*(R\.|Av\.|Rod\.|Al\.|Trav\.)\s*,\s*', caseSensitive: false);
+    final reFull = RegExp(r'^\s*(Rua|Avenida|Rodovia|Alameda|Travessa)\s*,\s*', caseSensitive: false);
+    var out = s;
+    out = out.replaceFirstMapped(reDot, (m) => '${m.group(1)} ');
+    out = out.replaceFirstMapped(reFull, (m) => '${m.group(1)} ');
+    return out;
+  }
+
+  String _removeCommaBeforeTypes(String s) {
+    final pattern = RegExp(
+      r',\s*(?=(R\.|Av\.|Rod\.|Al\.|Trav\.|Rua|Avenida|Rodovia|Alameda|Travessa)\b)',
+      caseSensitive: false,
+    );
+    return s.replaceAll(pattern, ' ');
+  }
+
+  String _fmtEnderecoLead({
+    required String logradouro,
+    required String endereco,
+    required String numero,
+    required String complemento,
+  }) {
+    var l = _fixCommaAfterTypeAtStart(_cleanTail(logradouro));
+    final e = _cleanTail(endereco);
+    final n = numero.trim();
+    final c = complemento.trim();
+
+    final partes = <String>[];
+    if (l.isNotEmpty) partes.add(l);
+    if (e.isNotEmpty) partes.add(e);
+    if (n.isNotEmpty) partes.add(n);
+    if (c.isNotEmpty) partes.add(c);
+
+    var out = partes.join(', ');
+    out = _cleanHead(out);
+    out = _cleanTail(out);
+    out = _removeCommaBeforeTypes(out);
+    out = out.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+    return out;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -149,28 +194,73 @@ class _HomeGestorState extends State<HomeGestor> {
 
       final rowsAll = await _sb
           .from('clientes')
-          .select(
-              'id, nome, endereco, bairro, telefone, data_visita, observacoes, consultor_uid_t')
+          .select('''
+            id,
+            nome,
+            endereco,
+            logradouro,
+            numero,
+            complemento,
+            bairro,
+            telefone,
+            data_visita,
+            observacoes,
+            consultor_uid_t
+          ''')
           .inFilter('consultor_uid_t', consUids)
           .order('data_visita', ascending: false, nullsFirst: true);
 
       final all = (rowsAll as List).cast<Map<String, dynamic>>();
       final slice = all.skip(start).take(_pageSize).toList();
 
+      String _pickLogradouro(Map<String, dynamic> m) {
+        final cands = [
+          m['logradouro'],
+          m['rua'],          
+          m['via'],
+          m['end_logradouro'],
+        ];
+        for (final v in cands) {
+          final s = (v ?? '').toString().trim();
+          if (s.isNotEmpty) return s;
+        }
+        return '';
+      }
+
       final batch = <Map<String, dynamic>>[];
       for (final r in slice) {
         final id = r['id'];
         if (_ids.contains(id)) continue;
         _ids.add(id);
+
+        final enderecoDb = (r['endereco'] ?? '').toString().trim();
+        final logradouro = _pickLogradouro(r);
+        final numero = (r['numero'] ?? '').toString().trim();
+        final complemento = (r['complemento'] ?? '').toString().trim();
+
+        final endFmt = enderecoDb.isNotEmpty
+            ? _fmtEnderecoLead(
+                logradouro: '',
+                endereco: enderecoDb,
+                numero: numero,
+                complemento: complemento,
+              )
+            : _fmtEnderecoLead(
+                logradouro: logradouro,
+                endereco: '',
+                numero: numero,
+                complemento: complemento,
+              );
+
         batch.add({
           'id': id,
-          'nome': r['nome'] ?? '',
-          'tel': r['telefone'] ?? '',
-          'end': r['endereco'] ?? '',
-          'bairro': r['bairro'] ?? '',
+          'nome': (r['nome'] ?? '').toString(),
+          'tel': (r['telefone'] ?? '').toString(),
+          'end': endFmt,
+          'bairro': (r['bairro'] ?? '').toString(),
           'consUid': r['consultor_uid_t'],
           'cons': '',
-          'obs': r['observacoes'] ?? '',
+          'obs': (r['observacoes'] ?? '').toString(),
           'dias': _calcDias(r['data_visita']),
           'urgente': _isUrgente(r['data_visita']),
           'alerta': _isAlerta(r['data_visita']),
@@ -213,6 +303,7 @@ class _HomeGestorState extends State<HomeGestor> {
         _aplicarFiltro();
       });
     } catch (e) {
+      print('Erro carregarLeads: $e');
       setState(() {
         _erro = 'Erro ao carregar leads';
         _loading = false;

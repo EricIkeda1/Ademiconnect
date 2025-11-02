@@ -1,4 +1,3 @@
-// lib/telas/gestor/home_gestor.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/lead_card.dart' as widgets;
@@ -538,8 +537,6 @@ class _HomeGestorState extends State<HomeGestor> {
   }
 }
 
-// ====== Lead list tab ======
-
 class _LeadsTab extends StatelessWidget {
   final bool loading;
   final String? erro;
@@ -992,17 +989,15 @@ class _TLGradientConfirmButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Gradiente forte igual ao preview (ativo)
     final enabledGradient = const LinearGradient(
       colors: [
-        Color(0xFFF15A24), // topo laranja avermelhado
-        Color(0xFFEA3124), // base vermelha sólida
+        Color(0xFFF15A24),
+        Color(0xFFEA3124), 
       ],
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
     );
 
-    // Tom rosado claro (desabilitado)
     final disabledColor = const Color(0xFFEEC5C2);
 
     return DecoratedBox(

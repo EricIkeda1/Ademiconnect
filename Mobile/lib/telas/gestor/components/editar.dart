@@ -71,10 +71,10 @@ class _EditarLeadSheetState extends State<EditarLeadSheet> {
     const branco = Color(0xFFFFFFFF);
     const vermelho = Color(0xFFEA3124);
 
-    const double menuHeight = 72; // altura da bottom bar (ajuste conforme necessário)
+    const double menuHeight = 72; 
     final media = MediaQuery.of(context);
     final totalH = media.size.height;
-    final double sheetAltura = totalH * 0.85; // ocupa 85% da altura da tela
+    final double sheetAltura = totalH * 0.85; 
 
     return Align(
       alignment: Alignment.bottomCenter,
@@ -99,7 +99,6 @@ class _EditarLeadSheetState extends State<EditarLeadSheet> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             child: Column(
               children: [
-                // Cabeçalho fixo
                 Row(
                   children: [
                     const Expanded(
@@ -117,7 +116,6 @@ class _EditarLeadSheetState extends State<EditarLeadSheet> {
                 ),
                 const SizedBox(height: 4),
 
-                // Conteúdo rolável
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.only(bottom: 20),
@@ -169,7 +167,6 @@ class _EditarLeadSheetState extends State<EditarLeadSheet> {
                   ),
                 ),
 
-                // Botão fixo
                 Padding(
                   padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
                   child: SizedBox(
