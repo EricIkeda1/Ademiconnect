@@ -87,8 +87,8 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     super.initState();
     _dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
     _horaVisitaCtrl.text = DateFormat('HH:mm').format(DateTime.now());
-    _dataNegociacaoCtrl.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
-    _horaNegociacaoCtrl.text = DateFormat('HH:mm').format(DateTime.now());
+    _dataNegociacaoCtrl.clear();
+    _horaNegociacaoCtrl.clear();
   }
 
   @override
@@ -112,26 +112,56 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     super.dispose();
   }
 
-  Future<void> _selecionarData() async {
+  Future<void> _selecionarDataVisita() async {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
       initialDate: now,
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 1),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Colors.red,
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null) {
-      _dataNegociacaoCtrl.text = DateFormat('dd/MM/yyyy').format(picked);
+      setState(() => _dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(picked));
     }
   }
 
-  Future<void> _selecionarHora() async {
+  Future<void> _selecionarHoraVisita() async {
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Colors.red,
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null) {
-      _horaNegociacaoCtrl.text = picked.format(context);
+      setState(() => _horaVisitaCtrl.text = picked.format(context));
     }
   }
 
@@ -184,18 +214,26 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     if (mounted) setState(() => _isLoading = true);
 
     try {
-      final dataStr = _dataVisitaCtrl.text.trim();
-      final horaStr = _horaVisitaCtrl.text.trim();
+      final dataVisitaStr = _dataVisitaCtrl.text.trim();
+      final horaVisitaStr = _horaVisitaCtrl.text.trim();
 
-      late DateTime dataHora;
+      if (dataVisitaStr.isEmpty || horaVisitaStr.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Data e hora da visita são obrigatórias')),
+        );
+        return;
+      }
+
+      late DateTime dataHoraVisita;
       try {
-        final h = DateFormat('HH:mm').parse(horaStr);
-        final horaPadrao = DateFormat('HH:mm').format(h);
-        dataHora = DateFormat('dd/MM/yyyy HH:mm').parse('$dataStr $horaPadrao');
+        final horaParsed = DateFormat('HH:mm').parse(horaVisitaStr);
+        final horaPadrao = DateFormat('HH:mm').format(horaParsed);
+        dataHoraVisita = DateFormat('dd/MM/yyyy HH:mm').parse('$dataVisitaStr $horaPadrao');
       } on FormatException {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Data ou hora inválida. Use o formato correto.')),
+          const SnackBar(content: Text('Data ou hora da visita inválida. Use o formato correto.')),
         );
         return;
       }
@@ -236,6 +274,10 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
         valorProposta = num.tryParse(norm);
       }
 
+      final agora = DateTime.now();
+      final dataNegociacaoAtual = DateFormat('dd/MM/yyyy').format(agora);
+      final horaNegociacaoAtual = DateFormat('HH:mm').format(agora);
+
       final cliente = Cliente(
         id: const Uuid().v4(),
         nomeCliente: _norm(_nomeClienteCtrl.text),
@@ -249,11 +291,11 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
         complemento: _complementoCtrl.text.trim().isEmpty ? null : _norm(_complementoCtrl.text),
         bairro: _norm(_bairroCtrl.text),
         cep: _cepCtrl.text.replaceAll(RegExp(r'[^\d]'), ''),
-        dataVisita: dataHora,
+        dataVisita: dataHoraVisita,
         observacoes: _observacoesCtrl.text.trim().isEmpty ? null : _norm(_observacoesCtrl.text),
         consultorResponsavel: consultorNomeLocal,
         consultorUid: userId,
-        horaVisita: horaStr,
+        horaVisita: horaVisitaStr,
         statusNegociacao: _statusNegociacao,
         valorProposta: valorProposta,
       );
@@ -263,12 +305,37 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
       if (!mounted) return;
 
       if (persistedNow) {
-        await NotificationService.showSuccessNotification();
-        widget.onClienteCadastrado?.call();
-        _limparCampos();
+        try {
+          await _client.from('clientes').update({
+            'data_negociacao': dataNegociacaoAtual,
+            'hora_negociacao': horaNegociacaoAtual,
+          }).eq('id', cliente.id);
+
+          await NotificationService.showSuccessNotification();
+          widget.onClienteCadastrado?.call();
+          _limparCampos();
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Cliente cadastrado com sucesso! Data/hora da negociação: $dataNegociacaoAtual $horaNegociacaoAtual'),
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Cliente salvo, mas erro ao salvar data/hora da negociação: $e'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Endereço já cadastrado (tipo + número).')),
+          const SnackBar(content: Text('Endereço já cadastrado (logradouro + número).')),
         );
       }
     } catch (e) {
@@ -298,8 +365,9 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     _tipoLogradouro = null;
     _statusNegociacao = null;
 
-    _dataNegociacaoCtrl.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
-    _horaNegociacaoCtrl.text = DateFormat('HH:mm').format(DateTime.now());
+    _dataNegociacaoCtrl.clear();
+    _horaNegociacaoCtrl.clear();
+
     _dataVisitaCtrl.text      = DateFormat('dd/MM/yyyy').format(DateTime.now());
     _horaVisitaCtrl.text      = DateFormat('HH:mm').format(DateTime.now());
 
@@ -559,45 +627,6 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                             Row(
                               children: [
                                 Expanded(
-                                  child: TextFormField(
-                                    controller: _dataNegociacaoCtrl,
-                                    readOnly: true,
-                                    decoration: _obterDecoracaoCampo(
-                                      'Data da negociação',
-                                      hint: 'dd/mm/aaaa',
-                                      prefixIcon: const Icon(Icons.event_outlined),
-                                      suffixIcon: IconButton(
-                                        icon: const Icon(Icons.calendar_today_outlined),
-                                        onPressed: _selecionarData,
-                                      ),
-                                    ),
-                                    onTap: _selecionarData,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: _horaNegociacaoCtrl,
-                                    readOnly: true,
-                                    decoration: _obterDecoracaoCampo(
-                                      'Hora da negociação',
-                                      hint: '00:00',
-                                      prefixIcon: const Icon(Icons.schedule_outlined),
-                                      suffixIcon: IconButton(
-                                        icon: const Icon(Icons.access_time),
-                                        onPressed: _selecionarHora,
-                                      ),
-                                    ),
-                                    onTap: _selecionarHora,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-
-                            Row(
-                              children: [
-                                Expanded(
                                   flex: 3,
                                   child: DropdownButtonFormField<String>(
                                     isExpanded: true,
@@ -665,25 +694,43 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                             Row(
                               children: [
                                 Expanded(
-                                  child: TextFormField(
-                                    controller: _dataVisitaCtrl,
-                                    readOnly: true,
-                                    decoration: _obterDecoracaoCampo(
-                                      'Data da visita',
-                                      hint: 'dd/mm/aaaa',
-                                      prefixIcon: const Icon(Icons.event_available_outlined),
+                                  child: GestureDetector(
+                                    onTap: _selecionarDataVisita,
+                                    child: AbsorbPointer(
+                                      child: TextFormField(
+                                        controller: _dataVisitaCtrl,
+                                        readOnly: true,
+                                        decoration: _obterDecoracaoCampo(
+                                          'Data da visita',
+                                          hint: 'dd/mm/aaaa',
+                                          prefixIcon: const Icon(Icons.event_available_outlined),
+                                          suffixIcon: IconButton(
+                                            icon: const Icon(Icons.calendar_today_outlined),
+                                            onPressed: _selecionarDataVisita,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
-                                  child: TextFormField(
-                                    controller: _horaVisitaCtrl,
-                                    readOnly: true,
-                                    decoration: _obterDecoracaoCampo(
-                                      'Hora da visita',
-                                      hint: '00:00',
-                                      prefixIcon: const Icon(Icons.access_time_outlined),
+                                  child: GestureDetector(
+                                    onTap: _selecionarHoraVisita,
+                                    child: AbsorbPointer(
+                                      child: TextFormField(
+                                        controller: _horaVisitaCtrl,
+                                        readOnly: true,
+                                        decoration: _obterDecoracaoCampo(
+                                          'Hora da visita',
+                                          hint: '00:00',
+                                          prefixIcon: const Icon(Icons.access_time_outlined),
+                                          suffixIcon: IconButton(
+                                            icon: const Icon(Icons.access_time),
+                                            onPressed: _selecionarHoraVisita,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -759,12 +806,12 @@ class _CampoTipo extends StatelessWidget {
       },
       onChanged: onChanged,
       decoration: const InputDecoration(
-        labelText: 'Tipo *',
+        labelText: 'Logradouro *', // alterado apenas o rótulo
         prefixIcon: Icon(Icons.map_outlined),
       ),
       icon: const Icon(Icons.keyboard_arrow_down_rounded),
       menuMaxHeight: menuMaxHeight,
-      validator: (v) => v == null || v.isEmpty ? 'Tipo é obrigatório' : null,
+      validator: (v) => v == null || v.isEmpty ? 'Logradouro é obrigatório' : null, // mensagem ajustada
     );
   }
 }

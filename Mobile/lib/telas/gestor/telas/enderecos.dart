@@ -9,7 +9,7 @@ const Color kShadow10 = Color(0x1A000000);
 
 class BairroResumo {
   final String nome;
-  final List<String> enderecos; // Exibição final por item
+  final List<String> enderecos; 
   const BairroResumo({required this.nome, required this.enderecos});
 }
 
@@ -20,21 +20,15 @@ class _EnderecoRepo {
   String _cleanTail(String s) => s.replaceFirst(RegExp(r',\s*$'), '').trimRight();
   String _cleanHead(String s) => s.replaceFirst(RegExp(r'^\s*,\s*'), '').trimLeft();
 
-  // Remove vírgula imediatamente após o tipo no INÍCIO do logradouro
-  // Cobre "R.,", "Av.,", "Rua,", "Avenida," etc.
   String _fixCommaAfterTypeAtStart(String s) {
-    // tipos abreviados com ponto
     final reDot = RegExp(r'^\s*(R\.|Av\.|Rod\.|Al\.|Trav\.)\s*,\s*', caseSensitive: false);
-    // tipos por extenso sem ponto
     final reFull = RegExp(r'^\s*(Rua|Avenida|Rodovia|Alameda|Travessa)\s*,\s*', caseSensitive: false);
-
     var out = s;
     out = out.replaceFirstMapped(reDot, (m) => '${m.group(1)} ');
     out = out.replaceFirstMapped(reFull, (m) => '${m.group(1)} ');
     return out;
   }
 
-  // Remove vírgula antes de tipos no meio da string (", Av." -> " Av.")
   String _removeCommaBeforeTypes(String s) {
     final pattern = RegExp(
       r',\s*(?=(R\.|Av\.|Rod\.|Al\.|Trav\.|Rua|Avenida|Rodovia|Alameda|Travessa)\b)',
@@ -43,22 +37,17 @@ class _EnderecoRepo {
     return s.replaceAll(pattern, ' ');
   }
 
-  // Exibe: logradouro, endereco, numero, complemento (se existirem)
   String _fmtLogEndNumCompl({
     required String logradouro,
     required String endereco,
     required String numero,
     required String complemento,
   }) {
-    // 1) Normaliza logradouro no começo
     var l = _fixCommaAfterTypeAtStart(_cleanTail(logradouro));
-
-    // 2) Demais campos
     final e = _cleanTail(endereco);
     final n = numero.trim();
     final c = complemento.trim();
 
-    // 3) Monta com vírgulas apenas entre partes existentes
     final partes = <String>[];
     if (l.isNotEmpty) partes.add(l);
     if (e.isNotEmpty) partes.add(e);
@@ -66,8 +55,6 @@ class _EnderecoRepo {
     if (c.isNotEmpty) partes.add(c);
 
     var out = partes.join(', ');
-
-    // 4) Limpezas finais sem remover separadores válidos
     out = _cleanHead(out);
     out = _cleanTail(out);
     out = _removeCommaBeforeTypes(out);
@@ -76,47 +63,65 @@ class _EnderecoRepo {
   }
 
   Future<Map<String, List<BairroResumo>>> listarPorCidades({double similaridade = 0.62}) async {
-    final rows = await sb.rpc('rpc_cidades_bairros_ruas', params: {'min_similaridade': similaridade});
+    final gestorId = sb.auth.currentUser?.id;
+    if (gestorId == null) return {};
+
+    var cQ = sb.from('consultores').select('uid').filter('gestor_id', 'eq', gestorId).filter('ativo', 'eq', true);
+    final cons = await cQ;
+    final uids = (cons is List ? cons : const [])
+        .map((e) => (e['uid'] ?? '').toString())
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    if (uids.isEmpty) return {};
+
+    final inText = uids.map((e) => '"$e"').join(',');
+    var q = sb
+        .from('clientes')
+        .select('cidade, bairro, logradouro, endereco, numero, complemento, consultor_uid_t')
+        .filter('consultor_uid_t', 'in', '($inText)');
+
+    final rows = await q;
 
     final mapa = <String, List<BairroResumo>>{};
-    for (final r in (rows as List)) {
-      final cidade = (r['cidade'] ?? 'Sem cidade').toString();
-      final bairro = (r['bairro'] ?? 'Sem bairro').toString();
+    if (rows is List) {
+      final tmp = <String, Map<String, List<String>>>{};
 
-      final lista = (r['ruas'] as List? ?? const [])
-          .where((e) => e != null)
-          .map((e) {
-            if (e is Map) {
-              final m = Map<String, dynamic>.from(e);
-              final logradouro = (m['logradouro'] ?? m['rua'] ?? '').toString();
-              final endereco   = (m['endereco'] ?? '').toString();
-              final numero     = (m['numero'] ?? '').toString();
-              final compl      = (m['complemento'] ?? '').toString();
+      for (final r in rows) {
+        final cidade = (r['cidade'] ?? 'Sem cidade').toString();
+        final bairro = (r['bairro'] ?? 'Sem bairro').toString();
+        final logradouro = (r['logradouro'] ?? '').toString();
+        final endereco = (r['endereco'] ?? '').toString();
+        final numero = (r['numero'] ?? '').toString();
+        final compl = (r['complemento'] ?? '').toString();
 
-              return _fmtLogEndNumCompl(
-                logradouro: logradouro,
-                endereco: endereco,
-                numero: numero,
-                complemento: compl,
-              );
-            } else if (e is String) {
-              var s = _fixCommaAfterTypeAtStart(_cleanTail(e.toString()));
-              s = _removeCommaBeforeTypes(s);
-              s = _cleanHead(s);
-              return s.trim();
-            } else {
-              return '';
-            }
-          })
-          .where((s) => s.isNotEmpty)
-          .toList();
+        final linha = _fmtLogEndNumCompl(
+          logradouro: logradouro,
+          endereco: endereco,
+          numero: numero,
+          complemento: compl,
+        );
 
-      (mapa[cidade] ??= []).add(BairroResumo(nome: bairro, enderecos: lista));
+        if (linha.isEmpty) continue;
+
+        final byCidade = (tmp[cidade] ??= <String, List<String>>{});
+        final lista = (byCidade[bairro] ??= <String>[]);
+        lista.add(linha);
+      }
+
+      for (final entry in tmp.entries) {
+        final cidade = entry.key;
+        final bairrosMap = entry.value;
+        final bairrosList = <BairroResumo>[];
+        for (final b in bairrosMap.entries) {
+          final lista = b.value.toSet().toList()..sort();
+          bairrosList.add(BairroResumo(nome: b.key, enderecos: lista));
+        }
+        bairrosList.sort((a, b) => a.nome.compareTo(b.nome));
+        mapa[cidade] = bairrosList;
+      }
     }
 
-    for (final e in mapa.entries) {
-      e.value.sort((a, b) => a.nome.compareTo(b.nome));
-    }
     return mapa;
   }
 }
@@ -161,7 +166,7 @@ class _EnderecosPageState extends State<EnderecosPage> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Visualize e gerencie as cidades, bairros e endereços do sistema',
+            'Visualize e gerencie as cidades, bairros e endereços do seu time',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurface.withOpacity(0.6)),
           ),
         ]),
@@ -201,9 +206,7 @@ class _EnderecosPageState extends State<EnderecosPage> {
                   final cidades = mapa.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
 
                   return RefreshIndicator(
-                    onRefresh: () async {
-                      _recarregar();
-                    },
+                    onRefresh: () async => _recarregar(),
                     child: ListView.separated(
                       padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
                       itemCount: cidades.length,
@@ -302,13 +305,11 @@ class _CidadeCardState extends State<_CidadeCard> {
                         children: [
                           const Icon(Icons.layers_outlined, size: 14, color: Color(0x99000000)),
                           const SizedBox(width: 4),
-                          Text('${widget.totalBairros} bairros',
-                              style: const TextStyle(fontSize: 12.5, color: Color(0x99000000))),
+                          Text('${widget.totalBairros} bairros', style: const TextStyle(fontSize: 12.5, color: Color(0x99000000))),
                           const SizedBox(width: 12),
                           const Icon(Icons.route_outlined, size: 14, color: Color(0x99000000)),
                           const SizedBox(width: 4),
-                          Text('${widget.totalEnderecos} endereços',
-                              style: const TextStyle(fontSize: 12.5, color: Color(0x99000000))),
+                          Text('${widget.totalEnderecos} endereços', style: const TextStyle(fontSize: 12.5, color: Color(0x99000000))),
                         ],
                       ),
                     ]),

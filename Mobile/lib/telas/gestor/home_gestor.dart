@@ -56,22 +56,27 @@ class _HomeGestorState extends State<HomeGestor> {
 
   String _cleanTail(String s) => s.replaceFirst(RegExp(r',\s*$'), '').trimRight();
   String _cleanHead(String s) => s.replaceFirst(RegExp(r'^\s*,\s*'), '').trimLeft();
-
   String _fixCommaAfterTypeAtStart(String s) {
-    final reDot = RegExp(r'^\s*(R\.|Av\.|Rod\.|Al\.|Trav\.)\s*,\s*', caseSensitive: false);
-    final reFull = RegExp(r'^\s*(Rua|Avenida|Rodovia|Alameda|Travessa)\s*,\s*', caseSensitive: false);
-    var out = s;
-    out = out.replaceFirstMapped(reDot, (m) => '${m.group(1)} ');
-    out = out.replaceFirstMapped(reFull, (m) => '${m.group(1)} ');
-    return out;
+    if (s.isEmpty) return s;
+
+    s = s.replaceFirstMapped(
+      RegExp(r'^\s*(R\.|Av\.|Rod\.|Al\.|Trav\.)\s*,\s*', caseSensitive: false),
+      (m) => '${m.group(1)} ',
+    );
+
+    s = s.replaceFirstMapped(
+      RegExp(r'^\s*(Rua|Avenida|Rodovia|Alameda|Travessa)\s*,\s*', caseSensitive: false),
+      (m) => '${m.group(1)} ',
+    );
+
+    return s.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
   }
 
   String _removeCommaBeforeTypes(String s) {
-    final pattern = RegExp(
-      r',\s*(?=(R\.|Av\.|Rod\.|Al\.|Trav\.|Rua|Avenida|Rodovia|Alameda|Travessa)\b)',
-      caseSensitive: false,
+    return s.replaceAll(
+      RegExp(r',\s*(?=(R\.|Av\.|Rod\.|Al\.|Trav\.|Rua|Avenida|Rodovia|Alameda|Travessa)\b)', caseSensitive: false),
+      ' ',
     );
-    return s.replaceAll(pattern, ' ');
   }
 
   String _fmtEnderecoLead({
@@ -81,6 +86,7 @@ class _HomeGestorState extends State<HomeGestor> {
     required String complemento,
   }) {
     var l = _fixCommaAfterTypeAtStart(_cleanTail(logradouro));
+
     final e = _cleanTail(endereco);
     final n = numero.trim();
     final c = complemento.trim();
@@ -92,6 +98,7 @@ class _HomeGestorState extends State<HomeGestor> {
     if (c.isNotEmpty) partes.add(c);
 
     var out = partes.join(', ');
+
     out = _cleanHead(out);
     out = _cleanTail(out);
     out = _removeCommaBeforeTypes(out);
@@ -136,12 +143,8 @@ class _HomeGestorState extends State<HomeGestor> {
   }
 
   Future<List<String>> _uidsConsultoresDoMeuTime() async {
-    final rows =
-        await _sb.from('consultores').select('uid').eq('gestor_id', _gestorId);
-    return (rows as List)
-        .map((r) => r['uid'] as String?)
-        .whereType<String>()
-        .toList();
+    final rows = await _sb.from('consultores').select('uid').eq('gestor_id', _gestorId);
+    return (rows as List).map((r) => r['uid'] as String?).whereType<String>().toList();
   }
 
   Future<void> _carregarTotalDb() async {
@@ -151,10 +154,7 @@ class _HomeGestorState extends State<HomeGestor> {
         setState(() => _totalDb = 0);
         return;
       }
-      final rows = await _sb
-          .from('clientes')
-          .select('id')
-          .inFilter('consultor_uid_t', consUids);
+      final rows = await _sb.from('clientes').select('id').inFilter('consultor_uid_t', consUids);
       setState(() => _totalDb = (rows as List).length);
     } catch (_) {
       setState(() => _totalDb = 0);
@@ -180,7 +180,6 @@ class _HomeGestorState extends State<HomeGestor> {
       setState(() => _loadingMore = true);
 
       final start = _page * _pageSize;
-
       final consUids = await _uidsConsultoresDoMeuTime();
       if (consUids.isEmpty) {
         setState(() {
@@ -214,12 +213,7 @@ class _HomeGestorState extends State<HomeGestor> {
       final slice = all.skip(start).take(_pageSize).toList();
 
       String _pickLogradouro(Map<String, dynamic> m) {
-        final cands = [
-          m['logradouro'],
-          m['rua'],          
-          m['via'],
-          m['end_logradouro'],
-        ];
+        final cands = [m['logradouro'], m['rua'], m['via'], m['end_logradouro']];
         for (final v in cands) {
           final s = (v ?? '').toString().trim();
           if (s.isNotEmpty) return s;
@@ -238,19 +232,12 @@ class _HomeGestorState extends State<HomeGestor> {
         final numero = (r['numero'] ?? '').toString().trim();
         final complemento = (r['complemento'] ?? '').toString().trim();
 
-        final endFmt = enderecoDb.isNotEmpty
-            ? _fmtEnderecoLead(
-                logradouro: '',
-                endereco: enderecoDb,
-                numero: numero,
-                complemento: complemento,
-              )
-            : _fmtEnderecoLead(
-                logradouro: logradouro,
-                endereco: '',
-                numero: numero,
-                complemento: complemento,
-              );
+        final endFmt = _fmtEnderecoLead(
+          logradouro: logradouro,
+          endereco: enderecoDb,
+          numero: numero,
+          complemento: complemento,
+        );
 
         batch.add({
           'id': id,
@@ -267,18 +254,10 @@ class _HomeGestorState extends State<HomeGestor> {
         });
       }
 
-      final uids = batch
-          .map((e) => e['consUid'])
-          .where((e) => e != null)
-          .toSet()
-          .cast<String>()
-          .toList();
+      final uids = batch.map((e) => e['consUid']).where((e) => e != null).toSet().cast<String>().toList();
       final nomeMap = <String, String>{};
       if (uids.isNotEmpty) {
-        final consRowsUid = await _sb
-            .from('consultores')
-            .select('uid, nome')
-            .inFilter('uid', uids);
+        final consRowsUid = await _sb.from('consultores').select('uid, nome').inFilter('uid', uids);
         for (final c in (consRowsUid as List)) {
           final uid = c['uid'] as String?;
           final nome = c['nome'] as String?;
@@ -303,7 +282,6 @@ class _HomeGestorState extends State<HomeGestor> {
         _aplicarFiltro();
       });
     } catch (e) {
-      print('Erro carregarLeads: $e');
       setState(() {
         _erro = 'Erro ao carregar leads';
         _loading = false;
@@ -337,10 +315,7 @@ class _HomeGestorState extends State<HomeGestor> {
 
   Future<void> _refresh() async {
     _searchCtrl.clear();
-    await Future.wait([
-      _carregarTotalDb(),
-      _carregarLeads(initial: true),
-    ]);
+    await Future.wait([_carregarTotalDb(), _carregarLeads(initial: true)]);
   }
 
   Future<bool> _onWillPop() async {
@@ -396,16 +371,14 @@ class _HomeGestorState extends State<HomeGestor> {
             prefixIcon: const Icon(Icons.search, color: cinzaPlaceholder),
             filled: true,
             fillColor: const Color(0xFFF3F4F6),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: borda, width: 1),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: Color(0xFFED1C24), width: 1.2),
+              borderSide: const BorderSide(color: Color(0xFFED1C24), width: 1.2),
             ),
           ),
         ),
@@ -458,10 +431,8 @@ class _HomeGestorState extends State<HomeGestor> {
                             child: Column(
                               children: [
                                 GestorHeaderRow(
-                                  total: _query.isEmpty
-                                      ? _totalDb
-                                      : _filteredLeads.length,
-                                  onAvisos: _abrirAvisosMock, 
+                                  total: _query.isEmpty ? _totalDb : _filteredLeads.length,
+                                  onAvisos: _abrirAvisosMock,
                                 ),
                                 _buildSearchBar(),
                               ],
@@ -476,12 +447,8 @@ class _HomeGestorState extends State<HomeGestor> {
                               _LeadsTab(
                                 loading: _loading,
                                 erro: _erro,
-                                leads: _query.isEmpty
-                                    ? _leads
-                                    : _filteredLeads,
-                                idsCount: _query.isEmpty
-                                    ? _totalDb
-                                    : _filteredLeads.length,
+                                leads: _query.isEmpty ? _leads : _filteredLeads,
+                                idsCount: _query.isEmpty ? _totalDb : _filteredLeads.length,
                                 hasMore: _hasMore,
                                 loadingMore: _loadingMore,
                                 expandirTodos: _expandirTodos,
@@ -489,26 +456,23 @@ class _HomeGestorState extends State<HomeGestor> {
                                 onCarregarMais: _carregarLeads,
                                 onEditar: _abrirEditar,
                                 onTransferir: _abrirTransferir,
-                                setExpandirTodos: (v) =>
-                                    setState(() => _expandirTodos = v),
+                                setExpandirTodos: (v) => setState(() => _expandirTodos = v),
                               ),
                               const VendasPage(),
                               Navigator(
                                 key: _consultoresNavKey,
                                 onGenerateRoute: (settings) =>
-                                    MaterialPageRoute(
-                                        builder: (_) =>
-                                            const ConsultoresRoot()),
+                                    MaterialPageRoute(builder: (_) => const ConsultoresRoot()),
                               ),
                               Navigator(
                                 key: _enderecosNavKey,
-                                onGenerateRoute: (_) => MaterialPageRoute(
-                                    builder: (_) => const EnderecosPage()),
+                                onGenerateRoute: (_) =>
+                                    MaterialPageRoute(builder: (_) => const EnderecosPage()),
                               ),
                               Navigator(
                                 key: _exportarNavKey,
-                                onGenerateRoute: (_) => MaterialPageRoute(
-                                    builder: (_) => const ExportarPage()),
+                                onGenerateRoute: (_) =>
+                                    MaterialPageRoute(builder: (_) => const ExportarPage()),
                               ),
                             ],
                           ),
@@ -554,8 +518,7 @@ class _HomeGestorState extends State<HomeGestor> {
           maxChildSize: 0.95,
           builder: (_, scrollController) {
             return ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
               child: SingleChildScrollView(
                 controller: scrollController,
                 child: comps.EditarLeadSheet(
@@ -604,7 +567,7 @@ class _HomeGestorState extends State<HomeGestor> {
 
     final ok = await showGeneralDialog<bool>(
       context: context,
-      barrierDismissible: true,  
+      barrierDismissible: true,
       barrierLabel: 'Transferir Lead',
       barrierColor: Colors.black54,
       transitionDuration: const Duration(milliseconds: 160),
@@ -613,9 +576,7 @@ class _HomeGestorState extends State<HomeGestor> {
           lead: TLCliente(id: c['id'], nome: c['nome'], telefone: c['tel']),
           consultorAtualNome: consultorAtualNome,
           onConfirmar: (novoUid) async {
-            await _sb
-                .from('clientes')
-                .update({'consultor_uid_t': novoUid}).eq('id', c['id']);
+            await _sb.from('clientes').update({'consultor_uid_t': novoUid}).eq('id', c['id']);
             setState(() {
               c['consUid'] = novoUid;
             });
@@ -623,8 +584,7 @@ class _HomeGestorState extends State<HomeGestor> {
         );
       },
       transitionBuilder: (ctx, anim, _, child) {
-        final curved =
-            CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
         return FadeTransition(
           opacity: curved,
           child: ScaleTransition(
@@ -684,8 +644,7 @@ class _LeadsTab extends StatelessWidget {
           children: [
             Text(erro!, style: const TextStyle(color: Colors.red)),
             const SizedBox(height: 12),
-            ElevatedButton(
-                onPressed: onRefresh, child: const Text('Tentar novamente')),
+            ElevatedButton(onPressed: onRefresh, child: const Text('Tentar novamente')),
           ],
         ),
       );
@@ -702,9 +661,7 @@ class _LeadsTab extends StatelessWidget {
       },
       child: NotificationListener<ScrollNotification>(
         onNotification: (n) {
-          if (n.metrics.pixels >= n.metrics.maxScrollExtent - 200 &&
-              hasMore &&
-              !loadingMore) {
+          if (n.metrics.pixels >= n.metrics.maxScrollExtent - 200 && hasMore && !loadingMore) {
             onCarregarMais(initial: false);
           }
           return false;
@@ -788,10 +745,7 @@ class _CardVerMais extends StatelessWidget {
                 const Expanded(
                   child: Text(
                     'Ver mais',
-                    style: TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w600,
-                        color: texto),
+                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: texto),
                   ),
                 ),
                 Text('($restante)', style: const TextStyle(color: texto)),
@@ -829,8 +783,7 @@ class TLTransferirLeadDialog extends StatefulWidget {
   State<TLTransferirLeadDialog> createState() => _TLTransferirLeadDialogState();
 }
 
-class _TLTransferirLeadDialogState extends State<TLTransferirLeadDialog>
-    with TickerProviderStateMixin {
+class _TLTransferirLeadDialogState extends State<TLTransferirLeadDialog> with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _sb = Supabase.instance.client;
 
@@ -847,8 +800,7 @@ class _TLTransferirLeadDialogState extends State<TLTransferirLeadDialog>
 
   static const double kMaxWidth = 520;
   static const double kMinBodyHeight = 220;
-  static const EdgeInsets kInsetPadding =
-      EdgeInsets.symmetric(horizontal: 28, vertical: 24);
+  static const EdgeInsets kInsetPadding = EdgeInsets.symmetric(horizontal: 28, vertical: 24);
 
   @override
   void initState() {
@@ -858,11 +810,7 @@ class _TLTransferirLeadDialogState extends State<TLTransferirLeadDialog>
 
   Future<void> _carregarConsultores() async {
     try {
-      final rows = await _sb
-          .from('consultores')
-          .select('uid, nome')
-          .eq('ativo', true)
-          .order('nome');
+      final rows = await _sb.from('consultores').select('uid, nome').eq('ativo', true).order('nome');
       setState(() {
         _consultores = List<Map<String, dynamic>>.from(rows);
         _loading = false;
@@ -887,6 +835,41 @@ class _TLTransferirLeadDialogState extends State<TLTransferirLeadDialog>
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  Widget _buildGradientConfirmButton({
+    required VoidCallback? onPressed,
+    required Widget child,
+    required bool enabled,
+  }) {
+    final enabledGradient = const LinearGradient(
+      colors: [Color(0xFFF15A24), Color(0xFFEA3124)],
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+    );
+    final disabledColor = const Color(0xFFEEC5C2);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: enabled ? enabledGradient : null,
+        color: enabled ? null : disabledColor,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 6, offset: Offset(0, 2))],
+      ),
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          disabledForegroundColor: Colors.white70,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: EdgeInsets.zero,
+        ),
+        child: child,
+      ),
+    );
   }
 
   @override
@@ -922,19 +905,11 @@ class _TLTransferirLeadDialogState extends State<TLTransferirLeadDialog>
                               borderRadius: BorderRadius.circular(13),
                             ),
                             alignment: Alignment.center,
-                            child: const Icon(Icons.sync_alt_rounded,
-                                color: vermelho, size: 16),
+                            child: const Icon(Icons.sync_alt_rounded, color: vermelho, size: 16),
                           ),
                           const SizedBox(width: 8),
                           const Expanded(
-                            child: Text(
-                              'Transferir Lead',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: texto,
-                              ),
-                            ),
+                            child: Text('Transferir Lead', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: texto)),
                           ),
                           IconButton(
                             icon: const Icon(Icons.close, color: texto, size: 20),
@@ -957,20 +932,12 @@ class _TLTransferirLeadDialogState extends State<TLTransferirLeadDialog>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(widget.lead.nome ?? '-',
-                              style: const TextStyle(
-                                  fontSize: 14.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: texto)),
+                          Text(widget.lead.nome ?? '-', style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: texto)),
                           const SizedBox(height: 4),
                           if ((widget.lead.telefone ?? '').isNotEmpty)
-                            Text(widget.lead.telefone!,
-                                style: const TextStyle(
-                                    fontSize: 13.5, color: texto)),
+                            Text(widget.lead.telefone!, style: const TextStyle(fontSize: 13.5, color: texto)),
                           const SizedBox(height: 4),
-                          Text('Consultor atual: ${widget.consultorAtualNome}',
-                              style: const TextStyle(
-                                  fontSize: 13, color: Color(0xFF6B6B6E))),
+                          Text('Consultor atual: ${widget.consultorAtualNome}', style: const TextStyle(fontSize: 13, color: Color(0xFF6B6B6E))),
                         ],
                       ),
                     ),
@@ -978,14 +945,7 @@ class _TLTransferirLeadDialogState extends State<TLTransferirLeadDialog>
                     const SizedBox(height: 14),
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        'Transferir para',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: texto,
-                        ),
-                      ),
+                      child: Text('Transferir para', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: texto)),
                     ),
                     const SizedBox(height: 6),
 
@@ -994,32 +954,26 @@ class _TLTransferirLeadDialogState extends State<TLTransferirLeadDialog>
                       child: DropdownButtonFormField<String>(
                         value: _selecionado,
                         isExpanded: true,
-                        icon: const Icon(Icons.expand_more,
-                            color: Color(0xFF6B6B6E)),
+                        icon: const Icon(Icons.expand_more, color: Color(0xFF6B6B6E)),
                         decoration: InputDecoration(
                           isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 11),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                           fillColor: branco,
                           filled: true,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide:
-                                const BorderSide(color: bordaCinza, width: 1),
+                            borderSide: const BorderSide(color: bordaCinza, width: 1),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide:
-                                const BorderSide(color: bordaCinza, width: 1),
+                            borderSide: const BorderSide(color: bordaCinza, width: 1),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide:
-                                const BorderSide(color: vermelho, width: 1.2),
+                            borderSide: const BorderSide(color: vermelho, width: 1.2),
                           ),
                         ),
-                        hint: const Text('Selecione o consultor',
-                            style: TextStyle(color: Color(0xFF9A9AA0))),
+                        hint: const Text('Selecione o consultor', style: TextStyle(color: Color(0xFF9A9AA0))),
                         items: _consultores
                             .map((c) => DropdownMenuItem<String>(
                                   value: c['uid'] as String,
@@ -1027,8 +981,7 @@ class _TLTransferirLeadDialogState extends State<TLTransferirLeadDialog>
                                 ))
                             .toList(),
                         onChanged: (v) => setState(() => _selecionado = v),
-                        validator: (v) =>
-                            v == null ? 'Selecione um consultor' : null,
+                        validator: (v) => v == null ? 'Selecione um consultor' : null,
                       ),
                     ),
 
@@ -1038,32 +991,20 @@ class _TLTransferirLeadDialogState extends State<TLTransferirLeadDialog>
                       child: SizedBox(
                         width: double.infinity,
                         height: 44,
-                        child: _TLGradientConfirmButton(
+                        child: _buildGradientConfirmButton(
+                          onPressed: _sending || _selecionado == null ? null : _confirmar,
                           enabled: !_sending && _selecionado != null,
-                          onPressed: _sending || _selecionado == null
-                              ? null
-                              : _confirmar,
                           child: _sending
                               ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
+                                  width: 18, height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                 )
                               : Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: const [
-                                    Icon(Icons.sync_alt_rounded,
-                                        size: 18, color: Colors.white),
+                                    Icon(Icons.sync_alt_rounded, size: 18, color: Colors.white),
                                     SizedBox(width: 8),
-                                    Text(
-                                      'Confirmar Transferência',
-                                      style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w700),
-                                    ),
+                                    Text('Confirmar Transferência', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
                                   ],
                                 ),
                         ),
@@ -1075,60 +1016,6 @@ class _TLTransferirLeadDialogState extends State<TLTransferirLeadDialog>
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _TLGradientConfirmButton extends StatelessWidget {
-  final VoidCallback? onPressed;
-  final Widget child;
-  final bool enabled;
-  const _TLGradientConfirmButton({
-    required this.onPressed,
-    required this.child,
-    required this.enabled,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final enabledGradient = const LinearGradient(
-      colors: [
-        Color(0xFFF15A24),
-        Color(0xFFEA3124),
-      ],
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-    );
-
-    final disabledColor = const Color(0xFFEEC5C2);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: enabled ? enabledGradient : null,
-        color: enabled ? null : disabledColor,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x14000000),
-            blurRadius: 6,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          elevation: 0,
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          foregroundColor: Colors.white,
-          disabledForegroundColor: Colors.white70,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          padding: EdgeInsets.zero,
-        ),
-        child: child,
       ),
     );
   }
