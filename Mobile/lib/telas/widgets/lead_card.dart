@@ -12,6 +12,9 @@ class LeadCard extends StatelessWidget {
   final VoidCallback onEditar;
   final VoidCallback onTransferir;
 
+  // NOVO: estabelecimento opcional (default = '')
+  final String estabelecimento;
+
   const LeadCard({
     super.key,
     required this.nome,
@@ -24,6 +27,7 @@ class LeadCard extends StatelessWidget {
     required this.alerta,
     required this.onEditar,
     required this.onTransferir,
+    this.estabelecimento = '', // compatível com chamadas antigas
   });
 
   static const branco = Color(0xFFFFFFFF);
@@ -60,29 +64,41 @@ class LeadCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
 
+            // Telefone
             Row(
               children: [
                 const Icon(Icons.phone, size: 16, color: cinzaIcone),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: Text(telefone, style: const TextStyle(fontSize: 13.5, color: texto)),
-                ),
+                Expanded(child: Text(telefone, style: const TextStyle(fontSize: 13.5, color: texto))),
               ],
             ),
             const SizedBox(height: 6),
 
+            // Endereço
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Icon(Icons.location_on_outlined, size: 16, color: cinzaIcone),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: Text(endereco, style: const TextStyle(fontSize: 13.5, color: texto)),
-                ),
+                Expanded(child: Text(endereco, style: const TextStyle(fontSize: 13.5, color: texto))),
               ],
             ),
+
+            // NOVO: Estabelecimento
+            if (estabelecimento.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const Icon(Icons.storefront_outlined, size: 16, color: cinzaIcone),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(estabelecimento, style: const TextStyle(fontSize: 13.5, color: texto))),
+                ],
+              ),
+            ],
+
             const SizedBox(height: 6),
 
+            // Consultor
             Row(
               children: [
                 const Icon(Icons.person_outline, size: 16, color: cinzaIcone),
@@ -97,12 +113,13 @@ class LeadCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
 
+            // Observação
             Container(
               width: double.infinity,
               constraints: const BoxConstraints(minHeight: 44),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: obsBg, 
+                color: obsBg,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: vermelho.withOpacity(0.25)),
               ),
@@ -112,16 +129,16 @@ class LeadCard extends StatelessWidget {
                   children: [
                     const TextSpan(
                       text: 'Obs: ',
-                      style: TextStyle(fontWeight: FontWeight.w700, color: vermelho), 
+                      style: TextStyle(fontWeight: FontWeight.w700, color: vermelho),
                     ),
                     TextSpan(text: observacao.isEmpty ? '—' : observacao),
                   ],
                 ),
               ),
             ),
-
             const SizedBox(height: 12),
 
+            // Ações
             Row(
               children: [
                 _BotaoTexto(

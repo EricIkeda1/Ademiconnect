@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/lead_card.dart' as widgets;
-import 'components/editar.dart' as comps;
 import 'components/gestor_navbar.dart';
 import 'components/gestor_header_row.dart';
 import 'components/menu_inferior.dart';
 import 'components/avisos.dart';
+import 'components/editar.dart' as comps;
+import 'components/transferir_lead_dialog.dart';
 import 'telas/lista_consultor.dart';
 import 'telas/enderecos.dart';
 import 'telas/exportar.dart';
 import 'telas/vendas.dart';
 
 class HomeGestor extends StatefulWidget {
-  const HomeGestor({super.key, this.initialTab = 0});
-  final int initialTab;
-
+  const HomeGestor({super.key});
   @override
   State<HomeGestor> createState() => _HomeGestorState();
 }
@@ -23,16 +22,9 @@ class _HomeGestorState extends State<HomeGestor> {
   static const Color branco = Color(0xFFFFFFFF);
   static const Color fundoApp = Color(0xFFF7F7F7);
   static const Color preto09 = Color(0xFF231F20);
-  static const Color borda = Color(0xFFDFDFDF);
-  static const Color cinzaPlaceholder = Color(0xFF9FA3A9);
 
-  late int _tab;
-  late final PageController _pageController;
-
-  final GlobalKey<NavigatorState> _leadsNavKey = GlobalKey<NavigatorState>();
-  final GlobalKey<NavigatorState> _consultoresNavKey = GlobalKey<NavigatorState>();
-  final GlobalKey<NavigatorState> _enderecosNavKey = GlobalKey<NavigatorState>();
-  final GlobalKey<NavigatorState> _exportarNavKey = GlobalKey<NavigatorState>();
+  int _tab = 0;
+  late final PageController _pageController = PageController(initialPage: _tab);
 
   final _sb = Supabase.instance.client;
 
@@ -46,35 +38,21 @@ class _HomeGestorState extends State<HomeGestor> {
   bool _loadingMore = false;
   bool _expandirTodos = false;
 
-  int _totalDb = 0;
-
-  final TextEditingController _searchCtrl = TextEditingController();
-  String _query = '';
-  List<Map<String, dynamic>> _filteredLeads = [];
-
-  String get _gestorId => _sb.auth.currentUser!.id;
-
   String _cleanTail(String s) => s.replaceFirst(RegExp(r',\s*$'), '').trimRight();
   String _cleanHead(String s) => s.replaceFirst(RegExp(r'^\s*,\s*'), '').trimLeft();
-  String _fixCommaAfterTypeAtStart(String s) {
+
+  String _removeCommaAfterTypeAtStart(String s) {
     if (s.isEmpty) return s;
-
-    s = s.replaceFirstMapped(
-      RegExp(r'^\s*(R\.|Av\.|Rod\.|Al\.|Trav\.)\s*,\s*', caseSensitive: false),
-      (m) => '${m.group(1)} ',
-    );
-
-    s = s.replaceFirstMapped(
-      RegExp(r'^\s*(Rua|Avenida|Rodovia|Alameda|Travessa)\s*,\s*', caseSensitive: false),
-      (m) => '${m.group(1)} ',
-    );
-
-    return s.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
+    s = s.replaceFirstMapped(RegExp(r'^\s*(Av|R|Rod|Al|Trav)\.\s*,\s*', caseSensitive: false),
+        (m) => '${m.group(1)}. ');
+    s = s.replaceFirstMapped(RegExp(r'^\s*(Avenida|Rua|Rodovia|Alameda|Travessa)\s*,\s*', caseSensitive: false),
+        (m) => '${m.group(1)} ');
+    return s.replaceAll(RegExp(r'\s{2,}'), ' ').trimLeft();
   }
 
-  String _removeCommaBeforeTypes(String s) {
+  String _removeCommaBeforeTypesAnywhere(String s) {
     return s.replaceAll(
-      RegExp(r',\s*(?=(R\.|Av\.|Rod\.|Al\.|Trav\.|Rua|Avenida|Rodovia|Alameda|Travessa)\b)', caseSensitive: false),
+      RegExp(r',\s*(?=(Av\.|R\.|Rod\.|Al\.|Trav\.|Avenida|Rua|Rodovia|Alameda|Travessa)\b)', caseSensitive: false),
       ' ',
     );
   }
@@ -83,25 +61,31 @@ class _HomeGestorState extends State<HomeGestor> {
     required String logradouro,
     required String endereco,
     required String numero,
-    required String complemento,
+    String cidade = '',
   }) {
-    var l = _fixCommaAfterTypeAtStart(_cleanTail(logradouro));
-
-    final e = _cleanTail(endereco);
+    var l = _removeCommaAfterTypeAtStart(_cleanTail(logradouro));
+    var e = _cleanTail(endereco);
     final n = numero.trim();
-    final c = complemento.trim();
+    final c = cidade.trim();
 
-    final partes = <String>[];
-    if (l.isNotEmpty) partes.add(l);
-    if (e.isNotEmpty) partes.add(e);
-    if (n.isNotEmpty) partes.add(n);
-    if (c.isNotEmpty) partes.add(c);
+    String primeiraParte;
+    if (l.isNotEmpty && e.isNotEmpty && RegExp(r'\.\s*$', caseSensitive: false).hasMatch(l)) {
+      primeiraParte = '$l ${e.trim()}';
+    } else if (l.isNotEmpty && e.isNotEmpty) {
+      primeiraParte = '$l, ${e.trim()}';
+    } else {
+      primeiraParte = (l + ' ' + e).trim();
+    }
 
-    var out = partes.join(', ');
+    String corpo = primeiraParte;
+    if (n.isNotEmpty) corpo = '$corpo, $n';
 
+    String out = corpo;
+    if (c.isNotEmpty) out = '$c. $corpo';
+
+    out = _removeCommaBeforeTypesAnywhere(out);
     out = _cleanHead(out);
     out = _cleanTail(out);
-    out = _removeCommaBeforeTypes(out);
     out = out.replaceAll(RegExp(r'\s{2,}'), ' ').trim();
     return out;
   }
@@ -109,56 +93,28 @@ class _HomeGestorState extends State<HomeGestor> {
   @override
   void initState() {
     super.initState();
-    _tab = widget.initialTab;
-    _pageController = PageController(initialPage: _tab);
-
-    _searchCtrl.addListener(() {
-      setState(() {
-        _query = _searchCtrl.text.trim();
-        _aplicarFiltro();
-      });
-    });
-    _carregarTotalDb();
     _carregarLeads(initial: true);
   }
 
   @override
   void dispose() {
     _pageController.dispose();
-    _searchCtrl.dispose();
     super.dispose();
   }
 
-  void _aplicarFiltro() {
-    if (_query.isEmpty) {
-      _filteredLeads = List<Map<String, dynamic>>.from(_leads);
-      return;
-    }
-    final q = _query.toLowerCase();
-    _filteredLeads = _leads.where((e) {
-      final nomeLead = (e['nome'] as String?)?.toLowerCase() ?? '';
-      final nomeCons = (e['cons'] as String?)?.toLowerCase() ?? '';
-      return nomeLead.contains(q) || nomeCons.contains(q);
-    }).toList();
-  }
-
   Future<List<String>> _uidsConsultoresDoMeuTime() async {
-    final rows = await _sb.from('consultores').select('uid').eq('gestor_id', _gestorId);
-    return (rows as List).map((r) => r['uid'] as String?).whereType<String>().toList();
-  }
-
-  Future<void> _carregarTotalDb() async {
-    try {
-      final consUids = await _uidsConsultoresDoMeuTime();
-      if (consUids.isEmpty) {
-        setState(() => _totalDb = 0);
-        return;
-      }
-      final rows = await _sb.from('clientes').select('id').inFilter('consultor_uid_t', consUids);
-      setState(() => _totalDb = (rows as List).length);
-    } catch (_) {
-      setState(() => _totalDb = 0);
-    }
+    final uidGestor = _sb.auth.currentUser?.id;
+    if (uidGestor == null) return [];
+    final rows = await _sb
+        .from('consultores')
+        .select('uid')
+        .eq('gestor_id', uidGestor)
+        .eq('ativo', true);
+    if (rows is! List) return [];
+    return rows
+        .map((r) => (r['uid'] ?? '').toString())
+        .where((s) => s.isNotEmpty)
+        .toList();
   }
 
   Future<void> _carregarLeads({bool initial = false}) async {
@@ -179,75 +135,51 @@ class _HomeGestorState extends State<HomeGestor> {
     try {
       setState(() => _loadingMore = true);
 
-      final start = _page * _pageSize;
+      // 1) Escopo do time
       final consUids = await _uidsConsultoresDoMeuTime();
       if (consUids.isEmpty) {
         setState(() {
-          _hasMore = false;
           _loading = false;
           _loadingMore = false;
-          _aplicarFiltro();
+          _hasMore = false;
         });
         return;
       }
 
-      final rowsAll = await _sb
+      // 2) Paginado filtrando por time
+      final start = _page * _pageSize;
+      final end = start + _pageSize - 1;
+
+      final rows = await _sb
           .from('clientes')
-          .select('''
-            id,
-            nome,
-            endereco,
-            logradouro,
-            numero,
-            complemento,
-            bairro,
-            telefone,
-            data_visita,
-            observacoes,
-            consultor_uid_t
-          ''')
+          .select('id, nome, telefone, logradouro, endereco, numero, bairro, cidade, estabelecimento, data_visita, observacoes, consultor_uid_t')
           .inFilter('consultor_uid_t', consUids)
-          .order('data_visita', ascending: false, nullsFirst: true);
-
-      final all = (rowsAll as List).cast<Map<String, dynamic>>();
-      final slice = all.skip(start).take(_pageSize).toList();
-
-      String _pickLogradouro(Map<String, dynamic> m) {
-        final cands = [m['logradouro'], m['rua'], m['via'], m['end_logradouro']];
-        for (final v in cands) {
-          final s = (v ?? '').toString().trim();
-          if (s.isNotEmpty) return s;
-        }
-        return '';
-      }
+          .order('data_visita', ascending: false, nullsFirst: true)
+          .range(start, end);
 
       final batch = <Map<String, dynamic>>[];
-      for (final r in slice) {
+      for (final r in (rows as List)) {
         final id = r['id'];
         if (_ids.contains(id)) continue;
         _ids.add(id);
 
-        final enderecoDb = (r['endereco'] ?? '').toString().trim();
-        final logradouro = _pickLogradouro(r);
-        final numero = (r['numero'] ?? '').toString().trim();
-        final complemento = (r['complemento'] ?? '').toString().trim();
-
         final endFmt = _fmtEnderecoLead(
-          logradouro: logradouro,
-          endereco: enderecoDb,
-          numero: numero,
-          complemento: complemento,
+          logradouro: (r['logradouro'] ?? '').toString(),
+          endereco: (r['endereco'] ?? '').toString(),
+          numero: (r['numero'] ?? '').toString(),
+          cidade: (r['cidade'] ?? '').toString(),
         );
 
         batch.add({
           'id': id,
-          'nome': (r['nome'] ?? '').toString(),
-          'tel': (r['telefone'] ?? '').toString(),
+          'nome': r['nome'] ?? '',
+          'tel': r['telefone'] ?? '',
           'end': endFmt,
-          'bairro': (r['bairro'] ?? '').toString(),
+          'estab': (r['estabelecimento'] ?? '').toString().trim(),
+          'bairro': r['bairro'] ?? '',
           'consUid': r['consultor_uid_t'],
           'cons': '',
-          'obs': (r['observacoes'] ?? '').toString(),
+          'obs': r['observacoes'] ?? '',
           'dias': _calcDias(r['data_visita']),
           'urgente': _isUrgente(r['data_visita']),
           'alerta': _isAlerta(r['data_visita']),
@@ -255,31 +187,26 @@ class _HomeGestorState extends State<HomeGestor> {
       }
 
       final uids = batch.map((e) => e['consUid']).where((e) => e != null).toSet().cast<String>().toList();
-      final nomeMap = <String, String>{};
       if (uids.isNotEmpty) {
-        final consRowsUid = await _sb.from('consultores').select('uid, nome').inFilter('uid', uids);
-        for (final c in (consRowsUid as List)) {
+        final consRows = await _sb.from('consultores').select('uid, nome').inFilter('uid', uids);
+        final map = <String, String>{};
+        for (final c in (consRows as List)) {
           final uid = c['uid'] as String?;
           final nome = c['nome'] as String?;
-          if (uid != null && nome != null) nomeMap[uid] = nome;
+          if (uid != null && nome != null) map[uid] = nome;
+        }
+        for (final e in batch) {
+          final uid = e['consUid'] as String?;
+          e['cons'] = uid != null ? (map[uid] ?? '') : '';
         }
       }
-      for (final e in batch) {
-        final uid = e['consUid'] as String?;
-        e['cons'] = uid != null ? (nomeMap[uid] ?? '') : '';
-      }
-
-      final totalAll = all.length;
-      final nextStart = (_page + 1) * _pageSize;
-      final hasMore = nextStart < totalAll;
 
       setState(() {
         _leads.addAll(batch);
         _page += 1;
-        _hasMore = hasMore;
+        _hasMore = (rows as List).length == _pageSize;
         _loading = false;
         _loadingMore = false;
-        _aplicarFiltro();
       });
     } catch (e) {
       setState(() {
@@ -313,25 +240,7 @@ class _HomeGestorState extends State<HomeGestor> {
 
   bool _isAlerta(dynamic dataVisita) => _calcDias(dataVisita) > 60;
 
-  Future<void> _refresh() async {
-    _searchCtrl.clear();
-    await Future.wait([_carregarTotalDb(), _carregarLeads(initial: true)]);
-  }
-
-  Future<bool> _onWillPop() async {
-    final currentKey = <GlobalKey<NavigatorState>>[
-      _leadsNavKey,
-      _consultoresNavKey,
-      _enderecosNavKey,
-      _exportarNavKey,
-    ][_tab];
-
-    if (currentKey.currentState?.canPop() == true) {
-      currentKey.currentState!.pop();
-      return false;
-    }
-    return true;
-  }
+  Future<void> _refresh() async => _carregarLeads(initial: true);
 
   Widget _withGlobalSwipe({required Widget child, required int pageCount}) {
     return GestureDetector(
@@ -356,51 +265,6 @@ class _HomeGestorState extends State<HomeGestor> {
     );
   }
 
-  Widget _buildSearchBar() {
-    return Container(
-      color: branco,
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
-      child: SizedBox(
-        height: 44,
-        child: TextField(
-          controller: _searchCtrl,
-          textInputAction: TextInputAction.search,
-          decoration: InputDecoration(
-            hintText: 'Pesquisar por lead ou consultor...',
-            hintStyle: const TextStyle(color: cinzaPlaceholder, fontSize: 14),
-            prefixIcon: const Icon(Icons.search, color: cinzaPlaceholder),
-            filled: true,
-            fillColor: const Color(0xFFF3F4F6),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: borda, width: 1),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFFED1C24), width: 1.2),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _abrirAvisosMock() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: const AvisosSheetMock(),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Theme(
@@ -412,95 +276,79 @@ class _HomeGestorState extends State<HomeGestor> {
           elevation: 0,
         ),
       ),
-      child: WillPopScope(
-        onWillPop: _onWillPop,
-        child: Scaffold(
-          appBar: const GestorNavbar(),
-          body: Stack(
-            children: [
-              Positioned.fill(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 84),
-                  child: _withGlobalSwipe(
-                    pageCount: 5,
-                    child: Column(
-                      children: [
-                        if (_tab == 0)
-                          Container(
-                            color: branco,
-                            child: Column(
-                              children: [
-                                GestorHeaderRow(
-                                  total: _query.isEmpty ? _totalDb : _filteredLeads.length,
-                                  onAvisos: _abrirAvisosMock,
-                                ),
-                                _buildSearchBar(),
-                              ],
+      child: Scaffold(
+        appBar: const GestorNavbar(),
+        body: Stack(
+          children: [
+            Positioned.fill(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 84),
+                child: _withGlobalSwipe(
+                  pageCount: 4,
+                  child: Column(
+                    children: [
+                      if (_tab == 0)
+                        Container(
+                          color: branco,
+                          child: GestorHeaderRow(
+                            total: _ids.length,
+                            onAvisos: () => showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.white,
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                              ),
+                              builder: (ctx) => const AvisosSheetMock(),
                             ),
                           ),
-                        if (_tab == 0) const SizedBox(height: 6),
-                        Expanded(
-                          child: PageView(
-                            controller: _pageController,
-                            onPageChanged: (i) => setState(() => _tab = i),
-                            children: [
-                              _LeadsTab(
-                                loading: _loading,
-                                erro: _erro,
-                                leads: _query.isEmpty ? _leads : _filteredLeads,
-                                idsCount: _query.isEmpty ? _totalDb : _filteredLeads.length,
-                                hasMore: _hasMore,
-                                loadingMore: _loadingMore,
-                                expandirTodos: _expandirTodos,
-                                onRefresh: _refresh,
-                                onCarregarMais: _carregarLeads,
-                                onEditar: _abrirEditar,
-                                onTransferir: _abrirTransferir,
-                                setExpandirTodos: (v) => setState(() => _expandirTodos = v),
-                              ),
-                              const VendasPage(),
-                              Navigator(
-                                key: _consultoresNavKey,
-                                onGenerateRoute: (settings) =>
-                                    MaterialPageRoute(builder: (_) => const ConsultoresRoot()),
-                              ),
-                              Navigator(
-                                key: _enderecosNavKey,
-                                onGenerateRoute: (_) =>
-                                    MaterialPageRoute(builder: (_) => const EnderecosPage()),
-                              ),
-                              Navigator(
-                                key: _exportarNavKey,
-                                onGenerateRoute: (_) =>
-                                    MaterialPageRoute(builder: (_) => const ExportarPage()),
-                              ),
-                            ],
-                          ),
                         ),
-                      ],
-                    ),
+                      if (_tab == 0) const SizedBox(height: 6),
+                      Expanded(
+                        child: PageView(
+                          controller: _pageController,
+                          onPageChanged: (i) => setState(() => _tab = i),
+                          children: [
+                            _LeadsTab(
+                              loading: _loading,
+                              erro: _erro,
+                              leads: _leads,
+                              idsCount: _ids.length,
+                              hasMore: _hasMore,
+                              loadingMore: _loadingMore,
+                              expandirTodos: _expandirTodos,
+                              onRefresh: _refresh,
+                              onCarregarMais: _carregarLeads,
+                              onEditar: _abrirEditar,
+                              onTransferir: _abrirTransferir,
+                              setExpandirTodos: (v) => setState(() => _expandirTodos = v),
+                            ),
+                            const VendasPage(),
+                            Navigator(onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => const ConsultoresRoot())),
+                            Navigator(onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => const EnderecosPage())),
+                            Navigator(onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => const ExportarPage())),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: MenuInferior(
-                  index: _tab,
-                  controller: _pageController,
-                  onChanged: (i) {
-                    _pageController.animateToPage(
-                      i,
-                      duration: const Duration(milliseconds: 260),
-                      curve: Curves.easeOutCubic,
-                    );
-                    setState(() => _tab = i);
-                  },
-                ),
+            ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: MenuInferior(
+                index: _tab,
+                controller: _pageController,
+                onChanged: (i) {
+                  _pageController.animateToPage(i, duration: const Duration(milliseconds: 260), curve: Curves.easeOutCubic);
+                  setState(() => _tab = i);
+                },
               ),
-            ],
-          ),
-          floatingActionButton: null,
+            ),
+          ],
         ),
+        floatingActionButton: null,
       ),
     );
   }
@@ -537,69 +385,59 @@ class _HomeGestorState extends State<HomeGestor> {
     );
 
     if (result != null) {
+      final novoEnd = _fmtEnderecoLead(
+        logradouro: result['logradouro'] ?? '',
+        endereco: result['endereco'] ?? '',
+        numero: result['numero'] ?? '',
+        cidade: result['cidade'] ?? '',
+      );
       setState(() {
         _leads[index] = {
           ..._leads[index],
           'nome': result['nome'],
-          'telefone': result['telefone'],
-          'end': result['endereco'],
+          'tel': result['telefone'],
+          'end': novoEnd,
           'bairro': result['bairro'],
           'dias': result['diasPAP'],
-          'observacoes': result['observacoes'],
+          'obs': result['observacoes'],
+          'estab': result['estabelecimento'] ?? _leads[index]['estab'],
         };
-        _aplicarFiltro();
       });
 
       try {
         await _sb.from('clientes').update({
           'nome': result['nome'],
           'telefone': result['telefone'],
+          'logradouro': result['logradouro'],
           'endereco': result['endereco'],
+          'numero': result['numero'],
           'bairro': result['bairro'],
+          'cidade': result['cidade'],
+          'estabelecimento': result['estabelecimento'],
           'observacoes': result['observacoes'],
-        }).eq('id', _leads[index]['id']);
+        }).eq('id', _leads[index]['id']).select();
       } catch (_) {}
     }
   }
 
   Future<void> _abrirTransferir(Map<String, dynamic> c) async {
-    final consultorAtualNome = (c['cons'] as String?) ?? '-';
-
-    final ok = await showGeneralDialog<bool>(
+    final ok = await showDialog<bool>(
       context: context,
       barrierDismissible: true,
-      barrierLabel: 'Transferir Lead',
-      barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 160),
-      pageBuilder: (ctx, a1, a2) {
-        return TLTransferirLeadDialog(
-          lead: TLCliente(id: c['id'], nome: c['nome'], telefone: c['tel']),
-          consultorAtualNome: consultorAtualNome,
-          onConfirmar: (novoUid) async {
-            await _sb.from('clientes').update({'consultor_uid_t': novoUid}).eq('id', c['id']);
-            setState(() {
-              c['consUid'] = novoUid;
-            });
-          },
-        );
-      },
-      transitionBuilder: (ctx, anim, _, child) {
-        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            scale: Tween(begin: 0.98, end: 1.0).animate(curved),
-            child: child,
-          ),
-        );
-      },
+      builder: (_) => TLTransferirLeadDialog(
+        lead: TLCliente(id: c['id'], nome: c['nome'], telefone: c['tel']),
+        consultorAtualNome: (c['cons'] as String?) ?? '-',
+        onConfirmar: (novoUid) async {
+          final res = await _sb.from('clientes').update({'consultor_uid_t': novoUid}).eq('id', c['id']).select();
+          if (res == null || res is! List || res.isEmpty) {
+            throw Exception('Sem permissão para transferir este lead (RLS/escopo).');
+          }
+          setState(() => c['consUid'] = novoUid);
+        },
+      ),
     );
-
     if (ok == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lead transferido com sucesso')),
-      );
-      _carregarTotalDb();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lead transferido com sucesso')));
     }
   }
 }
@@ -672,13 +510,11 @@ class _LeadsTab extends StatelessWidget {
           itemCount: itemCount,
           separatorBuilder: (_, __) => const SizedBox(height: 6),
           itemBuilder: (context, idx) {
-            if (mostrarLimite) {
-              if (idx < 10) {
-                final c = leads[idx];
-                return widgets.LeadCard(
+            final renderCard = (Map<String, dynamic> c) => widgets.LeadCard(
                   nome: c['nome'] as String,
                   telefone: c['tel'] as String,
                   endereco: c['end'] as String,
+                  estabelecimento: (c['estab'] as String?) ?? '',
                   consultor: (c['cons'] as String?) ?? '',
                   observacao: c['obs'] as String,
                   dias: (c['dias'] as int?) ?? 0,
@@ -687,28 +523,19 @@ class _LeadsTab extends StatelessWidget {
                   onEditar: () => onEditar(c, idx),
                   onTransferir: () => onTransferir(c),
                 );
+
+            if (mostrarLimite) {
+              if (idx < 10) {
+                final c = leads[idx];
+                return renderCard(c);
               }
               if (idx == 10) {
-                return _CardVerMais(
-                  restante: total - 10,
-                  onTap: () => setExpandirTodos(true),
-                );
+                return _CardVerMais(restante: total - 10, onTap: () => setExpandirTodos(true));
               }
             }
 
             final c = leads[idx];
-            return widgets.LeadCard(
-              nome: c['nome'] as String,
-              telefone: c['tel'] as String,
-              endereco: c['end'] as String,
-              consultor: (c['cons'] as String?) ?? '',
-              observacao: c['obs'] as String,
-              dias: (c['dias'] as int?) ?? 0,
-              urgente: (c['urgente'] as bool?) ?? false,
-              alerta: (c['alerta'] as bool?) ?? false,
-              onEditar: () => onEditar(c, idx),
-              onTransferir: () => onTransferir(c),
-            );
+            return renderCard(c);
           },
         ),
       ),
@@ -743,276 +570,12 @@ class _CardVerMais extends StatelessWidget {
             child: Row(
               children: [
                 const Expanded(
-                  child: Text(
-                    'Ver mais',
-                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: texto),
-                  ),
+                  child: Text('Ver mais', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: texto)),
                 ),
                 Text('($restante)', style: const TextStyle(color: texto)),
                 const SizedBox(width: 8),
                 const Icon(Icons.expand_more, color: texto),
               ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class TLCliente {
-  final dynamic id;
-  final String? nome;
-  final String? telefone;
-  TLCliente({required this.id, this.nome, this.telefone});
-}
-
-class TLTransferirLeadDialog extends StatefulWidget {
-  final TLCliente lead;
-  final String consultorAtualNome;
-  final Future<void> Function(String consultorUid) onConfirmar;
-
-  const TLTransferirLeadDialog({
-    super.key,
-    required this.lead,
-    required this.consultorAtualNome,
-    required this.onConfirmar,
-  });
-
-  @override
-  State<TLTransferirLeadDialog> createState() => _TLTransferirLeadDialogState();
-}
-
-class _TLTransferirLeadDialogState extends State<TLTransferirLeadDialog> with TickerProviderStateMixin {
-  final _formKey = GlobalKey<FormState>();
-  final _sb = Supabase.instance.client;
-
-  bool _loading = true;
-  bool _sending = false;
-  String? _erro;
-  List<Map<String, dynamic>> _consultores = [];
-  String? _selecionado;
-
-  static const branco = Color(0xFFFFFFFF);
-  static const texto = Color(0xFF231F20);
-  static const vermelho = Color(0xFFEA3124);
-  static const bordaCinza = Color(0xFFE8E8E8);
-
-  static const double kMaxWidth = 520;
-  static const double kMinBodyHeight = 220;
-  static const EdgeInsets kInsetPadding = EdgeInsets.symmetric(horizontal: 28, vertical: 24);
-
-  @override
-  void initState() {
-    super.initState();
-    _carregarConsultores();
-  }
-
-  Future<void> _carregarConsultores() async {
-    try {
-      final rows = await _sb.from('consultores').select('uid, nome').eq('ativo', true).order('nome');
-      setState(() {
-        _consultores = List<Map<String, dynamic>>.from(rows);
-        _loading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _erro = 'Erro ao carregar consultores';
-        _loading = false;
-      });
-    }
-  }
-
-  Future<void> _confirmar() async {
-    if (!_formKey.currentState!.validate()) return;
-    final uid = _selecionado;
-    if (uid == null) return;
-
-    setState(() => _sending = true);
-    try {
-      await widget.onConfirmar(uid);
-      if (mounted) Navigator.of(context).pop(true);
-    } finally {
-      if (mounted) setState(() => _sending = false);
-    }
-  }
-
-  Widget _buildGradientConfirmButton({
-    required VoidCallback? onPressed,
-    required Widget child,
-    required bool enabled,
-  }) {
-    final enabledGradient = const LinearGradient(
-      colors: [Color(0xFFF15A24), Color(0xFFEA3124)],
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-    );
-    final disabledColor = const Color(0xFFEEC5C2);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: enabled ? enabledGradient : null,
-        color: enabled ? null : disabledColor,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 6, offset: Offset(0, 2))],
-      ),
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          elevation: 0,
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          foregroundColor: Colors.white,
-          disabledForegroundColor: Colors.white70,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          padding: EdgeInsets.zero,
-        ),
-        child: child,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: kInsetPadding,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: kMaxWidth),
-          child: Material(
-            color: branco,
-            elevation: 6,
-            shadowColor: Colors.black26,
-            borderRadius: BorderRadius.circular(14),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(0, 12, 0, 16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 26,
-                            height: 26,
-                            decoration: BoxDecoration(
-                              color: const Color(0x1AEA3124),
-                              borderRadius: BorderRadius.circular(13),
-                            ),
-                            alignment: Alignment.center,
-                            child: const Icon(Icons.sync_alt_rounded, color: vermelho, size: 16),
-                          ),
-                          const SizedBox(width: 8),
-                          const Expanded(
-                            child: Text('Transferir Lead', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: texto)),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close, color: texto, size: 20),
-                            onPressed: () => Navigator.of(context).pop(),
-                            tooltip: 'Fechar',
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-
-                    Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: branco,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: bordaCinza, width: 1),
-                      ),
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(widget.lead.nome ?? '-', style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: texto)),
-                          const SizedBox(height: 4),
-                          if ((widget.lead.telefone ?? '').isNotEmpty)
-                            Text(widget.lead.telefone!, style: const TextStyle(fontSize: 13.5, color: texto)),
-                          const SizedBox(height: 4),
-                          Text('Consultor atual: ${widget.consultorAtualNome}', style: const TextStyle(fontSize: 13, color: Color(0xFF6B6B6E))),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 14),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Text('Transferir para', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: texto)),
-                    ),
-                    const SizedBox(height: 6),
-
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: DropdownButtonFormField<String>(
-                        value: _selecionado,
-                        isExpanded: true,
-                        icon: const Icon(Icons.expand_more, color: Color(0xFF6B6B6E)),
-                        decoration: InputDecoration(
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-                          fillColor: branco,
-                          filled: true,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: bordaCinza, width: 1),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: bordaCinza, width: 1),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: vermelho, width: 1.2),
-                          ),
-                        ),
-                        hint: const Text('Selecione o consultor', style: TextStyle(color: Color(0xFF9A9AA0))),
-                        items: _consultores
-                            .map((c) => DropdownMenuItem<String>(
-                                  value: c['uid'] as String,
-                                  child: Text(c['nome'] as String),
-                                ))
-                            .toList(),
-                        onChanged: (v) => setState(() => _selecionado = v),
-                        validator: (v) => v == null ? 'Selecione um consultor' : null,
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 44,
-                        child: _buildGradientConfirmButton(
-                          onPressed: _sending || _selecionado == null ? null : _confirmar,
-                          enabled: !_sending && _selecionado != null,
-                          child: _sending
-                              ? const SizedBox(
-                                  width: 18, height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                )
-                              : Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
-                                    Icon(Icons.sync_alt_rounded, size: 18, color: Colors.white),
-                                    SizedBox(width: 8),
-                                    Text('Confirmar Transferência', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                                  ],
-                                ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ),
           ),
         ),
