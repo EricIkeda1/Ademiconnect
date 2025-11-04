@@ -262,7 +262,6 @@ class _VendasPageState extends State<VendasPage> {
               child: _HeaderRow(
                 title: 'Dashboard de Vendas',
                 showConsultor: true,
-                consultorText: 'Escopo: Meu time',
                 primary: primary,
                 primaryLight: primaryLight,
               ),
