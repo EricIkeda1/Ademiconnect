@@ -537,24 +537,13 @@ class _LeadsTab extends StatelessWidget {
         child: ListView.separated(
           key: ValueKey('tab_leads_${expandirTodos ? 'all' : 'top10'}'),
           padding: const EdgeInsets.only(top: 0, bottom: 80),
-          itemCount: (itemCount == 0 ? 1 : itemCount) + 1,
+          // sem header "resultado(s)"
+          itemCount: (itemCount == 0 ? 0 : itemCount),
           separatorBuilder: (_, __) => const SizedBox(height: 6),
           itemBuilder: (context, idx) {
-            if (idx == 0) {
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: Text(
-                  total == 0 ? 'Nenhum resultado' : '$total resultado(s)',
-                  style: const TextStyle(fontSize: 12.5, color: Color(0xFF6B6B6B)),
-                ),
-              );
-            }
-
             if (itemCount == 0) {
               return const SizedBox.shrink();
             }
-
-            final realIdx = idx - 1;
 
             final renderCard = (Map<String, dynamic> c) => widgets.LeadCard(
                   nome: c['nome'] as String,
@@ -566,21 +555,21 @@ class _LeadsTab extends StatelessWidget {
                   dias: (c['dias'] as int?) ?? 0,
                   urgente: (c['urgente'] as bool?) ?? false,
                   alerta: (c['alerta'] as bool?) ?? false,
-                  onEditar: () => onEditar(c, realIdx),
+                  onEditar: () => onEditar(c, idx),
                   onTransferir: () => onTransferir(c),
                 );
 
             if (mostrarLimite) {
-              if (realIdx < 10) {
-                final c = leads[realIdx];
+              if (idx < 10) {
+                final c = leads[idx];
                 return renderCard(c);
               }
-              if (realIdx == 10) {
+              if (idx == 10) {
                 return _CardVerMais(restante: total - 10, onTap: () => setExpandirTodos(true));
               }
             }
 
-            final c = leads[realIdx];
+            final c = leads[idx];
             return renderCard(c);
           },
         ),
@@ -614,13 +603,10 @@ class _CardVerMais extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
-              children: [
-                const Expanded(
+              children: const [
+                Expanded(
                   child: Text('Ver mais', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: texto)),
                 ),
-                Text('($restante)', style: const TextStyle(color: texto)),
-                const SizedBox(width: 8),
-                const Icon(Icons.expand_more, color: texto),
               ],
             ),
           ),
