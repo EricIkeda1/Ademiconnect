@@ -3,7 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-
 import '../widgets/custom_navbar.dart';
 import 'meus_clientes_tab.dart';
 import 'minhas_visitas_tab.dart';
@@ -113,9 +112,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
     }
   }
 
-  void _onClienteCadastrado() {
-    _loadStats();
-  }
+  void _onClienteCadastrado() => _loadStats();
 
   Future<void> _copiarEndereco(String texto) async {
     await Clipboard.setData(ClipboardData(text: texto));
@@ -507,10 +504,11 @@ class _HomeConsultorState extends State<HomeConsultor> {
               const SizedBox(height: 10),
               LayoutBuilder(
                 builder: (context, cst) {
-                  final itemWidth = (cst.maxWidth - 10) / 2;
+                  const gutter = 10.0;
+                  final itemWidth = (cst.maxWidth - gutter) / 2;
                   return Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
+                    spacing: gutter,
+                    runSpacing: gutter,
                     children: [
                       SizedBox(
                         width: itemWidth,
@@ -520,6 +518,8 @@ class _HomeConsultorState extends State<HomeConsultor> {
                           icon: Icons.people_alt,
                           color: Colors.blue,
                           subtitle: 'Total cadastrados',
+                          dense: true,
+                          alignRightValue: true,
                         ),
                       ),
                       SizedBox(
@@ -530,6 +530,8 @@ class _HomeConsultorState extends State<HomeConsultor> {
                           icon: Icons.place,
                           color: Colors.green,
                           subtitle: 'Agendadas para hoje',
+                          dense: true,
+                          alignRightValue: true,
                         ),
                       ),
                       SizedBox(
@@ -540,6 +542,8 @@ class _HomeConsultorState extends State<HomeConsultor> {
                           icon: Icons.notifications_active,
                           color: Colors.orange,
                           subtitle: 'Visitas vencidas',
+                          dense: true,
+                          alignRightValue: true,
                         ),
                       ),
                       SizedBox(
@@ -550,6 +554,8 @@ class _HomeConsultorState extends State<HomeConsultor> {
                           icon: Icons.check_circle,
                           color: Colors.black,
                           subtitle: 'Visitas concluídas',
+                          dense: true,
+                          alignRightValue: true,
                         ),
                       ),
                     ],
@@ -605,48 +611,71 @@ class _HomeConsultorState extends State<HomeConsultor> {
     required IconData icon,
     required Color color,
     String? subtitle,
+    bool dense = false,
+    bool alignRightValue = true,
   }) {
+    final double h = dense ? 56 : 72;
+    final EdgeInsets pad = dense
+        ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8)
+        : const EdgeInsets.symmetric(horizontal: 12, vertical: 10);
+    final double iconSize = dense ? 16 : 18;
+    final double avatarRadius = dense ? 13 : 16;
+    final double titleSize = dense ? 11 : 12.5;
+    final double valueSize = dense ? 18 : 20;
+    final double subtitleSize = dense ? 10 : 11;
+
     return Card(
       elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: SizedBox(
-        height: 72,
+        height: h,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: pad,
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               CircleAvatar(
-                radius: 15,
+                radius: avatarRadius,
                 backgroundColor: color.withOpacity(0.12),
-                child: Icon(icon, color: color, size: 17),
+                child: Icon(icon, color: color, size: iconSize),
               ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Align(
-                  alignment: Alignment.topLeft,
-                  child: IntrinsicHeight(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
-                        const SizedBox(height: 2),
-                        Text(
-                          value,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: titleSize),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: subtitleSize,
+                          color: Colors.black.withOpacity(0.6),
                         ),
-                        if (subtitle != null) ...[
-                          const SizedBox(height: 1),
-                          Text(
-                            subtitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 10.5, color: Colors.black.withOpacity(0.6)),
-                          ),
-                        ],
-                      ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 24),
+                  child: Text(
+                    value,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: valueSize,
                     ),
                   ),
                 ),

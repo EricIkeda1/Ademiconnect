@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
@@ -14,6 +15,10 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = '';
   final SupabaseClient _client = Supabase.instance.client;
+
+  bool _showSearch = false;
+
+  Timer? _debounceSearch;
 
   final Map<String, String> _abbr = const {
     'Avenida': 'Av.',
@@ -39,11 +44,20 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
   @override
   void initState() {
     super.initState();
-    _searchCtrl.addListener(() => setState(() => _query = _searchCtrl.text.trim()));
+    _searchCtrl.addListener(() {
+      _debounceSearch?.cancel();
+      _debounceSearch = Timer(const Duration(milliseconds: 500), () {
+        if (!mounted) return;
+        setState(() {
+          _query = _searchCtrl.text.trim();
+        });
+      });
+    });
   }
 
   @override
   void dispose() {
+    _debounceSearch?.cancel();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -56,9 +70,8 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
         .select('*')
         .eq('consultor_uid_t', user.id)
         .order('data_visita', ascending: true, nullsFirst: false)
-
         .asStream();
-  } 
+  }
 
   InputDecoration _decoracaoCampo(BuildContext context, String label, {String? hint, Widget? suffixIcon}) {
     return InputDecoration(
@@ -80,16 +93,16 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
       case 'fechada': return 'Fechada';
       default: return '—';
     }
-  } 
+  }
 
   Color _statusColor(String? v) {
     switch ((v ?? '').toLowerCase()) {
       case 'conexao': return Colors.blue;
       case 'negociacao': return Colors.orange;
-      case 'fechada': return Colors.green;
+      case 'fechada': return Colors.red; 
       default: return Colors.grey;
     }
-  } 
+  }
 
   int _pesoStatus(String? s) {
     switch ((s ?? '').toLowerCase()) {
@@ -98,7 +111,7 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
       case 'fechada': return 2;
       default: return 3;
     }
-  } 
+  }
 
   DateTime? _parseVisita(dynamic v) {
     if (v == null) return null;
@@ -106,7 +119,7 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
     if (v is String) return DateTime.tryParse(v)?.toLocal();
     if (v is Map && v['value'] is String) return DateTime.tryParse(v['value'])?.toLocal();
     return null;
-  } 
+  }
 
   int _compareCliente(Map<String, dynamic> a, Map<String, dynamic> b) {
     final pa = _pesoStatus(a['status_negociacao']?.toString());
@@ -138,98 +151,122 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
     final sa = (a['estabelecimento'] ?? a['nome'] ?? '').toString().toLowerCase();
     final sb = (b['estabelecimento'] ?? b['nome'] ?? '').toString().toLowerCase();
     return sa.compareTo(sb);
-  } 
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(child: _buildHeader()),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: TextField(
-                controller: _searchCtrl,
-                textInputAction: TextInputAction.search,
-                decoration: _decoracaoCampo(
-                  context,
-                  'Buscar clientes',
-                  hint: 'Digite nome, endereço, bairro, cidade ou status...',
-                  suffixIcon: _query.isEmpty
-                      ? const Icon(Icons.search)
-                      : IconButton(icon: const Icon(Icons.clear), onPressed: _searchCtrl.clear, tooltip: 'Limpar'),
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () {
+          FocusScope.of(context).unfocus();
+          if (_showSearch) setState(() => _showSearch = false);
+        },
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(child: _buildHeader()),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: TextField(
+                  controller: _searchCtrl,
+                  textInputAction: TextInputAction.search,
+                  decoration: _decoracaoCampo(
+                    context,
+                    'Buscar clientes',
+                    hint: 'Digite nome, endereço, bairro, cidade ou status...',
+                    suffixIcon: _query.isEmpty
+                        ? const Icon(Icons.search)
+                        : IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _searchCtrl.clear();
+                              _debounceSearch?.cancel();
+                              setState(() {
+                                _query = '';
+                                _showSearch = false;
+                              });
+                              FocusScope.of(context).unfocus();
+                            },
+                            tooltip: 'Limpar',
+                          ),
+                  ),
+                  onTap: () => setState(() => _showSearch = true), 
+                  onSubmitted: (_) {
+                    setState(() => _showSearch = false); 
+                    FocusScope.of(context).unfocus();
+                  },
                 ),
               ),
             ),
-          ),
-          StreamBuilder<List<Map<String, dynamic>>>(
-            stream: _meusClientesStream,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const SliverToBoxAdapter(child: Center(child: CircularProgressIndicator()));
-              }
-              if (snapshot.hasError) {
-                return SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(16), child: Text('Erro: ${snapshot.error}')));
-              }
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(16), child: _buildEmptyState()));
-              }
+            StreamBuilder<List<Map<String, dynamic>>>(
+              stream: _meusClientesStream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const SliverToBoxAdapter(child: Center(child: CircularProgressIndicator()));
+                }
+                if (snapshot.hasError) {
+                  return SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(16), child: Text('Erro: ${snapshot.error}')));
+                }
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(16), child: _buildEmptyState()));
+                }
 
-              final clientes = snapshot.data!;
-              final q = _query.toLowerCase();
+                final clientes = snapshot.data!;
+                final q = _query.toLowerCase();
 
-              List<Map<String, dynamic>> clientesFiltrados;
-              if (_query.isEmpty) {
-                clientesFiltrados = [...clientes];
-              } else {
-                String s(Object? x) => (x ?? '').toString().toLowerCase();
-                clientesFiltrados = clientes.where((c) {
-                  final estabelecimento = s(c['estabelecimento'].toString().isNotEmpty ? c['estabelecimento'] : c['nome']);
-                  final logradouro = s(c['logradouro']);
-                  final endereco = s(c['endereco']);
-                  final numero = s(c['numero']);
-                  final bairro = s(c['bairro']);
-                  final cidade = s(c['cidade']);
-                  final status = s(c['status_negociacao']);
-                  final valor = s(c['valor_proposta']);
-                  return estabelecimento.contains(q) ||
-                         (logradouro + ' ' + endereco).contains(q) ||
-                         numero.contains(q) ||
-                         bairro.contains(q) ||
-                         cidade.contains(q) ||
-                         status.contains(q) ||
-                         valor.contains(q);
-                }).toList();
-              }
+                List<Map<String, dynamic>> clientesFiltrados;
+                if (_query.isEmpty) {
+                  clientesFiltrados = [...clientes];
+                } else {
+                  String s(Object? x) => (x ?? '').toString().toLowerCase();
+                  clientesFiltrados = clientes.where((c) {
+                    final estabelecimento = s(c['estabelecimento'].toString().isNotEmpty ? c['estabelecimento'] : c['nome']);
+                    final logradouro = s(c['logradouro']);
+                    final endereco = s(c['endereco']);
+                    final numero = s(c['numero']);
+                    final bairro = s(c['bairro']);
+                    final cidade = s(c['cidade']);
+                    final status = s(c['status_negociacao']);
+                    final valor = s(c['valor_proposta']);
+                    return estabelecimento.contains(q) ||
+                           (logradouro + ' ' + endereco).contains(q) ||
+                           numero.contains(q) ||
+                           bairro.contains(q) ||
+                           cidade.contains(q) ||
+                           status.contains(q) ||
+                           valor.contains(q);
+                  }).toList();
+                }
 
-              clientesFiltrados.sort(_compareCliente);
+                clientesFiltrados.sort(_compareCliente);
 
-              if (clientesFiltrados.isEmpty) {
-                return SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        Icon(Icons.search_off_outlined, size: 48, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4)),
-                        const SizedBox(height: 16),
-                        Text('Nenhum cliente encontrado', style: Theme.of(context).textTheme.bodyLarge),
-                      ],
+                if (clientesFiltrados.isEmpty) {
+                  return SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          Icon(Icons.search_off_outlined, size: 48, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4)),
+                          const SizedBox(height: 16),
+                          Text('Nenhum cliente encontrado', style: Theme.of(context).textTheme.bodyLarge),
+                        ],
+                      ),
                     ),
+                  );
+                }
+
+                return SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) => _buildClienteItem(clientesFiltrados[index]),
+                    childCount: clientesFiltrados.length,
                   ),
                 );
-              }
-
-              return SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) => _buildClienteItem(clientesFiltrados[index]),
-                  childCount: clientesFiltrados.length,
-                ),
-              );
-            },
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 20)),
-        ],
+              },
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 20)),
+          ],
+        ),
       ),
     );
   }

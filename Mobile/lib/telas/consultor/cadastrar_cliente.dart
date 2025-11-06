@@ -7,6 +7,14 @@ import 'package:ademicon_app/models/cliente.dart';
 import 'package:ademicon_app/services/cliente_service.dart';
 import 'package:ademicon_app/services/notification_service.dart';
 
+const kDanger = Color(0xFFF00000);      
+const kDangerHover = Color(0xFFE31214); 
+const kDangerPressed = Color(0xFF7D1315);
+const kInk = Color(0xFF231F20);       
+const kInk2 = Color(0xFF414042);        
+const kInkMuted = Color(0xFF939598);    
+const kDivider = Color(0xFFDCDCDC);   
+
 class CadastrarCliente extends StatefulWidget {
   final Function()? onClienteCadastrado;
   const CadastrarCliente({super.key, this.onClienteCadastrado});
@@ -123,12 +131,12 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Colors.red,
+              primary: kDanger,
               onPrimary: Colors.white,
-              onSurface: Colors.black,
+              onSurface: kInk,
             ),
             textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              style: TextButton.styleFrom(foregroundColor: kDanger),
             ),
           ),
           child: child!,
@@ -148,12 +156,12 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Colors.red,
+              primary: kDanger,
               onPrimary: Colors.white,
-              onSurface: Colors.black,
+              onSurface: kInk,
             ),
             textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              style: TextButton.styleFrom(foregroundColor: kDanger),
             ),
           ),
           child: child!,
@@ -288,11 +296,11 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
         endereco: enderecoNome,
         logradouro: logradouroTipo,
         numero: numeroInt,
-        complemento: _complementoCtrl.text.trim().isEmpty ? null : _norm(_complementoCtrl.text),
+        complemento: _complementoCtrl.text.trim().isNotEmpty ? _norm(_complementoCtrl.text) : null,
         bairro: _norm(_bairroCtrl.text),
         cep: _cepCtrl.text.replaceAll(RegExp(r'[^\d]'), ''),
         dataVisita: dataHoraVisita,
-        observacoes: _observacoesCtrl.text.trim().isEmpty ? null : _norm(_observacoesCtrl.text),
+        observacoes: _observacoesCtrl.text.trim().isNotEmpty ? _norm(_observacoesCtrl.text) : null,
         consultorResponsavel: consultorNomeLocal,
         consultorUid: userId,
         horaVisita: horaVisitaStr,
@@ -328,7 +336,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Cliente salvo, mas erro ao salvar data/hora da negociação: $e'),
-                backgroundColor: Colors.orange,
+                backgroundColor: kDanger,
               ),
             );
           }
@@ -368,8 +376,8 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
     _dataNegociacaoCtrl.clear();
     _horaNegociacaoCtrl.clear();
 
-    _dataVisitaCtrl.text      = DateFormat('dd/MM/yyyy').format(DateTime.now());
-    _horaVisitaCtrl.text      = DateFormat('HH:mm').format(DateTime.now());
+    _dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
+    _horaVisitaCtrl.text = DateFormat('HH:mm').format(DateTime.now());
 
     FocusScope.of(context).unfocus();
     setState(() {});
@@ -416,11 +424,11 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                         children: [
                           Text(
                             'Cadastrar Cliente',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: kInk),
                           ),
                           Text(
                             'Preencha os dados do cliente',
-                            style: Theme.of(context).textTheme.bodyMedium,
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: kInk2),
                           ),
                         ],
                       ),
@@ -443,20 +451,13 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Text(
-                              'Dados do Cliente',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                            ),
+                            Text('Dados do Cliente', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: kInk)),
                             const SizedBox(height: 16),
 
                             TextFormField(
                               controller: _nomeClienteCtrl,
                               decoration: relaxIfNarrow(
-                                _obterDecoracaoCampo(
-                                  'Nome do Cliente',
-                                  hint: 'Nome completo',
-                                  prefixIcon: const Icon(Icons.person_outline),
-                                ),
+                                _obterDecoracaoCampo('Nome do Cliente', hint: 'Nome completo', prefixIcon: const Icon(Icons.person_outline)),
                                 isNarrow,
                               ),
                               validator: (v) => _validarCampoObrigatorio(v, field: 'Nome do cliente'),
@@ -468,11 +469,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                               keyboardType: TextInputType.phone,
                               inputFormatters: [_telefoneFormatter],
                               decoration: relaxIfNarrow(
-                                _obterDecoracaoCampo(
-                                  'Telefone',
-                                  hint: '(00) 00000-0000',
-                                  prefixIcon: const Icon(Icons.call_outlined),
-                                ),
+                                _obterDecoracaoCampo('Telefone', hint: '(00) 00000-0000', prefixIcon: const Icon(Icons.call_outlined)),
                                 isNarrow,
                               ),
                               validator: (v) => _validarCampoObrigatorio(v, field: 'Telefone'),
@@ -482,21 +479,14 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                             TextFormField(
                               controller: _nomeEstabelecimentoCtrl,
                               decoration: relaxIfNarrow(
-                                _obterDecoracaoCampo(
-                                  'Estabelecimento',
-                                  hint: 'Nome do ponto de venda',
-                                  prefixIcon: const Icon(Icons.storefront_outlined),
-                                ),
+                                _obterDecoracaoCampo('Estabelecimento', hint: 'Nome do ponto de venda', prefixIcon: const Icon(Icons.storefront_outlined)),
                                 isNarrow,
                               ),
                               validator: (v) => _validarCampoObrigatorio(v, field: 'Estabelecimento'),
                             ),
                             const SizedBox(height: 16),
 
-                            Text(
-                              'Endereço',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                            ),
+                            Text('Endereço', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: kInk)),
                             const SizedBox(height: 12),
 
                             LayoutBuilder(
@@ -507,32 +497,18 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                                     children: [
                                       Expanded(
                                         flex: 2,
-                                        child: _CampoTipo(
-                                          value: _tipoLogradouro,
-                                          onChanged: (v) => setState(() => _tipoLogradouro = v),
-                                          menuMaxHeight: dropMenuMax,
-                                        ),
+                                        child: _CampoTipo(value: _tipoLogradouro, onChanged: (v) => setState(() => _tipoLogradouro = v), menuMaxHeight: dropMenuMax),
                                       ),
                                       const SizedBox(width: 12),
-                                      Expanded(
-                                        flex: 4,
-                                        child: _CampoNomeVia(controller: _nomeViaCtrl, isNarrow: false),
-                                      ),
+                                      Expanded(flex: 4, child: _CampoNomeVia(controller: _nomeViaCtrl, isNarrow: false)),
                                       const SizedBox(width: 12),
-                                      Expanded(
-                                        flex: 2,
-                                        child: _CampoNumero(controller: _numeroCtrl, isNarrow: false),
-                                      ),
+                                      Expanded(flex: 2, child: _CampoNumero(controller: _numeroCtrl, isNarrow: false)),
                                     ],
                                   );
                                 }
                                 return Column(
                                   children: [
-                                    _CampoTipo(
-                                      value: _tipoLogradouro,
-                                      onChanged: (v) => setState(() => _tipoLogradouro = v),
-                                      menuMaxHeight: dropMenuMax,
-                                    ),
+                                    _CampoTipo(value: _tipoLogradouro, onChanged: (v) => setState(() => _tipoLogradouro = v), menuMaxHeight: dropMenuMax),
                                     const SizedBox(height: 12),
                                     _CampoNomeVia(controller: _nomeViaCtrl, isNarrow: true),
                                     const SizedBox(height: 12),
@@ -548,11 +524,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                                 Expanded(
                                   child: TextFormField(
                                     controller: _bairroCtrl,
-                                    decoration: _obterDecoracaoCampo(
-                                      'Bairro',
-                                      hint: 'Ex: Centro',
-                                      prefixIcon: const Icon(Icons.location_on_outlined),
-                                    ),
+                                    decoration: _obterDecoracaoCampo('Bairro', hint: 'Ex: Centro', prefixIcon: const Icon(Icons.location_on_outlined)),
                                     validator: (v) => _validarCampoObrigatorio(v, field: 'Bairro'),
                                   ),
                                 ),
@@ -560,12 +532,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                                 Expanded(
                                   child: TextFormField(
                                     controller: _complementoCtrl,
-                                    decoration: _obterDecoracaoCampo(
-                                      'Complemento',
-                                      hint: 'Ap, bloco, casa, sala',
-                                      prefixIcon: const Icon(Icons.apartment_outlined),
-                                      isObrigatorio: false,
-                                    ),
+                                    decoration: _obterDecoracaoCampo('Complemento', hint: 'Ap, bloco, casa, sala', prefixIcon: const Icon(Icons.apartment_outlined), isObrigatorio: false),
                                   ),
                                 ),
                               ],
@@ -579,11 +546,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                                     controller: _estadoCtrl,
                                     textCapitalization: TextCapitalization.characters,
                                     maxLength: 2,
-                                    decoration: _obterDecoracaoCampo(
-                                      'UF',
-                                      hint: 'PR',
-                                      prefixIcon: const Icon(Icons.flag_outlined),
-                                    ).copyWith(counterText: ''),
+                                    decoration: _obterDecoracaoCampo('UF', hint: 'PR', prefixIcon: const Icon(Icons.flag_outlined)).copyWith(counterText: ''),
                                     validator: _validarUF,
                                   ),
                                 ),
@@ -592,11 +555,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                                   flex: 2,
                                   child: TextFormField(
                                     controller: _cidadeCtrl,
-                                    decoration: _obterDecoracaoCampo(
-                                      'Cidade',
-                                      hint: 'Ex: Londrina',
-                                      prefixIcon: const Icon(Icons.location_city_outlined),
-                                    ),
+                                    decoration: _obterDecoracaoCampo('Cidade', hint: 'Ex: Londrina', prefixIcon: const Icon(Icons.location_city_outlined)),
                                     validator: (v) => _validarCampoObrigatorio(v, field: 'Cidade'),
                                   ),
                                 ),
@@ -608,20 +567,13 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                               controller: _cepCtrl,
                               keyboardType: TextInputType.number,
                               inputFormatters: [_cepFormatter],
-                              decoration: _obterDecoracaoCampo(
-                                'CEP',
-                                hint: '00000-000',
-                                prefixIcon: const Icon(Icons.local_post_office_outlined),
-                              ),
+                              decoration: _obterDecoracaoCampo('CEP', hint: '00000-000', prefixIcon: const Icon(Icons.local_post_office_outlined)),
                               validator: _validarCEP,
                             ),
 
                             const SizedBox(height: 16),
 
-                            Text(
-                              'Negociação',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                            ),
+                            Text('Negociação', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: kInk)),
                             const SizedBox(height: 12),
 
                             Row(
@@ -631,17 +583,9 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                                   child: DropdownButtonFormField<String>(
                                     isExpanded: true,
                                     value: _statusNegociacao,
-                                    items: _statusOptions
-                                        .map((s) => DropdownMenuItem<String>(
-                                              value: s['value']!,
-                                              child: Text(s['label']!),
-                                            ))
-                                        .toList(),
+                                    items: _statusOptions.map((s) => DropdownMenuItem<String>(value: s['value']!, child: Text(s['label']!))).toList(),
                                     onChanged: (v) => setState(() => _statusNegociacao = v),
-                                    decoration: _obterDecoracaoCampo(
-                                      'Status',
-                                      prefixIcon: const Icon(Icons.timeline_outlined),
-                                    ),
+                                    decoration: _obterDecoracaoCampo('Status', prefixIcon: const Icon(Icons.timeline_outlined)),
                                     validator: (v) => v == null || v.isEmpty ? 'Status é obrigatório' : null,
                                   ),
                                 ),
@@ -651,12 +595,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                                   child: TextFormField(
                                     controller: _valorPropostaCtrl,
                                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    decoration: _obterDecoracaoCampo(
-                                      'Valor da proposta',
-                                      hint: 'Ex: 1.500,00',
-                                      prefixIcon: const Icon(Icons.attach_money_rounded),
-                                      isObrigatorio: false,
-                                    ),
+                                    decoration: _obterDecoracaoCampo('Valor da proposta', hint: 'Ex: 1.500,00', prefixIcon: const Icon(Icons.attach_money_rounded), isObrigatorio: false),
                                     validator: _validarValorProposta,
                                   ),
                                 ),
@@ -665,10 +604,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
 
                             const SizedBox(height: 16),
 
-                            Text(
-                              'Observações',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                            ),
+                            Text('Observações', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: kInk)),
                             const SizedBox(height: 12),
 
                             TextFormField(
@@ -685,10 +621,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
 
                             const SizedBox(height: 16),
 
-                            Text(
-                              'Agendamento de Visita',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                            ),
+                            Text('Agendamento de Visita', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: kInk)),
                             const SizedBox(height: 12),
 
                             Row(
@@ -704,10 +637,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                                           'Data da visita',
                                           hint: 'dd/mm/aaaa',
                                           prefixIcon: const Icon(Icons.event_available_outlined),
-                                          suffixIcon: IconButton(
-                                            icon: const Icon(Icons.calendar_today_outlined),
-                                            onPressed: _selecionarDataVisita,
-                                          ),
+                                          suffixIcon: IconButton(icon: const Icon(Icons.calendar_today_outlined), onPressed: _selecionarDataVisita),
                                         ),
                                       ),
                                     ),
@@ -725,10 +655,7 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                                           'Hora da visita',
                                           hint: '00:00',
                                           prefixIcon: const Icon(Icons.access_time_outlined),
-                                          suffixIcon: IconButton(
-                                            icon: const Icon(Icons.access_time),
-                                            onPressed: _selecionarHoraVisita,
-                                          ),
+                                          suffixIcon: IconButton(icon: const Icon(Icons.access_time), onPressed: _selecionarHoraVisita),
                                         ),
                                       ),
                                     ),
@@ -737,13 +664,42 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                               ],
                             ),
 
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 12),
+
+                            // Banner de aviso na paleta
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: kDanger.withOpacity(.08),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: kDanger.withOpacity(.25)),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(Icons.info, color: kDanger, size: 20),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      'Data da visita e hora da visita são definidas automaticamente com a data e hora atuais no momento do cadastro.',
+                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                            color: kInk,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            const SizedBox(height: 20),
 
                             Row(
                               children: [
                                 Expanded(
                                   child: OutlinedButton(
                                     onPressed: _limparCampos,
+                                    style: OutlinedButton.styleFrom(side: BorderSide(color: kDivider)),
                                     child: const Text('Limpar'),
                                   ),
                                 ),
@@ -751,8 +707,9 @@ class _CadastrarClienteState extends State<CadastrarCliente> {
                                 Expanded(
                                   child: FilledButton(
                                     onPressed: _isLoading ? null : _salvarCliente,
+                                    style: FilledButton.styleFrom(backgroundColor: kDanger, foregroundColor: Colors.white),
                                     child: _isLoading
-                                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                                         : const Text('Cadastrar'),
                                   ),
                                 ),
@@ -777,11 +734,7 @@ class _CampoTipo extends StatelessWidget {
   final String? value;
   final ValueChanged<String?> onChanged;
   final double menuMaxHeight;
-  const _CampoTipo({
-    required this.value,
-    required this.onChanged,
-    required this.menuMaxHeight,
-  });
+  const _CampoTipo({required this.value, required this.onChanged, required this.menuMaxHeight});
 
   @override
   Widget build(BuildContext context) {
@@ -789,29 +742,18 @@ class _CampoTipo extends StatelessWidget {
     return DropdownButtonFormField<String>(
       isExpanded: true,
       value: value,
-      items: _CadastrarClienteState._tiposLogradouro.map((e) {
-        return DropdownMenuItem<String>(
-          value: e,
-          child: Text(e, overflow: TextOverflow.ellipsis),
-        );
-      }).toList(),
+      items: _CadastrarClienteState._tiposLogradouro.map((e) => DropdownMenuItem<String>(value: e, child: Text(e, overflow: TextOverflow.ellipsis))).toList(),
       selectedItemBuilder: (context) {
         return _CadastrarClienteState._tiposLogradouro.map((e) {
           final abreviado = _CadastrarClienteState._abbr[e] ?? e;
-          return Align(
-            alignment: Alignment.centerLeft,
-            child: Text(abreviado, overflow: TextOverflow.ellipsis, style: theme.textTheme.titleMedium),
-          );
+          return Align(alignment: Alignment.centerLeft, child: Text(abreviado, overflow: TextOverflow.ellipsis, style: theme.textTheme.titleMedium));
         }).toList();
       },
       onChanged: onChanged,
-      decoration: const InputDecoration(
-        labelText: 'Logradouro *', // alterado apenas o rótulo
-        prefixIcon: Icon(Icons.map_outlined),
-      ),
+      decoration: const InputDecoration(labelText: 'Logradouro *', prefixIcon: Icon(Icons.map_outlined)),
       icon: const Icon(Icons.keyboard_arrow_down_rounded),
       menuMaxHeight: menuMaxHeight,
-      validator: (v) => v == null || v.isEmpty ? 'Logradouro é obrigatório' : null, // mensagem ajustada
+      validator: (v) => v == null || v.isEmpty ? 'Logradouro é obrigatório' : null,
     );
   }
 }
