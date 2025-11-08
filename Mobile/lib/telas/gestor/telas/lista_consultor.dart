@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'cadastrar_consultor.dart';
+import 'vendas.dart';
 
 const _brandRed = Color(0xFFEA3124);
 const _brandRedDark = Color(0xFFD12B20);
@@ -12,14 +13,10 @@ const _muted = Color(0xFF8F8F95);
 
 class BrPhoneTextInputFormatter extends TextInputFormatter {
   const BrPhoneTextInputFormatter();
-
   static final _digitsOnly = RegExp(r'\D');
 
   @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
     final raw = newValue.text.replaceAll(_digitsOnly, '');
     final String mask = raw.length > 10 ? '(##) #####-####' : '(##) ####-####';
     final formatted = _applyMask(raw, mask);
@@ -47,7 +44,9 @@ class BrPhoneTextInputFormatter extends TextInputFormatter {
 
 class ConsultoresRoot extends StatefulWidget {
   final VoidCallback? onCadastrar;
-  const ConsultoresRoot({super.key, this.onCadastrar});
+  final PageController? pageController; 
+
+  const ConsultoresRoot({super.key, this.onCadastrar, this.pageController});
 
   @override
   State<ConsultoresRoot> createState() => _ConsultoresRootState();
@@ -108,6 +107,7 @@ class _ConsultoresRootState extends State<ConsultoresRoot> {
 
     final mapped = rows.map((r) => _ConsultorView(
           r['id'].toString(),
+          (r['uid'] as String?) ?? '',
           (r['nome'] as String?) ?? '',
           (r['matricula'] as String?) ?? '',
           (r['telefone'] as String?) ?? '',
@@ -168,7 +168,6 @@ class _ConsultoresRootState extends State<ConsultoresRoot> {
       builder: (ctx) => _ConfirmExcluirDialog(nome: c.nome),
     );
     if (confirmed != true) return;
-
     try {
       await _client.from('consultores').delete().eq('id', c.id);
       setState(() {
@@ -186,10 +185,23 @@ class _ConsultoresRootState extends State<ConsultoresRoot> {
     }
   }
 
+  Future<void> _openDadosConsultor(_ConsultorView c) async {
+    VendasPage.setSelectedConsultor(
+      consultorId: c.id,
+      consultorUid: c.uid,
+      nomeConsultor: c.nome,
+    );
+
+    final pc = widget.pageController;
+    if (pc != null) {
+      await pc.animateToPage(1, duration: const Duration(milliseconds: 280), curve: Curves.easeOut);
+    } else {
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final showLoadMore = _visibleCount < _totalCount;
-
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
@@ -205,22 +217,19 @@ class _ConsultoresRootState extends State<ConsultoresRoot> {
                   children: [
                     const Icon(Icons.group, color: _brandRed, size: 20),
                     const SizedBox(width: 6),
-                    const Text('Consultores',
-                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: _textPrimary)),
+                    const Text('Consultores', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: _textPrimary)),
                     const Spacer(),
                     _ChipTotal(count: _totalCount),
                   ],
                 ),
                 const SizedBox(height: 12),
-
                 SizedBox(
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton.icon(
                     onPressed: _openCadastrarConsultor,
                     icon: const Icon(Icons.person_add_alt_1_outlined, color: Colors.white, size: 20),
-                    label: const Text('Cadastrar Novo Consultor',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
+                    label: const Text('Cadastrar Novo Consultor', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _brandRed,
                       elevation: 2,
@@ -229,13 +238,11 @@ class _ConsultoresRootState extends State<ConsultoresRoot> {
                   ),
                 ),
                 const SizedBox(height: 14),
-
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Text(_error!, style: const TextStyle(color: Colors.red)),
                   ),
-
                 if (_loading && _visibleCount == 0)
                   const Center(
                     child: Padding(
@@ -243,16 +250,15 @@ class _ConsultoresRootState extends State<ConsultoresRoot> {
                       child: CircularProgressIndicator(),
                     ),
                   ),
-
                 ..._consultores.map(
                   (c) => _ConsultorCard(
                     c: c,
                     phoneFmt: _phoneFmt,
                     onEditar: () => _openEditarConsultor(c),
                     onApagar: () => _confirmarExcluir(c),
+                    onAbrirDados: () => _openDadosConsultor(c),
                   ),
                 ),
-
                 if (showLoadMore)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
@@ -274,8 +280,8 @@ class _ConsultoresRootState extends State<ConsultoresRoot> {
 }
 
 class _ConsultorView {
-  final String id, nome, matricula, telefone, email;
-  _ConsultorView(this.id, this.nome, this.matricula, this.telefone, this.email);
+  final String id, uid, nome, matricula, telefone, email;
+  _ConsultorView(this.id, this.uid, this.nome, this.matricula, this.telefone, this.email);
 }
 
 class _ConsultorCard extends StatelessWidget {
@@ -283,12 +289,14 @@ class _ConsultorCard extends StatelessWidget {
   final BrPhoneTextInputFormatter phoneFmt;
   final VoidCallback onEditar;
   final VoidCallback onApagar;
+  final VoidCallback onAbrirDados;
   const _ConsultorCard({
     super.key,
     required this.c,
     required this.phoneFmt,
     required this.onEditar,
     required this.onApagar,
+    required this.onAbrirDados,
   });
 
   @override
@@ -316,9 +324,9 @@ class _ConsultorCard extends StatelessWidget {
                 Row(
                   children: [
                     PillButton(
-                      onPressed: null,
+                      onPressed: onAbrirDados,
                       icon: const Icon(Icons.list_alt_outlined, size: 16, color: _brandRed),
-                      label: 'Status',
+                      label: 'Dados',
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     ),
                     const SizedBox(width: 8),
@@ -531,7 +539,7 @@ class _EditarConsultorDialogState extends State<_EditarConsultorDialog> {
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE3E3E6))),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE3E3E6))),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _brandRed)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _brandRed)),
       );
 
   Future<void> _save() async {
@@ -613,7 +621,6 @@ class _EditarConsultorDialogState extends State<_EditarConsultorDialog> {
                           ],
                         ),
                         const SizedBox(height: 12),
-
                         _FieldLabel(icon: Icons.person_outline, text: 'Nome Completo', requiredMark: true),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -623,7 +630,6 @@ class _EditarConsultorDialogState extends State<_EditarConsultorDialog> {
                           validator: (v) => (v == null || v.trim().isEmpty) ? 'Nome é obrigatório' : null,
                         ),
                         const SizedBox(height: 10),
-
                         _FieldLabel(icon: Icons.phone_outlined, text: 'Telefone', requiredMark: true),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -640,7 +646,6 @@ class _EditarConsultorDialogState extends State<_EditarConsultorDialog> {
                           },
                         ),
                         const SizedBox(height: 10),
-
                         _FieldLabel(icon: Icons.alternate_email, text: 'Email', requiredMark: true),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -655,7 +660,6 @@ class _EditarConsultorDialogState extends State<_EditarConsultorDialog> {
                           },
                         ),
                         const SizedBox(height: 10),
-
                         _FieldLabel(icon: Icons.tag, text: 'Matrícula', requiredMark: false, hintExtra: '(opcional)'),
                         const SizedBox(height: 6),
                         TextFormField(
@@ -665,7 +669,6 @@ class _EditarConsultorDialogState extends State<_EditarConsultorDialog> {
                           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                         ),
                         const SizedBox(height: 14),
-
                         Row(
                           children: [
                             Expanded(
@@ -790,7 +793,6 @@ class _ConfirmExcluirDialog extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 12),
-
                 _BannerBox(
                   color: const Color(0xFFFFE6E6),
                   border: const Color(0xFFFFC6C6),
@@ -801,7 +803,6 @@ class _ConfirmExcluirDialog extends StatelessWidget {
                   titleColor: const Color(0xFFD32F2F),
                 ),
                 const SizedBox(height: 10),
-
                 _BannerBox(
                   color: const Color(0xFFFFF7E0),
                   border: const Color(0xFFFFE7A8),
@@ -812,34 +813,6 @@ class _ConfirmExcluirDialog extends StatelessWidget {
                   titleColor: const Color(0xFFB78900),
                 ),
                 const SizedBox(height: 14),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 46,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [_brandRed, _brandRedDark],
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 6, offset: Offset(0, 3))],
-                    ),
-                    child: ElevatedButton.icon(
-                      onPressed: () => Navigator.of(context).pop(true),
-                      icon: const Icon(Icons.delete_forever_outlined, color: Colors.white),
-                      label: const Text('Sim, Excluir Consultor', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
                 SizedBox(
                   width: double.infinity,
                   height: 46,
@@ -904,7 +877,7 @@ class _BannerBox extends StatelessWidget {
               children: [
                 Text(title, style: TextStyle(color: titleColor, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 2),
-                Text(subtitle, style: const TextStyle(color: Colors.black87)),
+                const Text('Esta ação não pode ser desfeita.', style: TextStyle(color: Colors.black87)),
               ],
             ),
           ),

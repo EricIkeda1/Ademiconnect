@@ -6,25 +6,44 @@ import '../components/editar_periodo.dart';
 
 class VendasPage extends StatefulWidget {
   const VendasPage({super.key});
+
+  static Map<String, String>? _selectedConsultor;
+  static VoidCallback? _notifySelection;
+
+  static void setSelectedConsultor({
+    required String? consultorId,
+    required String? consultorUid,
+    required String? nomeConsultor,
+  }) {
+    if ((consultorUid == null || consultorUid.isEmpty) &&
+        (consultorId == null || consultorId.isEmpty)) {
+      _selectedConsultor = null;
+    } else {
+      _selectedConsultor = {
+        if (consultorId != null) 'consultorId': consultorId,
+        if (consultorUid != null) 'consultorUid': consultorUid,
+        if (nomeConsultor != null) 'nomeConsultor': nomeConsultor,
+      };
+    }
+    _notifySelection?.call();
+  }
+
   @override
   State<VendasPage> createState() => _VendasPageState();
 }
 
 class _VendasPageState extends State<VendasPage>
     with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
-  // anima só na primeira visita após abrir app
   static bool _jaAnimouUmaVezGlobal = false;
 
   final SupabaseClient _client = Supabase.instance.client;
   RealtimeChannel? _chan;
 
-  // KPIs finais
   double totalVendas = 0;
   double mediaMensal = 0;
   double melhorMesValor = 0;
   int periodoMeses = 6;
 
-  // KPIs animados
   double animTotal = 0;
   double animMedia = 0;
   double animMelhor = 0;
@@ -32,30 +51,35 @@ class _VendasPageState extends State<VendasPage>
 
   late final AnimationController _kpiCtrl;
 
-  // Série do gráfico
   List<String> meses = [];
   List<double> realizado = [];
 
   final Color primary = const Color(0xFFDC2C2C);
   final Color primaryLight = const Color(0xFFF06666);
 
-  String moeda(double v) =>
-      NumberFormat.simpleCurrency(locale: 'pt_BR').format(v);
+  bool isIndividual = false;
+  String? consultorId;
+  String? consultorUid;
+  String? consultorNome;
+
+  String moeda(double v) => NumberFormat.simpleCurrency(locale: 'pt_BR').format(v);
 
   @override
   bool get wantKeepAlive => true;
 
+  bool _argsAplicados = false;
+
   @override
   void initState() {
     super.initState();
-    _kpiCtrl =
-        AnimationController(vsync: this, duration: const Duration(milliseconds: 650));
-    WidgetsBinding.instance.addPostFrameCallback((_) => _carregarDados());
+    _kpiCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 650));
+    VendasPage._notifySelection = _onSelectedConsultorStatic;
     _inscreverRealtime();
   }
 
   @override
   void dispose() {
+    VendasPage._notifySelection = null;
     if (_chan != null) _client.removeChannel(_chan!);
     _kpiCtrl.dispose();
     super.dispose();
@@ -75,6 +99,70 @@ class _VendasPageState extends State<VendasPage>
           )
           .subscribe();
     } catch (_) {}
+  }
+
+  void _onSelectedConsultorStatic() {
+    final sel = VendasPage._selectedConsultor;
+    if (!mounted) return;
+    setState(() {
+      if (sel == null) {
+        isIndividual = false;
+        consultorId = consultorUid = consultorNome = null;
+      } else {
+        consultorId = sel['consultorId'];
+        consultorUid = sel['consultorUid'];
+        consultorNome = sel['nomeConsultor'];
+        isIndividual = (consultorUid?.isNotEmpty == true) || (consultorId?.isNotEmpty == true);
+      }
+      _limparEstado();
+    });
+    _carregarDados(animarSeNecessario: false);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_argsAplicados) return;
+
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map) {
+      consultorId = args['consultorId']?.toString();
+      consultorUid = args['consultorUid']?.toString();
+      consultorNome = args['nomeConsultor']?.toString();
+      isIndividual = (consultorUid?.isNotEmpty == true) || (consultorId?.isNotEmpty == true);
+      _limparEstado();
+      _carregarDados(animarSeNecessario: false);
+      _argsAplicados = true;
+      return;
+    }
+
+    if (VendasPage._selectedConsultor != null) {
+      final sel = VendasPage._selectedConsultor!;
+      consultorId = sel['consultorId'];
+      consultorUid = sel['consultorUid'];
+      consultorNome = sel['nomeConsultor'];
+      isIndividual = (consultorUid?.isNotEmpty == true) || (consultorId?.isNotEmpty == true);
+      _limparEstado();
+      _carregarDados(animarSeNecessario: false);
+      _argsAplicados = true;
+      return;
+    }
+
+    _limparEstado();
+    _carregarDados(animarSeNecessario: false);
+    _argsAplicados = true;
+  }
+
+  void _limparEstado() {
+    meses = [];
+    realizado = [];
+    totalVendas = 0;
+    mediaMensal = 0;
+    melhorMesValor = 0;
+    animTotal = 0;
+    animMedia = 0;
+    animMelhor = 0;
+    animPeriodo = 0;
   }
 
   Future<void> _abrirEditarPeriodo() async {
@@ -99,53 +187,175 @@ class _VendasPageState extends State<VendasPage>
 
     if (novo != null && novo != periodoMeses && mounted) {
       setState(() => periodoMeses = novo);
-      await _carregarDados(animarSeNecessario: false); // não reanima ao trocar período
+      await _carregarDados(animarSeNecessario: false);
     }
+  }
+
+  void _voltarAoDashboard() {
+    VendasPage.setSelectedConsultor(
+      consultorId: null,
+      consultorUid: null,
+      nomeConsultor: null,
+    );
+    setState(() {
+      isIndividual = false;
+      consultorId = null;
+      consultorUid = null;
+      consultorNome = null;
+      _limparEstado();
+    });
+    _carregarDados(animarSeNecessario: false);
   }
 
   Future<void> _carregarDados({bool animarSeNecessario = true}) async {
     try {
-      final uidGestor = _client.auth.currentUser?.id;
-      if (uidGestor == null) return;
+      if (!isIndividual) {
+        final uidGestor = _client.auth.currentUser?.id;
+        if (uidGestor == null) return;
 
-      // 1) Consultores ativos do time
-      final cons = await _client
-          .from('consultores')
-          .select('uid, data_cadastro')
-          .eq('gestor_id', uidGestor)
-          .eq('ativo', true);
+        final cons = await _client
+            .from('consultores')
+            .select('uid, data_cadastro')
+            .eq('gestor_id', uidGestor)
+            .eq('ativo', true);
 
-      final List<String> uids = (cons is List)
-          ? cons
-              .map((e) => (e['uid'] ?? '').toString())
-              .where((s) => s.isNotEmpty)
-              .toList()
-          : <String>[];
+        final List<String> uids = (cons is List)
+            ? cons.map((e) => (e['uid'] ?? '').toString()).where((s) => s.isNotEmpty).toList()
+            : <String>[];
 
-      // Menor data_cadastro
-      DateTime? inicioTime;
-      if (cons is List && cons.isNotEmpty) {
-        for (final e in cons) {
-          final dc = e['data_cadastro'];
-          final dt = dc == null ? null : DateTime.tryParse(dc.toString());
-          if (dt != null) {
-            inicioTime = (inicioTime == null || dt.isBefore(inicioTime!)) ? dt : inicioTime;
+        DateTime? inicioTime;
+        if (cons is List && cons.isNotEmpty) {
+          for (final e in cons) {
+            final dc = e['data_cadastro'];
+            final dt = dc == null ? null : DateTime.tryParse(dc.toString());
+            if (dt != null) {
+              inicioTime = (inicioTime == null || dt.isBefore(inicioTime!)) ? dt : inicioTime;
+            }
           }
         }
-      }
 
-      // 2) Agregar vendas finalizadas do time
-      Map<String, double> somaMes = {};
-      DateTime? primeiraVenda;
+        Map<String, double> somaMes = {};
+        DateTime? primeiraVenda;
 
-      if (uids.isNotEmpty) {
-        final valores = uids.map((e) => '"$e"').join(',');
+        if (uids.isNotEmpty) {
+          final valores = uids.map((e) => '"$e"').join(',');
+          final vendas = await _client
+              .from('clientes')
+              .select('data_visita, status_negociacao, valor_proposta, consultor_uid_t')
+              .filter('status_negociacao', 'in', '("fechado","fechada","venda")')
+              .filter('consultor_uid_t', 'in', '($valores)')
+              .order('data_visita', ascending: true);
+
+          String fmtKey(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}';
+
+          if (vendas is List) {
+            for (final row in vendas) {
+              final ds = (row['data_visita'] ?? '').toString();
+              final d = DateTime.tryParse(ds)?.toLocal();
+              if (d == null) continue;
+
+              primeiraVenda ??= DateTime(d.year, d.month, 1);
+
+              final rawValor = row['valor_proposta'];
+              final v = switch (rawValor) {
+                num n => n.toDouble(),
+                String s => double.tryParse(s.replaceAll('.', '').replaceAll(',', '.')) ?? 0.0,
+                _ => 0.0,
+              };
+
+              final key = fmtKey(DateTime(d.year, d.month, 1));
+              somaMes.update(key, (old) => old + v, ifAbsent: () => v);
+            }
+          }
+        }
+
+        DateTime? inicioSerie = inicioTime;
+        if (inicioSerie == null || (primeiraVenda != null && primeiraVenda!.isBefore(inicioSerie))) {
+          inicioSerie = primeiraVenda;
+        }
+
+        if (inicioSerie == null) {
+          if (mounted) {
+            setState(() {
+              meses = [];
+              realizado = [];
+              totalVendas = 0;
+              mediaMensal = 0;
+              melhorMesValor = 0;
+              periodoMeses = 0;
+              animTotal = animMedia = animMelhor = animPeriodo = 0;
+            });
+          }
+          return;
+        }
+
+        final abrev = DateFormat('MMM', 'pt_BR');
+        String fmtKey(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}';
+
+        final DateTime start = DateTime(inicioSerie.year, inicioSerie.month, 1);
+        final DateTime end = DateTime(start.year, start.month + (periodoMeses - 1), 1);
+
+        final List<String> ms = [];
+        final List<double> rl = [];
+        DateTime cursor = start;
+        while (!cursor.isAfter(end)) {
+          final key = fmtKey(cursor);
+          ms.add(abrev.format(cursor));
+          rl.add(somaMes[key] ?? 0.0);
+          cursor = DateTime(cursor.year, cursor.month + 1, 1);
+        }
+
+        while (ms.length < periodoMeses) {
+          final next = DateTime(end.year, end.month + (ms.length - (periodoMeses - 1)), 1);
+          ms.add(abrev.format(next));
+          rl.add(0.0);
+        }
+        if (ms.length > periodoMeses) {
+          ms.removeRange(0, ms.length - periodoMeses);
+          rl.removeRange(0, rl.length - periodoMeses);
+        }
+
+        if (mounted) {
+          setState(() {
+            meses = ms;
+            realizado = rl;
+            totalVendas = rl.fold<double>(0, (a, b) => a + b);
+            periodoMeses = rl.length;
+            mediaMensal = periodoMeses == 0 ? 0 : totalVendas / periodoMeses;
+            melhorMesValor = rl.isEmpty ? 0 : rl.reduce((a, b) => a > b ? a : b);
+          });
+        }
+      } else {
+        final bool temUid = (consultorUid != null && consultorUid!.isNotEmpty);
+        final String filtroColuna = temUid ? 'consultor_uid_t' : 'consultor_id';
+        final String? filtroValorOpt = temUid ? consultorUid : consultorId;
+        final String? filtroValorStr =
+            (filtroValorOpt == null || filtroValorOpt.isEmpty) ? null : filtroValorOpt;
+
+        if (filtroValorStr == null) {
+          if (mounted) {
+            setState(() {
+              meses = [];
+              realizado = [];
+              totalVendas = 0;
+              mediaMensal = 0;
+              melhorMesValor = 0;
+              periodoMeses = 0;
+              animTotal = animMedia = animMelhor = animPeriodo = 0;
+            });
+          }
+          return;
+        }
+
         final vendas = await _client
             .from('clientes')
             .select('data_visita, status_negociacao, valor_proposta, consultor_uid_t')
             .filter('status_negociacao', 'in', '("fechado","fechada","venda")')
-            .filter('consultor_uid_t', 'in', '($valores)')
+            .eq(filtroColuna, filtroValorStr)
             .order('data_visita', ascending: true);
+
+        Map<String, double> somaMes = {};
+        DateTime? primeiraVenda;
 
         String fmtKey(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}';
 
@@ -168,74 +378,37 @@ class _VendasPageState extends State<VendasPage>
             somaMes.update(key, (old) => old + v, ifAbsent: () => v);
           }
         }
-      }
 
-      // 3) “Primeira barra”: mínimo entre cadastro e primeira venda
-      DateTime? inicioSerie = inicioTime;
-      if (inicioSerie == null || (primeiraVenda != null && primeiraVenda!.isBefore(inicioSerie))) {
-        inicioSerie = primeiraVenda;
-      }
+        final DateTime now = DateTime.now();
+        final DateTime inicioSerie =
+            (primeiraVenda ?? DateTime(now.year, now.month - (periodoMeses - 1), 1));
 
-      // Sem base
-      if (inicioSerie == null) {
+        final DateFormat abrev = DateFormat('MMM', 'pt_BR');
+        final DateTime start = DateTime(inicioSerie.year, inicioSerie.month, 1);
+        final DateTime end = DateTime(start.year, start.month + (periodoMeses - 1), 1);
+
+        final List<String> ms = [];
+        final List<double> rl = [];
+        DateTime cursor = start;
+        while (!cursor.isAfter(end)) {
+          final key = fmtKey(cursor);
+          ms.add(abrev.format(cursor));
+          rl.add(somaMes[key] ?? 0.0);
+          cursor = DateTime(cursor.year, cursor.month + 1, 1);
+        }
+
         if (mounted) {
           setState(() {
-            meses = [];
-            realizado = [];
-            totalVendas = 0;
-            mediaMensal = 0;
-            melhorMesValor = 0;
-            periodoMeses = 0;
-            animTotal = 0;
-            animMedia = 0;
-            animMelhor = 0;
-            animPeriodo = 0;
+            meses = ms;
+            realizado = rl;
+            totalVendas = rl.fold<double>(0, (a, b) => a + b);
+            periodoMeses = rl.length;
+            mediaMensal = periodoMeses == 0 ? 0 : totalVendas / periodoMeses;
+            melhorMesValor = rl.isEmpty ? 0 : rl.reduce((a, b) => a > b ? a : b);
           });
         }
-        return;
       }
 
-      // 4) Janela FIXA de `periodoMeses` iniciando exatamente na primeira barra
-      final abrev = DateFormat('MMM', 'pt_BR');
-      String fmtKey(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}';
-
-      final DateTime start = DateTime(inicioSerie.year, inicioSerie.month, 1);
-      final DateTime end = DateTime(start.year, start.month + (periodoMeses - 1), 1);
-
-      final List<String> ms = [];
-      final List<double> rl = [];
-      DateTime cursor = start;
-      while (!cursor.isAfter(end)) {
-        final key = fmtKey(cursor);
-        ms.add(abrev.format(cursor));
-        rl.add(somaMes[key] ?? 0.0);
-        cursor = DateTime(cursor.year, cursor.month + 1, 1);
-      }
-
-      // Sanidade: exatamente `periodoMeses`
-      while (ms.length < periodoMeses) {
-        final next = DateTime(end.year, end.month + (ms.length - (periodoMeses - 1)), 1);
-        ms.add(abrev.format(next));
-        rl.add(0.0);
-      }
-      if (ms.length > periodoMeses) {
-        ms.removeRange(0, ms.length - periodoMeses);
-        rl.removeRange(0, rl.length - periodoMeses);
-      }
-
-      // 5) KPIs locais (ou substitua pela view vendas_kpis se preferir)
-      if (mounted) {
-        setState(() {
-          meses = ms;
-          realizado = rl;
-          totalVendas = rl.fold<double>(0, (a, b) => a + b);
-          periodoMeses = rl.length; // igual ao selecionado
-          mediaMensal = periodoMeses == 0 ? 0 : totalVendas / periodoMeses;
-          melhorMesValor = rl.isEmpty ? 0 : rl.reduce((a, b) => a > b ? a : b);
-        });
-      }
-
-      // 6) Animação só na primeira visita
       final deveAnimar = animarSeNecessario && !_jaAnimouUmaVezGlobal;
       if (deveAnimar) {
         _rodarAnimacaoKpis();
@@ -292,6 +465,16 @@ class _VendasPageState extends State<VendasPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final headerTitle = isIndividual ? 'Dashboard do Consultor' : 'Dashboard de Vendas';
+    final headerSubtitle = isIndividual
+        ? (consultorNome != null && consultorNome!.isNotEmpty
+            ? 'Consultor: $consultorNome'
+            : 'Consultor selecionado')
+        : '';
+    final chartSubtitle = isIndividual
+        ? 'Somente vendas finalizadas - Consultor'
+        : 'Somente vendas finalizadas - Meu time';
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       body: CustomScrollView(
@@ -305,7 +488,6 @@ class _VendasPageState extends State<VendasPage>
             collapsedHeight: 0,
             expandedHeight: 0,
           ),
-          // Header com botão Editar Período
           SliverToBoxAdapter(
             child: Container(
               decoration: const BoxDecoration(
@@ -321,13 +503,34 @@ class _VendasPageState extends State<VendasPage>
                 children: [
                   Expanded(
                     child: _HeaderRow(
-                      title: 'Dashboard de Vendas',
-                      showConsultor: true,
+                      title: headerTitle,
+                      showConsultor: isIndividual,
+                      consultorText: headerSubtitle,
                       primary: primary,
                       primaryLight: primaryLight,
                     ),
                   ),
                   const SizedBox(width: 8),
+
+                  if (isIndividual)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: SizedBox(
+                        height: 34,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            side: const BorderSide(color: Color(0xFF9E9E9E)),
+                            foregroundColor: const Color(0xFF424242),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: _voltarAoDashboard,
+                          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 14),
+                          label: const Text('Voltar ao Dashboard'),
+                        ),
+                      ),
+                    ),
+
                   SizedBox(
                     height: 34,
                     child: OutlinedButton.icon(
@@ -384,7 +587,7 @@ class _VendasPageState extends State<VendasPage>
                   const SizedBox(height: 12),
                   _ChartCard(
                     title: 'Evolução de Vendas',
-                    subtitle: 'Somente vendas finalizadas - Meu time',
+                    subtitle: chartSubtitle,
                     child: _BarrasVendasChart(
                       meses: meses,
                       realizado: realizado,
@@ -400,8 +603,6 @@ class _VendasPageState extends State<VendasPage>
     );
   }
 }
-
-// ==================== UI Auxiliares ====================
 
 class _HeaderRow extends StatelessWidget {
   final String title;

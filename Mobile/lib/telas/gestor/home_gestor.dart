@@ -7,10 +7,10 @@ import 'components/menu_inferior.dart';
 import 'components/notificacao.dart';
 import 'components/editar.dart' as comps;
 import 'components/transferir_lead_dialog.dart';
-import 'telas/lista_consultor.dart';
-import 'telas/enderecos.dart';
-import 'telas/exportar.dart';
-import 'telas/vendas.dart';
+import 'telas/lista_consultor.dart' as cons;
+import 'telas/enderecos.dart' as end;
+import 'telas/exportar.dart' as exp;
+import 'telas/vendas.dart' as vendas;
 
 class HomeGestor extends StatefulWidget {
   const HomeGestor({super.key});
@@ -76,16 +76,21 @@ class _HomeGestorState extends State<HomeGestor> {
 
   String _removeCommaAfterTypeAtStart(String s) {
     if (s.isEmpty) return s;
-    s = s.replaceFirstMapped(RegExp(r'^\s*(Av|R|Rod|Al|Trav)\.\s*,\s*', caseSensitive: false),
+    s = s.replaceFirstMapped(
+        RegExp(r'^\s*(Av|R|Rod|Al|Trav)\.\s*,\s*', caseSensitive: false),
         (m) => '${m.group(1)}. ');
-    s = s.replaceFirstMapped(RegExp(r'^\s*(Avenida|Rua|Rodovia|Alameda|Travessa)\s*,\s*', caseSensitive: false),
+    s = s.replaceFirstMapped(
+        RegExp(r'^\s*(Avenida|Rua|Rodovia|Alameda|Travessa)\s*,\s*',
+            caseSensitive: false),
         (m) => '${m.group(1)} ');
     return s.replaceAll(RegExp(r'\s{2,}'), ' ').trimLeft();
   }
 
   String _removeCommaBeforeTypesAnywhere(String s) {
     return s.replaceAll(
-      RegExp(r',\s*(?=(Av\.|R\.|Rod\.|Al\.|Trav\.|Avenida|Rua|Rodovia|Alameda|Travessa)\b)', caseSensitive: false),
+      RegExp(
+          r',\s*(?=(Av\.|R\.|Rod\.|Al\.|Trav\.|Avenida|Rua|Rodovia|Alameda|Travessa)\b)',
+          caseSensitive: false),
       ' ',
     );
   }
@@ -102,7 +107,9 @@ class _HomeGestorState extends State<HomeGestor> {
     final c = cidade.trim();
 
     String primeiraParte;
-    if (l.isNotEmpty && e.isNotEmpty && RegExp(r'\.\s*$', caseSensitive: false).hasMatch(l)) {
+    if (l.isNotEmpty &&
+        e.isNotEmpty &&
+        RegExp(r'\.\s*$', caseSensitive: false).hasMatch(l)) {
       primeiraParte = '$l ${e.trim()}';
     } else if (l.isNotEmpty && e.isNotEmpty) {
       primeiraParte = '$l, ${e.trim()}';
@@ -173,7 +180,10 @@ class _HomeGestorState extends State<HomeGestor> {
         .eq('gestor_id', uidGestor)
         .eq('ativo', true);
     if (rows is! List) return [];
-    return rows.map((r) => (r['uid'] ?? '').toString()).where((s) => s.isNotEmpty).toList();
+    return rows
+        .map((r) => (r['uid'] ?? '').toString())
+        .where((s) => s.isNotEmpty)
+        .toList();
   }
 
   Future<void> _carregarLeads({bool initial = false}) async {
@@ -249,7 +259,8 @@ class _HomeGestorState extends State<HomeGestor> {
       final uids =
           batch.map((e) => e['consUid']).where((e) => e != null).toSet().cast<String>().toList();
       if (uids.isNotEmpty) {
-        final consRows = await _sb.from('consultores').select('uid, nome').inFilter('uid', uids);
+        final consRows =
+            await _sb.from('consultores').select('uid, nome').inFilter('uid', uids);
         final map = <String, String>{};
         for (final c in (consRows as List)) {
           final uid = c['uid'] as String?;
@@ -350,7 +361,7 @@ class _HomeGestorState extends State<HomeGestor> {
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 84),
                 child: _withGlobalSwipe(
-                  pageCount: 4,
+                  pageCount: 5, 
                   child: Column(
                     children: [
                       if (_tab == 0)
@@ -399,10 +410,28 @@ class _HomeGestorState extends State<HomeGestor> {
                               onTransferir: _abrirTransferir,
                               setExpandirTodos: (v) => setState(() => _expandirTodos = v),
                             ),
-                            const VendasPage(),
-                            Navigator(onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => const ConsultoresRoot())),
-                            Navigator(onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => const EnderecosPage())),
-                            Navigator(onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => const ExportarPage())),
+
+                            vendas.VendasPage(), 
+
+                            Navigator(
+                              onGenerateRoute: (_) => MaterialPageRoute(
+                                builder: (_) => cons.ConsultoresRoot(
+                                  pageController: _pageController,
+                                ),
+                              ),
+                            ),
+
+                            Navigator(
+                              onGenerateRoute: (_) => MaterialPageRoute(
+                                builder: (_) => const end.EnderecosPage(),
+                              ),
+                            ),
+
+                            Navigator(
+                              onGenerateRoute: (_) => MaterialPageRoute(
+                                builder: (_) => const exp.ExportarPage(),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -488,23 +517,19 @@ class _HomeGestorState extends State<HomeGestor> {
       });
 
       try {
-        await _sb
-            .from('clientes')
-            .update({
-              'nome': result['nome'],
-              'telefone': result['telefone'], 
-              'logradouro': result['logradouro'],
-              'endereco': result['endereco'],
-              'numero': result['numero'],
-              'bairro': result['bairro'],
-              'cidade': result['cidade'],
-              'estabelecimento': result['estabelecimento'],
-              'observacoes': result['observacoes'],
-              if (result['status_negociacao'] != null)
-                'status_negociacao': result['status_negociacao'],
-            })
-            .eq('id', _leads[index]['id'])
-            .select();
+        await _sb.from('clientes').update({
+          'nome': result['nome'],
+          'telefone': result['telefone'],
+          'logradouro': result['logradouro'],
+          'endereco': result['endereco'],
+          'numero': result['numero'],
+          'bairro': result['bairro'],
+          'cidade': result['cidade'],
+          'estabelecimento': result['estabelecimento'],
+          'observacoes': result['observacoes'],
+          if (result['status_negociacao'] != null)
+            'status_negociacao': result['status_negociacao'],
+        }).eq('id', _leads[index]['id']).select();
       } catch (_) {}
     }
   }
@@ -517,8 +542,11 @@ class _HomeGestorState extends State<HomeGestor> {
         lead: TLCliente(id: c['id'], nome: c['nome'], telefone: c['tel']),
         consultorAtualNome: (c['cons'] as String?) ?? '-',
         onConfirmar: (novoUid) async {
-          final res =
-              await _sb.from('clientes').update({'consultor_uid_t': novoUid}).eq('id', c['id']).select();
+          final res = await _sb
+              .from('clientes')
+              .update({'consultor_uid_t': novoUid})
+              .eq('id', c['id'])
+              .select();
           if (res == null || res is! List || res.isEmpty) {
             throw Exception('Sem permissão para transferir este lead (RLS/escopo).');
           }
@@ -629,8 +657,7 @@ class _LeadsTab extends StatelessWidget {
                 return renderCard(c);
               }
               if (idx == 10) {
-                return _CardVerMais(
-                    restante: total - 10, onTap: () => setExpandirTodos(true));
+                return _CardVerMais(restante: total - 10, onTap: () => setExpandirTodos(true));
               }
             }
 
