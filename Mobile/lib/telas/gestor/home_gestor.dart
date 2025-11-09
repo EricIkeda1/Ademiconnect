@@ -223,7 +223,7 @@ class _HomeGestorState extends State<HomeGestor> {
           .select(
               'id, nome, telefone, logradouro, endereco, numero, bairro, cidade, estabelecimento, data_visita, observacoes, consultor_uid_t, status_negociacao')
           .inFilter('consultor_uid_t', consUids)
-          .order('data_visita', ascending: false, nullsFirst: true)
+          .order('data_visita', ascending: true)
           .range(start, end);
 
       final batch = <Map<String, dynamic>>[];
@@ -239,6 +239,8 @@ class _HomeGestorState extends State<HomeGestor> {
           cidade: (r['cidade'] ?? '').toString(),
         );
 
+        final diasCalc = _calcDias(r['data_visita']);
+
         batch.add({
           'id': id,
           'nome': r['nome'] ?? '',
@@ -249,15 +251,19 @@ class _HomeGestorState extends State<HomeGestor> {
           'consUid': r['consultor_uid_t'],
           'cons': '',
           'obs': r['observacoes'] ?? '',
-          'dias': _calcDias(r['data_visita']),
+          'dias': diasCalc,
           'urgente': _isUrgente(r['data_visita']),
           'alerta': _isAlerta(r['data_visita']),
           'status': _fmtStatus(r['status_negociacao']),
         });
       }
 
-      final uids =
-          batch.map((e) => e['consUid']).where((e) => e != null).toSet().cast<String>().toList();
+      final uids = batch
+          .map((e) => e['consUid'])
+          .where((e) => e != null)
+          .toSet()
+          .cast<String>()
+          .toList();
       if (uids.isNotEmpty) {
         final consRows =
             await _sb.from('consultores').select('uid, nome').inFilter('uid', uids);
@@ -276,6 +282,16 @@ class _HomeGestorState extends State<HomeGestor> {
       if (!mounted) return;
       setState(() {
         _leads.addAll(batch);
+
+        _leads.sort((a, b) {
+          final da = (a['dias'] as int?) ?? -1;
+          final db = (b['dias'] as int?) ?? -1;
+          if (da == -1 && db == -1) return 0;
+          if (da == -1) return 1;
+          if (db == -1) return -1;
+          return db.compareTo(da);
+        });
+
         _page += 1;
         _hasMore = (rows as List).length == _pageSize;
         _loading = false;
@@ -292,12 +308,12 @@ class _HomeGestorState extends State<HomeGestor> {
   }
 
   int _calcDias(dynamic dataVisita) {
-    if (dataVisita == null) return 0;
+    if (dataVisita == null) return -1;
     try {
       final dt = DateTime.parse(dataVisita.toString());
       return DateTime.now().difference(dt).inDays.abs();
     } catch (_) {
-      return 0;
+      return -1;
     }
   }
 
@@ -361,7 +377,7 @@ class _HomeGestorState extends State<HomeGestor> {
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 84),
                 child: _withGlobalSwipe(
-                  pageCount: 5, 
+                  pageCount: 5,
                   child: Column(
                     children: [
                       if (_tab == 0)
@@ -411,7 +427,7 @@ class _HomeGestorState extends State<HomeGestor> {
                               setExpandirTodos: (v) => setState(() => _expandirTodos = v),
                             ),
 
-                            vendas.VendasPage(), 
+                            vendas.VendasPage(),
 
                             Navigator(
                               onGenerateRoute: (_) => MaterialPageRoute(
@@ -514,6 +530,14 @@ class _HomeGestorState extends State<HomeGestor> {
               ? _fmtStatus(result['status_negociacao'])
               : _leads[index]['status'],
         };
+        _leads.sort((a, b) {
+          final da = (a['dias'] as int?) ?? -1;
+          final db = (b['dias'] as int?) ?? -1;
+          if (da == -1 && db == -1) return 0;
+          if (da == -1) return 1;
+          if (db == -1) return -1;
+          return db.compareTo(da);
+        });
       });
 
       try {
@@ -645,7 +669,7 @@ class _LeadsTab extends StatelessWidget {
                   observacao: c['obs'] as String,
                   dias: (c['dias'] as int?) ?? 0,
                   urgente: (c['urgente'] as bool?) ?? false,
-                  alerta: (c['alerta'] as bool?) ?? false,
+                  alerta: (c['alerta'] as bool?) ?? false, 
                   status: (c['status'] as String?) ?? '',
                   onEditar: () => onEditar(c, idx),
                   onTransferir: () => onTransferir(c),

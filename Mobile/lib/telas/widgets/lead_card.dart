@@ -13,7 +13,6 @@ class LeadCard extends StatelessWidget {
   final VoidCallback onTransferir;
 
   final String estabelecimento;
-
   final String? status;
 
   const LeadCard({
@@ -211,15 +210,23 @@ class _DiasBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color bg = const Color(0xFFE7F7EE);
-    Color fg = const Color(0xFF1B8151);
+    Color bg;
+    Color fg;
+
     if (urgente) {
       bg = const Color(0xFFFFEAEA);
       fg = const Color(0xFFB21F1F);
-    } else if (alerta) {
+    } else if (dias >= 90) {
+      bg = const Color(0xFFFFEAEA);
+      fg = const Color(0xFFB21F1F);
+    } else if (dias >= 84) {
       bg = const Color(0xFFFFF4E1);
       fg = const Color(0xFFA86A00);
+    } else {
+      bg = const Color(0xFFE7F7EE);
+      fg = const Color(0xFF1B8151);
     }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
