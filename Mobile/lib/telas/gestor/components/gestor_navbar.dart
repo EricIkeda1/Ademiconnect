@@ -21,13 +21,12 @@ class _GestorNavbarState extends State<GestorNavbar> {
   final SupabaseClient _sb = Supabase.instance.client;
 
   // Estado
-  String _nome = 'Gestor';              // curto (AppBar)
-  String _nomeCompleto = 'Gestor';      // completo (cartão)
+  String _nome = 'Gestor';               // curto (AppBar)
+  String _nomeCompleto = 'Gestor';       // completo (cartão)
   String _email = '';
   String _idUsuario = '';
-  final String _tipoCargo = 'Gestor';   // fixo, não busca do Supabase
+  final String _tipoCargo = 'Gestor';    // fixo, não busca do Supabase
   bool _carregando = true;
-  bool _expandido = false;
 
   @override
   void initState() {
@@ -35,20 +34,16 @@ class _GestorNavbarState extends State<GestorNavbar> {
     _carregarPerfil();
   }
 
+  // Regra: AppBar mostra somente o primeiro nome se houver mais de uma palavra.
   String _nomeCurto(String completo) {
-    final parts = completo.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty || parts.first.isEmpty) return completo.trim();
-    if (parts.length == 1) return parts.first;
-    final blacklist = {'filho', 'neto', 'junior', 'jr.', 'jr', 'sobrinho'};
-    var last = parts.last;
-    if (blacklist.contains(last.toLowerCase()) && parts.length >= 3) {
-      last = parts[parts.length - 2];
-    }
-    return '${parts.first} $last';
+    final parts = completo.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return completo.trim();
+    if (parts.length > 1) return parts.first; // "Augusto tal tal tal" -> "Augusto"
+    return parts.first;
   }
 
   String _iniciais(String nome) {
-    final p = nome.trim().split(RegExp(r'\s+'));
+    final p = nome.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
     if (p.isEmpty) return 'US';
     if (p.length == 1) return p.first.substring(0, 1).toUpperCase();
     return (p.first.substring(0, 1) + p.last.substring(0, 1)).toUpperCase();
@@ -79,8 +74,8 @@ class _GestorNavbarState extends State<GestorNavbar> {
       final nomeFinal = nomeFromDb ?? (emailFinal.isNotEmpty ? emailFinal : 'Gestor');
 
       setState(() {
-        _nomeCompleto = nomeFinal;      // nome cheio (cartão)
-        _nome = _nomeCurto(nomeFinal);  // nome curto (AppBar)
+        _nomeCompleto = nomeFinal;       // nome cheio (cartão)
+        _nome = _nomeCurto(nomeFinal);   // nome curto (AppBar)
         _email = emailFinal;
         _carregando = false;
       });
@@ -93,23 +88,30 @@ class _GestorNavbarState extends State<GestorNavbar> {
     Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
   }
 
-  // Abre o cartão alinhado à esquerda da AppBar
+  // Abre o cartão alinhado à esquerda da AppBar, compatível com mobile
   Future<void> _abrirMenuPerfilEsquerda(TapDownDetails details) async {
-    setState(() => _expandido = true);
+    if (!mounted) return;
 
-    final overlayBox = Overlay.of(context).context.findRenderObject() as RenderBox;
-    final barBox = context.findRenderObject() as RenderBox;
-    final barTopLeft = barBox.localToGlobal(Offset.zero);
+    final overlay = Overlay.of(context);
+    if (overlay == null) return;
 
-    final double leftX = barTopLeft.dx + 12; // padding AppBar
-    final double topY = barTopLeft.dy + kToolbarHeight; // abaixo da AppBar
-    const double popupWidth = 310; // largura do mock
+    final screen = MediaQuery.of(context).size;
+    const desiredWidth = 310.0;
+    final cardWidth =
+        screen.width < desiredWidth + 24 ? screen.width * 0.92 : desiredWidth;
+
+    final appBarTopLeft =
+        (context.findRenderObject() as RenderBox?)?.localToGlobal(Offset.zero) ??
+            Offset.zero;
+    const leftPadding = 8.0; // idem ao padding do título
+    final leftX = leftPadding;
+    final topY = appBarTopLeft.dy + kToolbarHeight;
 
     final position = RelativeRect.fromLTRB(
       leftX,
       topY,
-      overlayBox.size.width - leftX - popupWidth,
-      overlayBox.size.height - topY - 1,
+      screen.width - leftX - cardWidth,
+      0,
     );
 
     await showMenu<int>(
@@ -124,27 +126,34 @@ class _GestorNavbarState extends State<GestorNavbar> {
         PopupMenuItem<int>(
           enabled: false,
           padding: EdgeInsets.zero,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: popupWidth),
-            child: _buildPerfilCard(
-              iniciais: _carregando ? '...' : _iniciais(_nomeCompleto),
-              nomeCompleto: _carregando ? 'Carregando' : _nomeCompleto,
-              subtitulo: _tipoCargo,     // fixo
-              idUsuario: _idUsuario,
-              email: _email,
-              telefone: '',
-              localizacao: '',
-              onSair: () {
-                Navigator.pop(context);
-                _goLogin();
-              },
+          child: SafeArea(
+            minimum: const EdgeInsets.only(bottom: 8),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: cardWidth,
+                maxHeight: screen.height * 0.8,
+              ),
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: _buildPerfilCard(
+                  iniciais: _carregando ? '...' : _iniciais(_nomeCompleto),
+                  nomeCompleto: _carregando ? 'Carregando' : _nomeCompleto,
+                  subtitulo: _tipoCargo, // fixo
+                  idUsuario: _idUsuario,
+                  email: _email,
+                  telefone: '',
+                  localizacao: '',
+                  onSair: () {
+                    Navigator.pop(context);
+                    _goLogin();
+                  },
+                ),
+              ),
             ),
           ),
         ),
       ],
     );
-
-    if (mounted) setState(() => _expandido = false);
   }
 
   @override
@@ -155,7 +164,7 @@ class _GestorNavbarState extends State<GestorNavbar> {
       automaticallyImplyLeading: false,
       titleSpacing: 0,
       title: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        padding: const EdgeInsets.fromLTRB(8, 4, 12, 4), // left=8, right=12
         child: SizedBox(
           height: kToolbarHeight,
           child: Stack(
@@ -190,7 +199,10 @@ class _GestorNavbarState extends State<GestorNavbar> {
                             ),
                             border: Border.all(color: corBorda, width: 1),
                             boxShadow: const [
-                              BoxShadow(color: Color(0x14000000), blurRadius: 3, offset: Offset(0, 1)),
+                              BoxShadow(
+                                  color: Color(0x14000000),
+                                  blurRadius: 3,
+                                  offset: Offset(0, 1)),
                             ],
                           ),
                           child: Stack(
@@ -198,7 +210,10 @@ class _GestorNavbarState extends State<GestorNavbar> {
                               Center(
                                 child: Text(
                                   _carregando ? '...' : _iniciais(_nome),
-                                  style: const TextStyle(color: vermelhoClaro, fontSize: 11, fontWeight: FontWeight.w800),
+                                  style: const TextStyle(
+                                      color: vermelhoClaro,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800),
                                 ),
                               ),
                               Positioned(
@@ -210,36 +225,25 @@ class _GestorNavbarState extends State<GestorNavbar> {
                                   decoration: BoxDecoration(
                                     color: const Color(0xFF2ECC71),
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white, width: 1.5),
+                                    border: Border.all(
+                                        color: Colors.white, width: 1.5),
                                   ),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 4), // gap avatar→texto
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // Nome curto na AppBar
-                                Text(
-                                  _carregando ? '...' : _nome,
-                                  style: const TextStyle(color: preto09, fontSize: 15, fontWeight: FontWeight.w600),
-                                ),
-                                const SizedBox(width: 6),
-                                AnimatedRotation(
-                                  turns: _expandido ? 0.5 : 0.0,
-                                  duration: const Duration(milliseconds: 180),
-                                  child: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: corTexto),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 1),
-                            const Text('Gestor', style: TextStyle(color: vermelhoClaro, fontSize: 11)), // fixo
+                          children: const [
+                            // AppBar: somente primeiro nome
+                            _NomeAppBar(),
+                            SizedBox(height: 1),
+                            Text('Gestor',
+                                style: TextStyle(
+                                    color: vermelhoClaro, fontSize: 11)), // fixo
                           ],
                         ),
                       ],
@@ -272,10 +276,12 @@ class _GestorNavbarState extends State<GestorNavbar> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        width: 310,
+        width: 310, // permanece 310; no mobile limitamos via ConstrainedBox
         decoration: const BoxDecoration(
           color: Colors.white,
-          boxShadow: [BoxShadow(color: Color(0x1A000000), blurRadius: 10, offset: Offset(0, 6))],
+          boxShadow: [
+            BoxShadow(color: Color(0x1A000000), blurRadius: 10, offset: Offset(0, 6))
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -283,7 +289,11 @@ class _GestorNavbarState extends State<GestorNavbar> {
             // Topo vermelho
             Container(
               decoration: const BoxDecoration(
-                gradient: LinearGradient(colors: [vermelhoClaro, vermelhoTopoB], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                gradient: LinearGradient(
+                  colors: [vermelhoClaro, vermelhoTopoB],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -292,12 +302,17 @@ class _GestorNavbarState extends State<GestorNavbar> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: const Color(0x22FFFFFF),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Text('Gestor', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                      child: const Text('Gestor',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700)),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -312,10 +327,19 @@ class _GestorNavbarState extends State<GestorNavbar> {
                           shape: BoxShape.circle,
                           color: Colors.white,
                           border: Border.all(color: Colors.white, width: 5),
-                          boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 3, offset: Offset(0, 1))],
+                          boxShadow: const [
+                            BoxShadow(
+                                color: Color(0x14000000),
+                                blurRadius: 3,
+                                offset: Offset(0, 1))
+                          ],
                         ),
                         child: Center(
-                          child: Text(iniciais, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFFB71C1C))),
+                          child: Text(iniciais,
+                              style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFFB71C1C))),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -325,7 +349,7 @@ class _GestorNavbarState extends State<GestorNavbar> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Nome COMPLETO no card (sem sublinhado)
+                              // Card: NOME COMPLETO
                               Text(
                                 nomeCompleto,
                                 maxLines: 1,
@@ -337,7 +361,11 @@ class _GestorNavbarState extends State<GestorNavbar> {
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              Text(subtitulo, style: const TextStyle(color: Color(0xFFEDEDED), fontSize: 12, fontWeight: FontWeight.w600)),
+                              Text(subtitulo,
+                                  style: const TextStyle(
+                                      color: Color(0xFFEDEDED),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600)),
                             ],
                           ),
                         ),
@@ -354,16 +382,40 @@ class _GestorNavbarState extends State<GestorNavbar> {
 
             // Lista de itens (3 com ênfase)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Column(
                 children: [
-                  _perfilRow(bg: cinzaItem, icon: Icons.tag, titulo: 'ID do Usuário', valor: idUsuario, enfase: true),
-                  _perfilRow(bg: cinzaItem, icon: Icons.alternate_email, titulo: 'Email Corporativo', valor: email, enfase: true),
-                  _perfilRow(bg: cinzaItem, icon: Icons.badge_outlined, titulo: 'Cargo', valor: 'Gestor', enfase: true), // fixo
+                  _perfilRow(
+                      bg: cinzaItem,
+                      icon: Icons.tag,
+                      titulo: 'ID do Usuário',
+                      valor: idUsuario,
+                      enfase: true),
+                  _perfilRow(
+                      bg: cinzaItem,
+                      icon: Icons.alternate_email,
+                      titulo: 'Email Corporativo',
+                      valor: email,
+                      enfase: true),
+                  _perfilRow(
+                      bg: cinzaItem,
+                      icon: Icons.badge_outlined,
+                      titulo: 'Cargo',
+                      valor: 'Gestor',
+                      enfase: true), // fixo
                   if (telefone != null && telefone!.isNotEmpty)
-                    _perfilRow(bg: cinzaItem, icon: Icons.call_outlined, titulo: 'Telefone', valor: telefone!),
+                    _perfilRow(
+                        bg: cinzaItem,
+                        icon: Icons.call_outlined,
+                        titulo: 'Telefone',
+                        valor: telefone!),
                   if (localizacao != null && localizacao!.isNotEmpty)
-                    _perfilRow(bg: cinzaItem, icon: Icons.location_on_outlined, titulo: 'Localização', valor: localizacao!),
+                    _perfilRow(
+                        bg: cinzaItem,
+                        icon: Icons.location_on_outlined,
+                        titulo: 'Localização',
+                        valor: localizacao!),
                 ],
               ),
             ),
@@ -371,7 +423,10 @@ class _GestorNavbarState extends State<GestorNavbar> {
             // Botão sair
             Container(
               padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
-              decoration: BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: bordaLeve, width: 1))),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: bordaLeve, width: 1)),
+              ),
               child: SizedBox(
                 width: double.infinity,
                 height: 44,
@@ -380,11 +435,13 @@ class _GestorNavbarState extends State<GestorNavbar> {
                     backgroundColor: vermelhoClaro,
                     foregroundColor: Colors.white,
                     elevation: 4,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: onSair,
                   icon: const Icon(Icons.logout_outlined),
-                  label: const Text('Sair da Conta', style: TextStyle(fontWeight: FontWeight.w800)),
+                  label: const Text('Sair da Conta',
+                      style: TextStyle(fontWeight: FontWeight.w800)),
                 ),
               ),
             ),
@@ -402,10 +459,13 @@ class _GestorNavbarState extends State<GestorNavbar> {
     required String valor,
     bool enfase = false,
   }) {
-    final Color borda = enfase ? const Color(0x33EA3124) : const Color(0x143A2E2E);
+    final Color borda =
+        enfase ? const Color(0x33EA3124) : const Color(0x143A2E2E);
     final Color bgIcon = enfase ? const Color(0x1AEA3124) : bg;
-    final Color corIcone = enfase ? vermelhoClaro : const Color(0xFF2F2B2B);
-    final FontWeight pesoValor = enfase ? FontWeight.w800 : FontWeight.w700;
+    final Color corIcone =
+        enfase ? vermelhoClaro : const Color(0xFF2F2B2B);
+    final FontWeight pesoValor =
+        enfase ? FontWeight.w800 : FontWeight.w700;
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -427,7 +487,10 @@ class _GestorNavbarState extends State<GestorNavbar> {
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(color: bgIcon, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: bgIcon,
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Icon(icon, color: corIcone, size: 20),
           ),
           const SizedBox(width: 12),
@@ -435,18 +498,46 @@ class _GestorNavbarState extends State<GestorNavbar> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(titulo, style: const TextStyle(fontSize: 11, color: Color(0xFF7A7A7A), fontWeight: FontWeight.w600)),
+                Text(titulo,
+                    style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF7A7A7A),
+                        fontWeight: FontWeight.w600)),
                 const SizedBox(height: 3),
                 Text(
                   valor,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 15, color: const Color(0xFF231F20), fontWeight: pesoValor),
+                  style: TextStyle(
+                      fontSize: 15,
+                      color: const Color(0xFF231F20),
+                      fontWeight: pesoValor),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Extrai o nome curto da instância pai sem reconstruir toda a AppBar.
+/// Mantém o texto da linha superior desacoplado do estado visual.
+class _NomeAppBar extends StatelessWidget {
+  const _NomeAppBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.findAncestorStateOfType<_GestorNavbarState>();
+    final carregando = state?._carregando ?? true;
+    final nome = state?._nome ?? '...';
+    return Text(
+      carregando ? '...' : nome,
+      style: const TextStyle(
+        color: _GestorNavbarState.preto09,
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
       ),
     );
   }

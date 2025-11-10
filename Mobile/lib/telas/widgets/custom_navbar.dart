@@ -45,18 +45,12 @@ class _CustomNavbarState extends State<CustomNavbar> {
   static const corBorda = Color(0xFF3A2E2E);
   static const corTexto = Color(0xFF2F2B2B);
 
-  bool _expandido = false;
-
+  // Mesmo esquema: AppBar mostra só o primeiro nome se houver mais de uma palavra
   String _nomeCurto(String completo) {
-    final parts = completo.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty || parts.first.isEmpty) return completo.trim();
-    if (parts.length == 1) return parts.first;
-    final blacklist = {'filho', 'neto', 'junior', 'jr.', 'jr', 'sobrinho'};
-    var last = parts.last;
-    if (blacklist.contains(last.toLowerCase()) && parts.length >= 3) {
-      last = parts[parts.length - 2];
-    }
-    return '${parts.first} $last';
+    final parts = completo.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return completo.trim();
+    if (parts.length > 1) return parts.first; // "Augusto tal tal tal" -> "Augusto"
+    return parts.first;
   }
 
   String _iniciais(String nome) {
@@ -68,21 +62,28 @@ class _CustomNavbarState extends State<CustomNavbar> {
 
   String _fmtData(DateTime d) => DateFormat('dd/MM/yyyy HH:mm').format(d);
 
-  Future<void> _abrirMenuPerfilEsquerda(TapDownDetails details, double popupWidth) async {
-    setState(() => _expandido = true);
+  Future<void> _abrirMenuPerfilEsquerda(
+      TapDownDetails details, double popupWidth) async {
+    final overlay = Overlay.of(context);
+    if (overlay == null) return;
 
-    final overlayBox = Overlay.of(context).context.findRenderObject() as RenderBox;
-    final barBox = context.findRenderObject() as RenderBox;
-    final barTopLeft = barBox.localToGlobal(Offset.zero);
+    final screen = MediaQuery.of(context).size;
+    final cardWidth =
+        screen.width < popupWidth + 24 ? screen.width * 0.92 : popupWidth;
 
-    final double leftX = barTopLeft.dx + 16;
-    final double topY = barTopLeft.dy + kToolbarHeight;
+    final appBarTopLeft =
+        (context.findRenderObject() as RenderBox?)?.localToGlobal(Offset.zero) ??
+            Offset.zero;
+
+    const leftPadding = 8.0; // 0.2 cm ≈ 8 px
+    final double leftX = leftPadding;
+    final double topY = appBarTopLeft.dy + kToolbarHeight;
 
     final position = RelativeRect.fromLTRB(
       leftX,
       topY,
-      overlayBox.size.width - leftX - popupWidth,
-      overlayBox.size.height - topY - 1,
+      screen.width - leftX - cardWidth,
+      0,
     );
 
     await showMenu<int>(
@@ -97,28 +98,36 @@ class _CustomNavbarState extends State<CustomNavbar> {
         PopupMenuItem<int>(
           enabled: false,
           padding: EdgeInsets.zero,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: popupWidth),
-            child: _buildPerfilCard(
-              iniciais: _iniciais(widget.nomeCompleto),
-              nomeCompleto: widget.nomeCompleto,
-              cargo: 'Consultor',
-              idUsuario: widget.idUsuario,
-              email: widget.email,
-              matricula: widget.matricula,
-              dataCadastroFmt: _fmtData(widget.dataCadastro),
-              onSair: () {
-                Navigator.pop(context);
-                (widget.onLogout ??
-                    () => Navigator.pushReplacementNamed(context, '/login'))();
-              },
+          child: SafeArea(
+            minimum: const EdgeInsets.only(bottom: 8),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: cardWidth,
+                maxHeight: screen.height * 0.8,
+              ),
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: _buildPerfilCard(
+                  iniciais: _iniciais(widget.nomeCompleto),
+                  nomeCompleto: widget.nomeCompleto, // Card: nome completo
+                  cargo: 'Consultor',
+                  idUsuario: widget.idUsuario,
+                  email: widget.email,
+                  matricula: widget.matricula,
+                  dataCadastroFmt: _fmtData(widget.dataCadastro),
+                  onSair: () {
+                    Navigator.pop(context);
+                    (widget.onLogout ??
+                        () => Navigator.pushReplacementNamed(
+                            context, '/login'))();
+                  },
+                ),
+              ),
             ),
           ),
         ),
       ],
     );
-
-    if (mounted) setState(() => _expandido = false);
   }
 
   @override
@@ -135,7 +144,7 @@ class _CustomNavbarState extends State<CustomNavbar> {
     final double nomeSize = 16.0 * scale;
     final double cargoSize = 12.0 * scale;
 
-    final nomeCurto = _nomeCurto(widget.nomeCompleto);
+    final nomeCurto = _nomeCurto(widget.nomeCompleto); // AppBar: curto
 
     return PreferredSize(
       preferredSize:
@@ -160,7 +169,7 @@ class _CustomNavbarState extends State<CustomNavbar> {
             Align(
               alignment: Alignment.centerLeft,
               child: Padding(
-                padding: const EdgeInsets.only(left: 16),
+                padding: const EdgeInsets.only(left: 8), // 0.2 cm para a direita
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTapDown: (d) => _abrirMenuPerfilEsquerda(d, 340),
@@ -180,7 +189,10 @@ class _CustomNavbarState extends State<CustomNavbar> {
                             ),
                             border: Border.all(color: corBorda, width: 1),
                             boxShadow: const [
-                              BoxShadow(color: Color(0x14000000), blurRadius: 3, offset: Offset(0, 1)),
+                              BoxShadow(
+                                  color: Color(0x14000000),
+                                  blurRadius: 3,
+                                  offset: Offset(0, 1)),
                             ],
                           ),
                           child: Stack(
@@ -188,25 +200,30 @@ class _CustomNavbarState extends State<CustomNavbar> {
                               Center(
                                 child: Text(
                                   _iniciais(widget.nomeCompleto),
-                                  style: const TextStyle(color: vermelho, fontSize: 11, fontWeight: FontWeight.w800),
+                                  style: const TextStyle(
+                                      color: vermelho,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800),
                                 ),
                               ),
                               Positioned(
                                 right: 0,
                                 bottom: 0,
                                 child: Container(
-                                  width: 8, height: 8,
+                                  width: 8,
+                                  height: 8,
                                   decoration: BoxDecoration(
                                     color: const Color(0xFF2ECC71),
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white, width: 1.5),
+                                    border: Border.all(
+                                        color: Colors.white, width: 1.5),
                                   ),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      if (!widget.hideAvatar) const SizedBox(width: 10),
+                      if (!widget.hideAvatar) const SizedBox(width: 4), // gap avatar->texto
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
@@ -214,6 +231,7 @@ class _CustomNavbarState extends State<CustomNavbar> {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              // AppBar: somente primeiro nome se for composto
                               Text(
                                 nomeCurto,
                                 maxLines: 1,
@@ -223,12 +241,6 @@ class _CustomNavbarState extends State<CustomNavbar> {
                                   color: Colors.black87,
                                   fontSize: nomeSize,
                                 ),
-                              ),
-                              const SizedBox(width: 6),
-                              AnimatedRotation(
-                                turns: _expandido ? 0.5 : 0.0,
-                                duration: const Duration(milliseconds: 180),
-                                child: const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: corTexto),
                               ),
                             ],
                           ),
@@ -362,6 +374,7 @@ class _CustomNavbarState extends State<CustomNavbar> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // Card: nome completo
                               Text(
                                 nomeCompleto,
                                 maxLines: 1,
