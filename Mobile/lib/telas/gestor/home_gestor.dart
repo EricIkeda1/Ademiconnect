@@ -4,7 +4,7 @@ import '../widgets/lead_card.dart' as widgets;
 import 'components/gestor_navbar.dart';
 import 'components/gestor_header_row.dart';
 import 'components/menu_inferior.dart';
-import 'components/notificacao.dart'; 
+import 'components/avisos.dart'; 
 import 'components/editar.dart' as comps;
 import 'components/transferir_lead_dialog.dart';
 import 'telas/lista_consultor.dart' as cons;
