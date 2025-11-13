@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 import 'cadastrar_consultor.dart';
 import 'vendas.dart';
 
@@ -14,26 +13,20 @@ const _muted = Color(0xFF8F8F95);
 class BrPhoneTextInputFormatter extends TextInputFormatter {
   const BrPhoneTextInputFormatter();
   static final _digitsOnly = RegExp(r'\D');
-
   @override
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
     final raw = newValue.text.replaceAll(_digitsOnly, '');
-    final String mask = raw.length > 10 ? '(##) #####-####' : '(##) ####-####';
+    final mask = raw.length > 10 ? '(##) #####-####' : '(##) ####-####';
     final formatted = _applyMask(raw, mask);
-    final sel = TextSelection.collapsed(offset: formatted.length);
-    return TextEditingValue(text: formatted, selection: sel, composing: TextRange.empty);
+    return TextEditingValue(text: formatted, selection: TextSelection.collapsed(offset: formatted.length), composing: TextRange.empty);
   }
-
   String _applyMask(String digits, String mask) {
-    final buf = StringBuffer();
-    int i = 0;
+    final b = StringBuffer(); int i = 0;
     for (int m = 0; m < mask.length && i < digits.length; m++) {
-      final ch = mask[m];
-      if (ch == '#') { buf.write(digits[i]); i++; } else { buf.write(ch); }
+      final ch = mask[m]; if (ch == '#') { b.write(digits[i]); i++; } else { b.write(ch); }
     }
-    return buf.toString();
+    return b.toString();
   }
-
   String formatStatic(String input) {
     final raw = input.replaceAll(_digitsOnly, '');
     if (raw.isEmpty) return '';
@@ -45,9 +38,7 @@ class BrPhoneTextInputFormatter extends TextInputFormatter {
 class ConsultoresRoot extends StatefulWidget {
   final VoidCallback? onCadastrar;
   final PageController? pageController;
-
   const ConsultoresRoot({super.key, this.onCadastrar, this.pageController});
-
   @override
   State<ConsultoresRoot> createState() => _ConsultoresRootState();
 }
@@ -63,6 +54,8 @@ class _ConsultoresRootState extends State<ConsultoresRoot> {
   int _totalCount = 0;
   bool _loading = false;
   String? _error;
+
+  bool _filtroAtivo = true;
 
   @override
   void initState() {
@@ -91,8 +84,8 @@ class _ConsultoresRootState extends State<ConsultoresRoot> {
     final res = await _client
         .from('consultores')
         .select('id')
-        .eq('ativo', true)
-        .count(CountOption.exact); 
+        .eq('ativo', _filtroAtivo)
+        .count(CountOption.exact);
     setState(() => _totalCount = res.count ?? 0);
   }
 
@@ -102,14 +95,12 @@ class _ConsultoresRootState extends State<ConsultoresRoot> {
 
     final dynamic result = await _client
         .from('consultores')
-        .select('id, uid, nome, email, telefone, matricula')
-        .eq('ativo', true)
+        .select('id, uid, nome, email, telefone, matricula, ativo')
+        .eq('ativo', _filtroAtivo)
         .order('nome', ascending: true)
-        .range(start, end); 
+        .range(start, end);
 
-    final List<dynamic> raw = result as List<dynamic>;
-    final rows = raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-
+    final rows = (result as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
     final mapped = rows.map((r) => _ConsultorView(
           r['id'].toString(),
           (r['uid'] as String?) ?? '',
@@ -117,6 +108,7 @@ class _ConsultoresRootState extends State<ConsultoresRoot> {
           (r['matricula'] as String?) ?? '',
           (r['telefone'] as String?) ?? '',
           (r['email'] as String?) ?? '',
+          (r['ativo'] as bool?) ?? true,
         ));
 
     setState(() {
@@ -174,16 +166,15 @@ class _ConsultoresRootState extends State<ConsultoresRoot> {
     );
     if (confirmed != true) return;
     try {
-      await _client
-          .from('consultores')
-          .update({'ativo': false})
-          .eq('id', c.id);
+      await _client.from('consultores').update({'ativo': false}).eq('id', c.id);
 
-      setState(() {
-        _consultores.removeWhere((x) => x.id == c.id);
-        _totalCount = (_totalCount - 1).clamp(0, 1 << 31);
-        _visibleCount = _consultores.length;
-      });
+      if (_filtroAtivo) {
+        setState(() {
+          _consultores.removeWhere((x) => x.id == c.id);
+          _totalCount = (_totalCount - 1).clamp(0, 1 << 31);
+          _visibleCount = _consultores.length;
+        });
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Conta marcada como inativa'), backgroundColor: Colors.green),
@@ -201,11 +192,16 @@ class _ConsultoresRootState extends State<ConsultoresRoot> {
       consultorUid: c.uid,
       nomeConsultor: c.nome,
     );
-
     final pc = widget.pageController;
     if (pc != null) {
       await pc.animateToPage(1, duration: const Duration(milliseconds: 280), curve: Curves.easeOut);
-    } else {}
+    }
+  }
+
+  Future<void> _trocarAba(bool ativos) async {
+    if (_filtroAtivo == ativos) return;
+    setState(() => _filtroAtivo = ativos);
+    await _fetchFirstPage();
   }
 
   @override
@@ -228,6 +224,12 @@ class _ConsultoresRootState extends State<ConsultoresRoot> {
                     const SizedBox(width: 6),
                     const Text('Consultores', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: _textPrimary)),
                     const Spacer(),
+                    _ToggleAtivos(onChanged: _trocarAba, ativos: _filtroAtivo),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
                     _ChipTotal(count: _totalCount),
                   ],
                 ),
@@ -288,9 +290,57 @@ class _ConsultoresRootState extends State<ConsultoresRoot> {
   }
 }
 
+class _ToggleAtivos extends StatelessWidget {
+  final bool ativos;
+  final void Function(bool ativos) onChanged;
+  const _ToggleAtivos({super.key, required this.ativos, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 32,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE3E3E6)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _seg('Ativos', ativos, () => onChanged(true)),
+          _seg('Desligados', !ativos, () => onChanged(false)),
+        ],
+      ),
+    );
+  }
+
+  Widget _seg(String label, bool selected, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFFFECEA) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? _brandRed : const Color(0xFF5A5A60),
+            fontWeight: FontWeight.w700,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ConsultorView {
   final String id, uid, nome, matricula, telefone, email;
-  _ConsultorView(this.id, this.uid, this.nome, this.matricula, this.telefone, this.email);
+  final bool ativo;
+  _ConsultorView(this.id, this.uid, this.nome, this.matricula, this.telefone, this.email, this.ativo);
 }
 
 class _ConsultorCard extends StatelessWidget {
@@ -327,33 +377,23 @@ class _ConsultorCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _AvatarRed(),
+                _AvatarPerfil(ativo: c.ativo),
                 const SizedBox(width: 10),
-                Expanded(child: _NomeMatricula(nome: c.nome, matricula: c.matricula)),
-                Row(
-                  children: [
-                    PillButton(
-                      onPressed: onAbrirDados,
-                      icon: const Icon(Icons.list_alt_outlined, size: 16, color: _brandRed),
-                      label: 'Dados',
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    ),
-                    const SizedBox(width: 8),
-                    PillIconButton(
-                      onPressed: onEditar,
-                      icon: Icons.edit_outlined,
-                      radius: 10,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    PillIconButton(
-                      onPressed: onApagar,
-                      icon: Icons.delete_outline_rounded,
-                      radius: 10,
-                      size: 16,
-                    ),
-                  ],
+                Expanded(child: _NomeMatricula(nome: c.nome, matricula: c.matricula, ativo: c.ativo)),
+                PillButton(
+                  onPressed: onAbrirDados,
+                  icon: const Icon(Icons.receipt_long_rounded, size: 16, color: _brandRed),
+                  label: 'Status',
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
+                const SizedBox(width: 8),
+                if (!c.ativo) _BadgeDesligado(),
+                const SizedBox(width: 8),
+                if (c.ativo) ...[
+                  PillIconButton(onPressed: onEditar, icon: Icons.edit_outlined, radius: 10, size: 16),
+                  const SizedBox(width: 8),
+                  PillIconButton(onPressed: onApagar, icon: Icons.delete_outline_rounded, radius: 10, size: 16),
+                ],
               ],
             ),
             const SizedBox(height: 12),
@@ -379,14 +419,38 @@ class _ConsultorCard extends StatelessWidget {
   }
 }
 
-class _AvatarRed extends StatelessWidget {
+class _BadgeDesligado extends StatelessWidget {
+  const _BadgeDesligado({super.key});
   @override
   Widget build(BuildContext context) {
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFED4B4B),
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 6, offset: Offset(0, 3))],
+      ),
+      child: const Text(
+        'DESLIGADO',
+        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, letterSpacing: 0.5, fontSize: 12),
+      ),
+    );
+  }
+}
+
+class _AvatarPerfil extends StatelessWidget {
+  final bool ativo;
+  const _AvatarPerfil({super.key, required this.ativo});
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = ativo ? _brandRed : const Color(0xFF8C9199);
+    final icon = ativo ? Icons.person : Icons.person_off_outlined;
+    return Container(
       width: 44,
       height: 44,
-      decoration: BoxDecoration(color: _brandRed, borderRadius: BorderRadius.circular(12)),
-      child: const Icon(Icons.person, color: Colors.white, size: 22),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+      child: Icon(icon, color: Colors.white, size: 22),
     );
   }
 }
@@ -394,14 +458,23 @@ class _AvatarRed extends StatelessWidget {
 class _NomeMatricula extends StatelessWidget {
   final String nome;
   final String matricula;
-  const _NomeMatricula({required this.nome, required this.matricula});
+  final bool ativo;
+  const _NomeMatricula({required this.nome, required this.matricula, required this.ativo});
 
   @override
   Widget build(BuildContext context) {
+    final styleNome = TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+      color: const Color(0xFF1E1E22),
+      decoration: ativo ? TextDecoration.none : TextDecoration.lineThrough,
+      decorationColor: const Color(0xFF8C9199),
+      decorationThickness: 1.4,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(nome, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF1E1E22))),
+        Text(nome, style: styleNome),
         const SizedBox(height: 4),
         Text('Mat. ${matricula.isEmpty ? '—' : matricula}', style: const TextStyle(fontSize: 12, color: Color(0xFF9A9AA0), height: 1.0)),
       ],
@@ -416,17 +489,7 @@ class PillButton extends StatelessWidget {
   final EdgeInsets? padding;
   final double radius;
   final bool dense;
-
-  const PillButton({
-    super.key,
-    this.onPressed,
-    this.icon,
-    this.label,
-    this.padding,
-    this.radius = 10,
-    this.dense = true,
-  });
-
+  const PillButton({super.key, this.onPressed, this.icon, this.label, this.padding, this.radius = 10, this.dense = true});
   @override
   Widget build(BuildContext context) {
     final child = Row(
@@ -434,11 +497,9 @@ class PillButton extends StatelessWidget {
       children: [
         if (icon != null) icon!,
         if (icon != null && label != null) const SizedBox(width: 6),
-        if (label != null)
-          Text(label!, style: const TextStyle(color: _brandRed, fontWeight: FontWeight.w600, fontSize: 14, letterSpacing: 0.2)),
+        if (label != null) Text(label!, style: const TextStyle(color: _brandRed, fontWeight: FontWeight.w600, fontSize: 14, letterSpacing: 0.2)),
       ],
     );
-
     return OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
@@ -460,14 +521,7 @@ class PillIconButton extends StatelessWidget {
   final IconData icon;
   final double size;
   final double radius;
-  const PillIconButton({
-    super.key,
-    required this.onPressed,
-    required this.icon,
-    this.size = 16,
-    this.radius = 10,
-  });
-
+  const PillIconButton({super.key, required this.onPressed, required this.icon, this.size = 16, this.radius = 10});
   @override
   Widget build(BuildContext context) {
     return OutlinedButton(
@@ -489,7 +543,6 @@ class PillIconButton extends StatelessWidget {
 class _ChipTotal extends StatelessWidget {
   final int count;
   const _ChipTotal({required this.count});
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -564,7 +617,7 @@ class _EditarConsultorDialogState extends State<_EditarConsultorDialog> {
             'email': _emailCtrl.text.trim(),
             'matricula': _matCtrl.text.trim().isEmpty ? null : _matCtrl.text.trim(),
           })
-          .eq('id', widget.consultor.id); 
+          .eq('id', widget.consultor.id);
       if (!mounted) return;
       Navigator.of(context).pop(true);
       ScaffoldMessenger.of(context).showSnackBar(

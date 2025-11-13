@@ -56,7 +56,7 @@ class _ExportarPageState extends State<ExportarPage> {
 
     final rows = await sb
         .from('clientes')
-        .select('id,nome,endereco,bairro,cidade,estado,cep,telefone,data_visita,observacoes,consultor_uid_t,hora_visita,responsavel')
+        .select('id,nome,telefone,observacoes,consultor_uid_t')
         .inFilter('consultor_uid_t', consUids)
         .order('nome', ascending: true);
     return (rows as List).cast<Map<String, dynamic>>();
@@ -75,8 +75,7 @@ class _ExportarPageState extends State<ExportarPage> {
 
   String _montarCsvClientes(List<Map<String, dynamic>> rows) {
     final buffer = StringBuffer();
-    const header =
-        'id;nome;endereco;bairro;cidade;estado;cep;telefone;data_visita;observacoes;consultor_uid_t;hora_visita;responsavel';
+    const header = 'nome;celular;observacoes';
     buffer.writeln(header);
 
     String esc(dynamic v) {
@@ -86,19 +85,9 @@ class _ExportarPageState extends State<ExportarPage> {
 
     for (final r in rows) {
       buffer.writeln([
-        esc(r['id']),
         esc(r['nome']),
-        esc(r['endereco']),
-        esc(r['bairro']),
-        esc(r['cidade']),
-        esc(r['estado']),
-        esc(r['cep']),
         esc(r['telefone']),
-        esc(r['data_visita']),
         esc(r['observacoes']),
-        esc(r['consultor_uid_t']),
-        esc(r['hora_visita']),
-        esc(r['responsavel']),
       ].join(';'));
     }
     return buffer.toString();
@@ -157,10 +146,10 @@ class _ExportarPageState extends State<ExportarPage> {
         const SizedBox(width: 10),
         const Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Exportar Dados', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16.5)),
-            SizedBox(height: 4),
-            Text('Compartilhe seus clientes em CSV para Excel/Sheets/CRM.', style: TextStyle(fontSize: 13, color: Color(0x99000000))),
-          ]),
+              Text('Exportar Dados', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16.5)),
+              SizedBox(height: 4),
+              Text('Compartilhe seus clientes em CSV para Excel/Sheets/CRM.', style: TextStyle(fontSize: 13, color: Color(0x99000000))),
+            ]),
         ),
       ],
     );

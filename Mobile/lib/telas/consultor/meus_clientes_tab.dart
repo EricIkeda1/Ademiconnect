@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
+const Color primaryRed = Color(0xFFFF0000); 
+
 class MeusClientesTab extends StatefulWidget {
   final Function onClienteRemovido;
   const MeusClientesTab({super.key, required this.onClienteRemovido});
@@ -17,7 +19,6 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
   final SupabaseClient _client = Supabase.instance.client;
 
   bool _showSearch = false;
-
   Timer? _debounceSearch;
 
   final Map<String, String> _abbr = const {
@@ -34,7 +35,6 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
   final List<String> _tiposLogradouro = const [
     'Rua','Avenida','Alameda','Travessa','Rodovia','Estrada','Praça','Via','Largo'
   ];
-
   final List<Map<String, String>> _statusOptions = const [
     {'label': 'Conexão', 'value': 'conexao'},
     {'label': 'Negociação', 'value': 'negociacao'},
@@ -48,9 +48,7 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
       _debounceSearch?.cancel();
       _debounceSearch = Timer(const Duration(milliseconds: 500), () {
         if (!mounted) return;
-        setState(() {
-          _query = _searchCtrl.text.trim();
-        });
+        setState(() { _query = _searchCtrl.text.trim(); });
       });
     });
   }
@@ -66,11 +64,11 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
     final user = _client.auth.currentSession?.user;
     if (user == null) return const Stream<List<Map<String, dynamic>>>.empty();
     return _client
-        .from('clientes')
-        .select('*')
-        .eq('consultor_uid_t', user.id)
-        .order('data_visita', ascending: true, nullsFirst: false)
-        .asStream();
+      .from('clientes')
+      .select('*')
+      .eq('consultor_uid_t', user.id)
+      .order('data_negociacao', ascending: true, nullsFirst: false)
+      .asStream();
   }
 
   InputDecoration _decoracaoCampo(BuildContext context, String label, {String? hint, Widget? suffixIcon}) {
@@ -113,32 +111,13 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
     }
   }
 
-  DateTime? _parseVisita(dynamic v) {
-    if (v == null) return null;
-    if (v is DateTime) return v.toLocal();
-    if (v is String) return DateTime.tryParse(v)?.toLocal();
-    if (v is Map && v['value'] is String) return DateTime.tryParse(v['value'])?.toLocal();
-    return null;
-  }
-
   int _compareCliente(Map<String, dynamic> a, Map<String, dynamic> b) {
     final pa = _pesoStatus(a['status_negociacao']?.toString());
     final pb = _pesoStatus(b['status_negociacao']?.toString());
     if (pa != pb) return pa.compareTo(pb);
 
-    final DateTime? da = _parseVisita(a['data_visita']);
-    final DateTime? db = _parseVisita(b['data_visita']);
-    int cat(DateTime? d) {
-      if (d == null) return 3;
-      final now = DateTime.now();
-      final h = DateTime(now.year, now.month, now.day);
-      final dh = DateTime(d.year, d.month, d.day);
-      if (dh == h) return 0;
-      if (dh.isAfter(h)) return 1;
-      return 2;
-    }
-    final ca = cat(da), cb = cat(db);
-    if (ca != cb) return ca.compareTo(cb);
+    final DateTime? da = _joinDataHora(a['data_negociacao'], a['hora_negociacao']);
+    final DateTime? db = _joinDataHora(b['data_negociacao'], b['hora_negociacao']);
     if (da != null && db != null) {
       final cmp = da.compareTo(db);
       if (cmp != 0) return cmp;
@@ -151,6 +130,21 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
     final sa = (a['estabelecimento'] ?? a['nome'] ?? '').toString().toLowerCase();
     final sb = (b['estabelecimento'] ?? b['nome'] ?? '').toString().toLowerCase();
     return sa.compareTo(sb);
+  }
+
+  DateTime? _joinDataHora(dynamic data, dynamic hora) {
+    if (data == null || (data is String && data.isEmpty)) return null;
+    final dataDate = data is DateTime ? data : DateTime.tryParse(data.toString());
+    if (dataDate == null) return null;
+    int hour = 0, minute = 0;
+    if (hora != null && hora is String && hora.contains(':')) {
+      final parts = hora.split(':');
+      if (parts.length == 2) {
+        hour = int.tryParse(parts[0]) ?? 0;
+        minute = int.tryParse(parts[1]) ?? 0;
+      }
+    }
+    return DateTime(dataDate.year, dataDate.month, dataDate.day, hour, minute);
   }
 
   @override
@@ -341,15 +335,15 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
     final String estado = (c['estado'] ?? '').toString().trim().toUpperCase();
     final String linhaCidade = [cidade, estado].where((e) => e.isNotEmpty).join(' - ');
 
-    final DateTime? dataVisita = _parseVisita(c['data_visita']);
+    final DateTime? dataHoraVisita = _joinDataHora(c['data_negociacao'], c['hora_negociacao']);
     final now = DateTime.now();
-    final bool visitaHoje = dataVisita != null &&
-        dataVisita.year == now.year && dataVisita.month == now.month && dataVisita.day == now.day;
-    final bool visitaPassada = dataVisita != null && dataVisita.isBefore(DateTime(now.year, now.month, now.day));
+    final bool visitaHoje = dataHoraVisita != null &&
+        dataHoraVisita.year == now.year && dataHoraVisita.month == now.month && dataHoraVisita.day == now.day;
+    final bool visitaPassada = dataHoraVisita != null && dataHoraVisita.isBefore(DateTime(now.year, now.month, now.day));
 
     String dataFormatada = 'Data não informada';
-    if (dataVisita != null) {
-      dataFormatada = 'Próxima visita: ${DateFormat('dd/MM/yyyy HH:mm').format(dataVisita)}';
+    if (dataHoraVisita != null) {
+      dataFormatada = 'Visita: ${DateFormat('dd/MM/yyyy HH:mm').format(dataHoraVisita)}';
     }
 
     final String statusTec = (c['status_negociacao'] ?? '').toString();
@@ -421,7 +415,7 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
                       dataFormatada,
                       style: TextStyle(
                         fontSize: 12,
-                        color: dataVisita == null
+                        color: dataHoraVisita == null
                             ? Colors.grey
                             : visitaPassada
                                 ? Colors.grey
@@ -487,7 +481,9 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
     final observacoes = (c['observacoes'] ?? '').toString();
     final tipoInicial = _abbr.entries
         .firstWhere(
-          (e) => (c['logradouro'] ?? '').toString().trim().toLowerCase() == e.value.toLowerCase(),
+          (e) =>
+              (c['logradouro'] ?? '').toString().trim().toLowerCase() ==
+              e.value.toLowerCase(),
           orElse: () => const MapEntry('', ''),
         )
         .key;
@@ -504,7 +500,52 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
     final observacoesCtrl = TextEditingController(text: observacoes);
     String? _statusTecEd = statusTec.isEmpty ? null : statusTec;
 
-    String montarLogradouroAbrev(String? tipoCheio) => _abbr[tipoCheio ?? ''] ?? (tipoCheio ?? '');
+    final String dataBanco = (c['data_negociacao'] ?? '') as String;
+    final String horaBanco = (c['hora_negociacao'] ?? '') as String;
+
+    DateTime? _dataVisitaEd = dataBanco.isNotEmpty
+      ? DateTime.tryParse(dataBanco)
+      : null;
+
+    TimeOfDay? _horaVisitaEd;
+    if (horaBanco.isNotEmpty) {
+      final partes = horaBanco.split(':');
+      if (partes.length == 2) {
+        int hora = int.tryParse(partes[0]) ?? 0;
+        int minuto = int.tryParse(partes[1]) ?? 0;
+        _horaVisitaEd = TimeOfDay(hour: hora, minute: minuto);
+      }
+    }
+
+    final dataVisitaCtrl = TextEditingController(
+        text: _dataVisitaEd != null ? DateFormat('dd/MM/yyyy').format(_dataVisitaEd) : '');
+    final horaVisitaCtrl = TextEditingController(
+        text: _horaVisitaEd != null ? _horaVisitaEd.format(context) : '');
+
+    Future<void> _selecionarData(BuildContext context) async {
+      final data = await showDatePicker(
+        context: context,
+        initialDate: _dataVisitaEd ?? DateTime.now(),
+        firstDate: DateTime(2000),
+        lastDate: DateTime(2100),
+      );
+      if (data == null) return;
+      _dataVisitaEd = data;
+      dataVisitaCtrl.text = DateFormat('dd/MM/yyyy').format(data);
+    }
+
+    Future<void> _selecionarHora(BuildContext context) async {
+      final hora = await showTimePicker(
+        context: context,
+        initialTime: _horaVisitaEd ?? TimeOfDay.now(),
+      );
+      if (hora == null) return;
+      _horaVisitaEd = hora;
+      horaVisitaCtrl.text = hora.format(context);
+    }
+
+    String montarLogradouroAbrev(String? tipoCheio) =>
+        _abbr[tipoCheio ?? ''] ?? (tipoCheio ?? '');
 
     await showModalBottomSheet(
       context: context,
@@ -675,10 +716,46 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
                       decoration: _decoracaoCampo(context, 'Observações', hint: 'Notas sobre a negociação'),
                     ),
 
+                    const SizedBox(height: 12),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: dataVisitaCtrl,
+                            readOnly: true,
+                            decoration: _decoracaoCampo(context, 'Data da Visita', hint: 'Selecione a data da visita'),
+                            onTap: () => _selecionarData(context),
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return 'Data da visita é obrigatória';
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextFormField(
+                            controller: horaVisitaCtrl,
+                            readOnly: true,
+                            decoration: _decoracaoCampo(context, 'Hora da Visita', hint: 'Selecione a hora da visita'),
+                            onTap: () => _selecionarHora(context),
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return 'Hora da visita é obrigatória';
+                              return null;
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+
                     const SizedBox(height: 16),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: primaryRed,
+                          foregroundColor: Colors.white,
+                        ),
                         onPressed: () async {
                           if (!(formKey.currentState?.validate() ?? false)) return;
 
@@ -702,21 +779,38 @@ class _MeusClientesTabState extends State<MeusClientesTab> {
                             );
                             return;
                           }
+                          if (_dataVisitaEd == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Informe a Data da visita.'), backgroundColor: Colors.red),
+                            );
+                            return;
+                          }
+                          if (_horaVisitaEd == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Informe a Hora da visita.'), backgroundColor: Colors.red),
+                            );
+                            return;
+                          }
 
                           final logradouroAbrev = montarLogradouroAbrev(_tipoLogradouroEd);
+
+                          final dataSalvar = DateFormat('yyyy-MM-dd').format(_dataVisitaEd!);
+                          final horaSalvar = '${_horaVisitaEd!.hour.toString().padLeft(2, '0')}:${_horaVisitaEd!.minute.toString().padLeft(2, '0')}';
 
                           try {
                             await _client.from('clientes').update({
                               'status_negociacao': _statusTecEd,
                               'valor_proposta': valor,
                               'logradouro': logradouroAbrev,
-                              'endereco'  : nomeViaPuro,
+                              'endereco': nomeViaPuro,
                               'numero': numeroCtrl.text.trim(),
                               'bairro': bairroCtrl.text.trim(),
                               'cidade': cidadeCtrl.text.trim(),
                               'estado': estadoCtrl.text.trim().toUpperCase(),
                               'complemento': complementoCtrl.text.trim().isNotEmpty ? complementoCtrl.text.trim() : null,
                               'observacoes': observacoesCtrl.text.trim().isNotEmpty ? observacoesCtrl.text.trim() : null,
+                              'data_negociacao': dataSalvar,
+                              'hora_negociacao': horaSalvar,
                             }).eq('id', c['id']);
 
                             if (mounted) {

@@ -6,6 +6,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../models/cliente.dart';
 
+const Color primaryRed = Color(0xFFFF0000);
+
 class ExportarDadosTab extends StatelessWidget {
   final List<Cliente> clientes;
   const ExportarDadosTab({super.key, required this.clientes});
@@ -125,6 +127,8 @@ class ExportarDadosTab extends StatelessWidget {
                     icon: const Icon(Icons.download_rounded),
                     label: const Text('Baixar CSV'),
                     style: FilledButton.styleFrom(
+                      backgroundColor: primaryRed,
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                   ),
@@ -263,44 +267,18 @@ class ExportarDadosTab extends StatelessWidget {
 
   String _buildCsv(List<Cliente> dados) {
     final headers = [
-      'id',
       'nome',
-      'telefone',
-      'estabelecimento',
-      'estado',
-      'cidade',
-      'logradouro',
-      'endereco', 
-      'numero',
-      'bairro',
-      'cep',
-      'data_visita',
-      'hora_visita',
+      'celular',
       'observacoes',
-      'responsavel',
-      'consultor_uid_t',
     ];
     final buffer = StringBuffer();
     buffer.writeln(headers.join(','));
 
     for (final c in dados) {
       final row = [
-        c.id,
-        c.nomeCliente,
-        c.telefone,
-        c.estabelecimento,
-        c.estado,
-        c.cidade,
-        c.logradouro ?? '',  
-        c.endereco,    
-        c.numero?.toString() ?? '',
-        c.bairro ?? '',
-        c.cep ?? '',
-        c.dataVisita.toIso8601String(),
-        c.horaVisita ?? '',
+        c.nomeCliente ?? '',
+        c.telefone ?? '',
         c.observacoes ?? '',
-        c.consultorResponsavel ?? '',
-        c.consultorUid,
       ].map(_escapeCsv).join(',');
       buffer.writeln(row);
     }
