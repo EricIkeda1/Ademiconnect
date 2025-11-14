@@ -1,161 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../components/enderecos_service.dart'; 
 
 const Color kRed = Color(0xFFED3B2E);
 const Color kRedLight = Color(0xFFFFE5E3);
 const Color kBorder = Color(0xFFE8E8E8);
 const Color kBg = Color(0xFFF7F7F7);
 const Color kShadow10 = Color(0x1A000000);
-
-class BairroResumo {
-  final String nome;
-  final List<String> enderecos; 
-  const BairroResumo({required this.nome, required this.enderecos});
-}
-
-class _EnderecoRepo {
-  final SupabaseClient sb;
-  _EnderecoRepo(this.sb);
-
-  String _cleanTail(String s) => s.replaceFirst(RegExp(r',\s*$'), '').trimRight();
-  String _cleanHead(String s) => s.replaceFirst(RegExp(r'^\s*,\s*'), '').trimLeft();
-
-  String _fixCommaAfterTypeAtStart(String s) {
-    final reDot = RegExp(
-      r'^\s*(R\.|Av\.|Rod\.|Al\.|Trav\.|Tv\.)\s*,\s*',
-      caseSensitive: false,
-    );
-    final reFull = RegExp(
-      r'^\s*(Rua|Avenida|Rodovia|Alameda|Travessa)\s*,\s*',
-      caseSensitive: false,
-    );
-    var out = s;
-    out = out.replaceFirstMapped(reDot, (m) => '${m.group(1)} ');
-    out = out.replaceFirstMapped(reFull, (m) => '${m.group(1)} ');
-    return out.trim();
-  }
-
-  String _fixCommaAfterTypeAnywhere(String s) {
-    final reDot = RegExp(
-      r'(?<=^|[\s,])(R\.|Av\.|Rod\.|Al\.|Trav\.|Tv\.)\s*,\s+',
-      caseSensitive: false,
-    );
-    final reFull = RegExp(
-      r'(?<=^|[\s,])(Rua|Avenida|Rodovia|Alameda|Travessa)\s*,\s+',
-      caseSensitive: false,
-    );
-    var out = s.replaceAllMapped(reDot, (m) => '${m.group(1)} ');
-    out = out.replaceAllMapped(reFull, (m) => '${m.group(1)} ');
-    return out.trim();
-  }
-
-  String _removeCommaBeforeTypes(String s) {
-    final pattern = RegExp(
-      r',\s*(?=(R\.|Av\.|Rod\.|Al\.|Trav\.|Tv\.|Rua|Avenida|Rodovia|Alameda|Travessa)\b)',
-      caseSensitive: false,
-    );
-    return s.replaceAll(pattern, ' ');
-  }
-
-  String _normalizeSpacesAndCommas(String s) {
-    var out = s.replaceAll(RegExp(r'\s+'), ' ');
-    out = out.replaceAll(RegExp(r'\s*,\s*'), ', ');
-    out = out.replaceAll(RegExp(r',\s*,+'), ', ');
-    return out.trim();
-  }
-
-  String _fmtLogEndNumCompl({
-    required String logradouro,
-    required String endereco,
-    required String numero,
-    required String complemento,
-  }) {
-    var l = _cleanTail(logradouro);
-    var e = _cleanTail(endereco);
-    final n = numero.trim();
-    final c = complemento.trim();
-
-    l = _fixCommaAfterTypeAtStart(l);
-
-    final partes = <String>[];
-    if (l.isNotEmpty) partes.add(l);
-    if (e.isNotEmpty) partes.add(e);
-    if (n.isNotEmpty) partes.add(n);
-    if (c.isNotEmpty) partes.add(c);
-
-    var out = partes.join(', ');
-
-    out = _fixCommaAfterTypeAnywhere(out);
-    out = _removeCommaBeforeTypes(out);
-    out = _cleanHead(out);
-    out = _cleanTail(out);
-    out = _normalizeSpacesAndCommas(out);
-    return out;
-  }
-
-  Future<Map<String, List<BairroResumo>>> listarPorCidades({double similaridade = 0.62}) async {
-    final gestorId = sb.auth.currentUser?.id;
-    if (gestorId == null) return {};
-
-    var cQ = sb.from('consultores').select('uid').filter('gestor_id', 'eq', gestorId).filter('ativo', 'eq', true);
-    final cons = await cQ;
-    final uids = (cons is List ? cons : const [])
-        .map((e) => (e['uid'] ?? '').toString())
-        .where((s) => s.isNotEmpty)
-        .toList();
-
-    if (uids.isEmpty) return {};
-
-    final inText = uids.map((e) => '"$e"').join(',');
-    var q = sb
-        .from('clientes')
-        .select('cidade, bairro, logradouro, endereco, numero, complemento, consultor_uid_t')
-        .filter('consultor_uid_t', 'in', '($inText)');
-
-    final rows = await q;
-
-    final mapa = <String, List<BairroResumo>>{};
-    if (rows is List) {
-      final tmp = <String, Map<String, List<String>>>{};
-
-      for (final r in rows) {
-        final cidade = (r['cidade'] ?? 'Sem cidade').toString();
-        final bairro = (r['bairro'] ?? 'Sem bairro').toString();
-        final logradouro = (r['logradouro'] ?? '').toString();
-        final endereco = (r['endereco'] ?? '').toString();
-        final numero = (r['numero'] ?? '').toString();
-        final compl = (r['complemento'] ?? '').toString();
-
-        final linha = _fmtLogEndNumCompl(
-          logradouro: logradouro,
-          endereco: endereco,
-          numero: numero,
-          complemento: compl,
-        );
-
-        if (linha.isEmpty) continue;
-
-        final byCidade = (tmp[cidade] ??= <String, List<String>>{});
-        final lista = (byCidade[bairro] ??= <String>[]);
-        lista.add(linha);
-      }
-
-      for (final entry in tmp.entries) {
-        final cidade = entry.key;
-        final bairrosMap = entry.value;
-        final bairrosList = <BairroResumo>[];
-        for (final b in bairrosMap.entries) {
-          final lista = b.value.toSet().toList()..sort();
-          bairrosList.add(BairroResumo(nome: b.key, enderecos: lista));
-        }
-        bairrosList.sort((a, b) => a.nome.compareTo(b.nome));
-        mapa[cidade] = bairrosList;
-      }
-    }
-
-    return mapa;
-  }
-}
 
 class EnderecosPage extends StatefulWidget {
   const EnderecosPage({super.key});
@@ -164,19 +15,19 @@ class EnderecosPage extends StatefulWidget {
 }
 
 class _EnderecosPageState extends State<EnderecosPage> {
-  late final _EnderecoRepo _repo;
+  late final EnderecosService _service;
   late Future<Map<String, List<BairroResumo>>> _future;
 
   @override
   void initState() {
     super.initState();
-    _repo = _EnderecoRepo(Supabase.instance.client);
-    _future = _repo.listarPorCidades();
+    _service = EnderecosService(Supabase.instance.client);
+    _future = _service.listarAgrupadoPorCidade();
   }
 
   void _recarregar() {
     setState(() {
-      _future = _repo.listarPorCidades();
+      _future = _service.listarAgrupadoPorCidade();
     });
   }
 
@@ -410,11 +261,9 @@ class _BairroCardState extends State<_BairroCard> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(widget.bairro.nome,
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF231F20))),
+                      Text(widget.bairro.nome, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF231F20))),
                       const SizedBox(height: 2),
-                      Text('${widget.bairro.enderecos.length} endereços',
-                          style: const TextStyle(fontSize: 12.5, color: Color(0x99000000))),
+                      Text('${widget.bairro.enderecos.length} endereços', style: const TextStyle(fontSize: 12.5, color: Color(0x99000000))),
                     ]),
                   ),
                   Icon(_open ? Icons.expand_less : Icons.expand_more, color: kRed),
