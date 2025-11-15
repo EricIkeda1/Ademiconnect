@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CustomNavbar extends StatefulWidget implements PreferredSizeWidget {
   final String nomeCompleto;
@@ -46,14 +47,22 @@ class _CustomNavbarState extends State<CustomNavbar> {
   static const corTexto = Color(0xFF2F2B2B);
 
   String _nomeCurto(String completo) {
-    final parts = completo.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final parts = completo
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
     if (parts.isEmpty) return completo.trim();
     if (parts.length > 1) return parts.first;
     return parts.first;
   }
 
   String _iniciais(String nome) {
-    final p = nome.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
+    final p = nome
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((e) => e.isNotEmpty)
+        .toList();
     if (p.isEmpty) return 'US';
     if (p.length == 1) return p.first.substring(0, 1).toUpperCase();
     return (p.first.substring(0, 1) + p.last.substring(0, 1)).toUpperCase();
@@ -65,8 +74,8 @@ class _CustomNavbarState extends State<CustomNavbar> {
       TapDownDetails details, double popupWidth) async {
     final screen = MediaQuery.of(context).size;
     final paddingTop = MediaQuery.of(context).padding.top;
-    const gutterTop = 6.0;    
-    const leftPadding = 8.0;   
+    const gutterTop = 6.0;
+    const leftPadding = 8.0;
 
     final cardWidth =
         screen.width < popupWidth + 24 ? screen.width * 0.92 : popupWidth;
@@ -94,7 +103,7 @@ class _CustomNavbarState extends State<CustomNavbar> {
           enabled: false,
           padding: EdgeInsets.zero,
           child: Material(
-            type: MaterialType.transparency, 
+            type: MaterialType.transparency,
             child: SafeArea(
               minimum: const EdgeInsets.only(bottom: 8),
               child: ConstrainedBox(
@@ -112,11 +121,20 @@ class _CustomNavbarState extends State<CustomNavbar> {
                     email: widget.email,
                     matricula: widget.matricula,
                     dataCadastroFmt: _fmtData(widget.dataCadastro),
-                    onSair: () {
+                    onSair: () async {
                       Navigator.pop(context);
-                      (widget.onLogout ??
-                          () => Navigator.pushReplacementNamed(
-                              context, '/login'))();
+
+                      if (widget.onLogout != null) {
+                        widget.onLogout!();
+                      } else {
+                        await Supabase.instance.client.auth.signOut();
+                        if (mounted) {
+                          Navigator.of(context).pushNamedAndRemoveUntil(
+                            '/login',
+                            (route) => false,
+                          );
+                        }
+                      }
                     },
                   ),
                 ),
@@ -138,15 +156,18 @@ class _CustomNavbarState extends State<CustomNavbar> {
     final double logoHeight = lerpDouble(32, 24, t);
 
     const Color cinzaBrand = Color(0xFF939598);
-    final scale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
+    final scale =
+        MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
     final double nomeSize = 16.0 * scale;
     final double cargoSize = 12.0 * scale;
 
     final nomeCurto = _nomeCurto(widget.nomeCompleto);
 
     return PreferredSize(
-      preferredSize:
-          Size.fromHeight(toolbarHeight + (widget.tabsNoAppBar && widget.tabs != null ? 60 : 0)),
+      preferredSize: Size.fromHeight(
+        toolbarHeight +
+            (widget.tabsNoAppBar && widget.tabs != null ? 60 : 0),
+      ),
       child: AppBar(
         automaticallyImplyLeading: false,
         backgroundColor: Colors.white,
@@ -161,7 +182,8 @@ class _CustomNavbarState extends State<CustomNavbar> {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 height: logoHeight,
-                child: Image.asset('assets/Logo.png', fit: BoxFit.contain),
+                child:
+                    Image.asset('assets/Logo.png', fit: BoxFit.contain),
               ),
             ),
             Align(
@@ -185,7 +207,8 @@ class _CustomNavbarState extends State<CustomNavbar> {
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
-                            border: Border.all(color: corBorda, width: 1),
+                            border:
+                                Border.all(color: corBorda, width: 1),
                             boxShadow: const [
                               BoxShadow(
                                   color: Color(0x14000000),
@@ -199,9 +222,10 @@ class _CustomNavbarState extends State<CustomNavbar> {
                                 child: Text(
                                   _iniciais(widget.nomeCompleto),
                                   style: const TextStyle(
-                                      color: vermelho,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w800),
+                                    color: vermelho,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                                 ),
                               ),
                               Positioned(
@@ -214,7 +238,9 @@ class _CustomNavbarState extends State<CustomNavbar> {
                                     color: const Color(0xFF2ECC71),
                                     shape: BoxShape.circle,
                                     border: Border.all(
-                                        color: Colors.white, width: 1.5),
+                                      color: Colors.white,
+                                      width: 1.5,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -260,7 +286,9 @@ class _CustomNavbarState extends State<CustomNavbar> {
             ),
           ],
         ),
-        bottom: widget.tabsNoAppBar && widget.tabs != null && widget.tabController != null
+        bottom: widget.tabsNoAppBar &&
+                widget.tabs != null &&
+                widget.tabController != null
             ? PreferredSize(
                 preferredSize: const Size.fromHeight(60),
                 child: Container(
@@ -274,15 +302,27 @@ class _CustomNavbarState extends State<CustomNavbar> {
                     child: TabBar(
                       controller: widget.tabController,
                       isScrollable: true,
-                      labelPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      labelPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 10,
+                      ),
                       labelColor: Colors.black,
                       unselectedLabelColor: Colors.white,
-                      labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-                      unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                      labelStyle: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                      ),
+                      unselectedLabelStyle: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
                       indicator: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: cinzaBrand, width: 1.4),
+                        border: Border.all(
+                          color: cinzaBrand,
+                          width: 1.4,
+                        ),
                         boxShadow: const [
                           BoxShadow(
                             color: Color(0x33000000),
@@ -323,7 +363,13 @@ class _CustomNavbarState extends State<CustomNavbar> {
         width: 340,
         decoration: const BoxDecoration(
           color: Colors.white,
-          boxShadow: [BoxShadow(color: Color(0x1A000000), blurRadius: 10, offset: Offset(0, 6))],
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x1A000000),
+              blurRadius: 10,
+              offset: Offset(0, 6),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,10 +396,23 @@ class _CustomNavbarState extends State<CustomNavbar> {
                           shape: BoxShape.circle,
                           color: Colors.white,
                           border: Border.all(color: Colors.white, width: 5),
-                          boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 3, offset: Offset(0, 1))],
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x14000000),
+                              blurRadius: 3,
+                              offset: Offset(0, 1),
+                            ),
+                          ],
                         ),
                         child: Center(
-                          child: Text(iniciais, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFFB71C1C))),
+                          child: Text(
+                            iniciais,
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFFB71C1C),
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -367,10 +426,21 @@ class _CustomNavbarState extends State<CustomNavbar> {
                                 nomeCompleto,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                               const SizedBox(height: 6),
-                              Text(cargo, style: const TextStyle(color: Color(0xFFEDEDED), fontSize: 12, fontWeight: FontWeight.w600)),
+                              Text(
+                                cargo,
+                                style: const TextStyle(
+                                  color: Color(0xFFEDEDED),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -381,27 +451,59 @@ class _CustomNavbarState extends State<CustomNavbar> {
                 ],
               ),
             ),
-
             Container(height: 14, color: const Color(0xFFF6F6F6)),
-
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
               child: Column(
                 children: [
-                  _perfilRow(bg: cinzaItem, icon: Icons.tag, titulo: 'ID do Usuário', valor: idUsuario, enfase: true),
-                  _perfilRow(bg: cinzaItem, icon: Icons.alternate_email, titulo: 'Email Corporativo', valor: email, enfase: true),
-                  _perfilRow(bg: cinzaItem, icon: Icons.badge_outlined, titulo: 'Cargo', valor: cargo, enfase: true),
-                  _perfilRow(bg: cinzaItem, icon: Icons.event, titulo: 'Registrado em', valor: dataCadastroFmt, enfase: true),
-                  _perfilRow(bg: cinzaItem, icon: Icons.badge, titulo: 'Matrícula', valor: matricula, enfase: true),
+                  _perfilRow(
+                    bg: cinzaItem,
+                    icon: Icons.tag,
+                    titulo: 'ID do Usuário',
+                    valor: idUsuario,
+                    enfase: true,
+                  ),
+                  _perfilRow(
+                    bg: cinzaItem,
+                    icon: Icons.alternate_email,
+                    titulo: 'Email Corporativo',
+                    valor: email,
+                    enfase: true,
+                  ),
+                  _perfilRow(
+                    bg: cinzaItem,
+                    icon: Icons.badge_outlined,
+                    titulo: 'Cargo',
+                    valor: cargo,
+                    enfase: true,
+                  ),
+                  _perfilRow(
+                    bg: cinzaItem,
+                    icon: Icons.event,
+                    titulo: 'Registrado em',
+                    valor: dataCadastroFmt,
+                    enfase: true,
+                  ),
+                  _perfilRow(
+                    bg: cinzaItem,
+                    icon: Icons.badge,
+                    titulo: 'Matrícula',
+                    valor: matricula,
+                    enfase: true,
+                  ),
                 ],
               ),
             ),
-
             Container(
               padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
               decoration: const BoxDecoration(
                 color: Colors.white,
-                border: Border(top: BorderSide(color: Color(0x143A2E2E))),
+                border: Border(
+                  top: BorderSide(color: Color(0x143A2E2E)),
+                ),
               ),
               child: SizedBox(
                 width: double.infinity,
@@ -411,11 +513,16 @@ class _CustomNavbarState extends State<CustomNavbar> {
                     backgroundColor: vermelho,
                     foregroundColor: Colors.white,
                     elevation: 4,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   onPressed: onSair,
                   icon: const Icon(Icons.logout_outlined),
-                  label: const Text('Sair da Conta', style: TextStyle(fontWeight: FontWeight.w800)),
+                  label: const Text(
+                    'Sair da Conta',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
                 ),
               ),
             ),
@@ -432,10 +539,13 @@ class _CustomNavbarState extends State<CustomNavbar> {
     required String valor,
     bool enfase = false,
   }) {
-    final Color borda = enfase ? const Color(0x33EA3124) : const Color(0x143A2E2E);
+    final Color borda =
+        enfase ? const Color(0x33EA3124) : const Color(0x143A2E2E);
     final Color bgIcon = enfase ? const Color(0x1AEA3124) : bg;
-    final Color corIcone = enfase ? vermelho : const Color(0xFF2F2B2B);
-    final FontWeight pesoValor = enfase ? FontWeight.w800 : FontWeight.w700;
+    final Color corIcone =
+        enfase ? vermelho : const Color(0xFF2F2B2B);
+    final FontWeight pesoValor =
+        enfase ? FontWeight.w800 : FontWeight.w700;
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -445,7 +555,9 @@ class _CustomNavbarState extends State<CustomNavbar> {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: enfase ? const Color(0x1AEA3124) : const Color(0x0F000000),
+            color: enfase
+                ? const Color(0x1AEA3124)
+                : const Color(0x0F000000),
             blurRadius: enfase ? 6 : 3,
             offset: const Offset(0, 2),
           ),
@@ -457,7 +569,10 @@ class _CustomNavbarState extends State<CustomNavbar> {
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(color: bgIcon, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: bgIcon,
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Icon(icon, color: corIcone, size: 20),
           ),
           const SizedBox(width: 12),
@@ -465,13 +580,24 @@ class _CustomNavbarState extends State<CustomNavbar> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(titulo, style: const TextStyle(fontSize: 11, color: Color(0xFF7A7A7A), fontWeight: FontWeight.w600)),
+                Text(
+                  titulo,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF7A7A7A),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: 3),
                 Text(
                   valor,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 15, color: const Color(0xFF231F20), fontWeight: pesoValor),
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: const Color(0xFF231F20),
+                    fontWeight: pesoValor,
+                  ),
                 ),
               ],
             ),

@@ -3,8 +3,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class GestorNavbar extends StatefulWidget implements PreferredSizeWidget {
   const GestorNavbar({super.key});
+
   @override
   Size get preferredSize => const Size.fromHeight(64);
+
   @override
   State<GestorNavbar> createState() => _GestorNavbarState();
 }
@@ -19,9 +21,9 @@ class _GestorNavbarState extends State<GestorNavbar> {
   final SupabaseClient _sb = Supabase.instance.client;
 
   String _nome = 'Gestor';
-  String _nomeCompleto = 'Gestor'; 
-  String _email = '';       
-  String _idUsuario = '';      
+  String _nomeCompleto = 'Gestor';
+  String _email = '';
+  String _idUsuario = '';
   final String _tipoCargo = 'Gestor';
   bool _carregando = true;
 
@@ -32,14 +34,22 @@ class _GestorNavbarState extends State<GestorNavbar> {
   }
 
   String _nomeCurto(String completo) {
-    final parts = completo.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final parts = completo
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
     if (parts.isEmpty) return completo.trim();
     if (parts.length > 1) return parts.first;
     return parts.first;
   }
 
   String _iniciais(String nome) {
-    final p = nome.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
+    final p = nome
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((e) => e.isNotEmpty)
+        .toList();
     if (p.isEmpty) return 'GE';
     if (p.length == 1) return p.first.substring(0, 1).toUpperCase();
     return (p.first.substring(0, 1) + p.last.substring(0, 1)).toUpperCase();
@@ -63,14 +73,15 @@ class _GestorNavbarState extends State<GestorNavbar> {
       final nomeFromDb = data != null ? (data['nome'] as String?) : null;
       final emailFromDb = data != null ? (data['email'] as String?) : null;
 
-      final nomeFinal = (nomeFromDb != null && nomeFromDb.trim().isNotEmpty)
-          ? nomeFromDb.trim()
-          : 'Gestor';
+      final nomeFinal =
+          (nomeFromDb != null && nomeFromDb.trim().isNotEmpty)
+              ? nomeFromDb.trim()
+              : 'Gestor';
 
       setState(() {
-        _nomeCompleto = nomeFinal;     
-        _nome = _nomeCurto(nomeFinal);  
-        _email = emailFromDb ?? '';    
+        _nomeCompleto = nomeFinal;
+        _nome = _nomeCurto(nomeFinal);
+        _email = emailFromDb ?? '';
         _carregando = false;
       });
     } catch (_) {
@@ -78,8 +89,13 @@ class _GestorNavbarState extends State<GestorNavbar> {
     }
   }
 
-  void _goLogin() {
-    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+  Future<void> _goLogin() async {
+    await _sb.auth.signOut();
+    if (!mounted) return;
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      '/login',
+      (route) => false,
+    );
   }
 
   Future<void> _abrirMenuPerfilEsquerda(TapDownDetails details) async {
@@ -127,12 +143,12 @@ class _GestorNavbarState extends State<GestorNavbar> {
                   child: _buildPerfilCard(
                     iniciais: _iniciais(_nomeCompleto),
                     nomeCompleto: _nomeCompleto,
-                    cargo: _tipoCargo,      
-                    idUsuario: _idUsuario,  
-                    email: _email,     
-                    onSair: () {
-                      Navigator.pop(context);
-                      _goLogin();
+                    cargo: _tipoCargo,
+                    idUsuario: _idUsuario,
+                    email: _email,
+                    onSair: () async {
+                      Navigator.pop(context); 
+                      await _goLogin();      
                     },
                   ),
                 ),
@@ -179,16 +195,20 @@ class _GestorNavbarState extends State<GestorNavbar> {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             gradient: const LinearGradient(
-                              colors: [Color(0xFFFFE4E1), Color(0xFFFFF5F5)],
+                              colors: [
+                                Color(0xFFFFE4E1),
+                                Color(0xFFFFF5F5)
+                              ],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
                             border: Border.all(color: corBorda, width: 1),
                             boxShadow: const [
                               BoxShadow(
-                                  color: Color(0x14000000),
-                                  blurRadius: 3,
-                                  offset: Offset(0, 1)),
+                                color: Color(0x14000000),
+                                blurRadius: 3,
+                                offset: Offset(0, 1),
+                              ),
                             ],
                           ),
                           child: Stack(
@@ -197,9 +217,10 @@ class _GestorNavbarState extends State<GestorNavbar> {
                                 child: Text(
                                   _iniciais(_nomeCompleto),
                                   style: const TextStyle(
-                                      color: vermelhoClaro,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w800),
+                                    color: vermelhoClaro,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                                 ),
                               ),
                               Positioned(
@@ -212,7 +233,9 @@ class _GestorNavbarState extends State<GestorNavbar> {
                                     color: const Color(0xFF2ECC71),
                                     shape: BoxShape.circle,
                                     border: Border.all(
-                                        color: Colors.white, width: 1.5),
+                                      color: Colors.white,
+                                      width: 1.5,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -227,14 +250,19 @@ class _GestorNavbarState extends State<GestorNavbar> {
                             Text(
                               _nome,
                               style: const TextStyle(
-                                  color: preto09,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600),
+                                color: preto09,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             const SizedBox(height: 1),
-                            const Text('Gestor',
-                                style: TextStyle(
-                                    color: vermelhoClaro, fontSize: 11)),
+                            const Text(
+                              'Gestor',
+                              style: TextStyle(
+                                color: vermelhoClaro,
+                                fontSize: 11,
+                              ),
+                            ),
                           ],
                         ),
                       ],
@@ -253,13 +281,12 @@ class _GestorNavbarState extends State<GestorNavbar> {
   Widget _buildPerfilCard({
     required String iniciais,
     required String nomeCompleto,
-    required String cargo,  
-    required String idUsuario, 
-    required String email,   
+    required String cargo,
+    required String idUsuario,
+    required String email,
     required VoidCallback onSair,
   }) {
     const cinzaItem = Color(0xFFF7F7F7);
-    const bordaLeve = Color(0x143A2E2E);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
@@ -267,7 +294,13 @@ class _GestorNavbarState extends State<GestorNavbar> {
         width: 310,
         decoration: const BoxDecoration(
           color: Colors.white,
-          boxShadow: [BoxShadow(color: Color(0x1A000000), blurRadius: 10, offset: Offset(0, 6))],
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x1A000000),
+              blurRadius: 10,
+              offset: Offset(0, 6),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -295,15 +328,22 @@ class _GestorNavbarState extends State<GestorNavbar> {
                           color: Colors.white,
                           border: Border.all(color: Colors.white, width: 5),
                           boxShadow: const [
-                            BoxShadow(color: Color(0x14000000), blurRadius: 3, offset: Offset(0, 1))
+                            BoxShadow(
+                              color: Color(0x14000000),
+                              blurRadius: 3,
+                              offset: Offset(0, 1),
+                            ),
                           ],
                         ),
                         child: Center(
-                          child: Text(iniciais,
-                              style: const TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFFB71C1C))),
+                          child: Text(
+                            iniciais,
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFFB71C1C),
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -324,11 +364,14 @@ class _GestorNavbarState extends State<GestorNavbar> {
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              Text(cargo,
-                                  style: const TextStyle(
-                                      color: Color(0xFFEDEDED),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600)),
+                              Text(
+                                cargo,
+                                style: const TextStyle(
+                                  color: Color(0xFFEDEDED),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -339,25 +382,48 @@ class _GestorNavbarState extends State<GestorNavbar> {
                 ],
               ),
             ),
-
-            Container(height: 14, color: const Color(0xFFF6F6F6)),
-
+            Container(
+              height: 14,
+              color: const Color(0xFFF6F6F6),
+            ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
               child: Column(
                 children: [
-                  _perfilRow(bg: cinzaItem, icon: Icons.tag, titulo: 'ID do Usuário', valor: idUsuario, enfase: true),
-                  _perfilRow(bg: cinzaItem, icon: Icons.alternate_email, titulo: 'Email Corporativo', valor: email, enfase: true),
-                  _perfilRow(bg: cinzaItem, icon: Icons.badge_outlined, titulo: 'Cargo', valor: cargo, enfase: true),
+                  _perfilRow(
+                    bg: cinzaItem,
+                    icon: Icons.tag,
+                    titulo: 'ID do Usuário',
+                    valor: idUsuario,
+                    enfase: true,
+                  ),
+                  _perfilRow(
+                    bg: cinzaItem,
+                    icon: Icons.alternate_email,
+                    titulo: 'Email Corporativo',
+                    valor: email,
+                    enfase: true,
+                  ),
+                  _perfilRow(
+                    bg: cinzaItem,
+                    icon: Icons.badge_outlined,
+                    titulo: 'Cargo',
+                    valor: cargo,
+                    enfase: true,
+                  ),
                 ],
               ),
             ),
-
             Container(
               padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
               decoration: const BoxDecoration(
                 color: Colors.white,
-                border: Border(top: BorderSide(color: Color(0x143A2E2E))),
+                border: Border(
+                  top: BorderSide(color: Color(0x143A2E2E)),
+                ),
               ),
               child: SizedBox(
                 width: double.infinity,
@@ -367,11 +433,16 @@ class _GestorNavbarState extends State<GestorNavbar> {
                     backgroundColor: vermelhoClaro,
                     foregroundColor: Colors.white,
                     elevation: 4,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   onPressed: onSair,
                   icon: const Icon(Icons.logout_outlined),
-                  label: const Text('Sair da Conta', style: TextStyle(fontWeight: FontWeight.w800)),
+                  label: const Text(
+                    'Sair da Conta',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
                 ),
               ),
             ),
@@ -388,10 +459,13 @@ class _GestorNavbarState extends State<GestorNavbar> {
     required String valor,
     bool enfase = false,
   }) {
-    final Color borda = enfase ? const Color(0x33EA3124) : const Color(0x143A2E2E);
+    final Color borda =
+        enfase ? const Color(0x33EA3124) : const Color(0x143A2E2E);
     final Color bgIcon = enfase ? const Color(0x1AEA3124) : bg;
-    final Color corIcone = enfase ? vermelhoClaro : const Color(0xFF2F2B2B);
-    final FontWeight pesoValor = enfase ? FontWeight.w800 : FontWeight.w700;
+    final Color corIcone =
+        enfase ? vermelhoClaro : const Color(0xFF2F2B2B);
+    final FontWeight pesoValor =
+        enfase ? FontWeight.w800 : FontWeight.w700;
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -401,7 +475,8 @@ class _GestorNavbarState extends State<GestorNavbar> {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: enfase ? const Color(0x1AEA3124) : const Color(0x0F000000),
+            color:
+                enfase ? const Color(0x1AEA3124) : const Color(0x0F000000),
             blurRadius: enfase ? 6 : 3,
             offset: const Offset(0, 2),
           ),
@@ -413,7 +488,10 @@ class _GestorNavbarState extends State<GestorNavbar> {
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(color: bgIcon, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: bgIcon,
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Icon(icon, color: corIcone, size: 20),
           ),
           const SizedBox(width: 12),
@@ -421,13 +499,24 @@ class _GestorNavbarState extends State<GestorNavbar> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(titulo, style: const TextStyle(fontSize: 11, color: Color(0xFF7A7A7A), fontWeight: FontWeight.w600)),
+                Text(
+                  titulo,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF7A7A7A),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: 3),
                 Text(
                   valor.isEmpty ? '—' : valor,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 15, color: const Color(0xFF231F20), fontWeight: pesoValor),
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: const Color(0xFF231F20),
+                    fontWeight: pesoValor,
+                  ),
                 ),
               ],
             ),

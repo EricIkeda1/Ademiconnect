@@ -1,4 +1,4 @@
-import 'dart:async';                   
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -9,10 +9,9 @@ import 'telas/login.dart';
 import 'telas/gestor/home_gestor.dart';
 import 'telas/consultor/home_consultor.dart';
 import 'telas/recuperar_senha.dart';
-import 'telas/nova_senha.dart';           
+import 'telas/nova_senha.dart';
 import 'services/notification_service.dart';
 import 'services/cliente_service.dart';
-
 
 FlutterLocalNotificationsPlugin? flutterLocalNotificationsPlugin;
 ClienteService? clienteService;
@@ -95,14 +94,21 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
 
-    _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+    _authSub =
+        Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       final event = data.event;
       final session = data.session;
       debugPrint('🔐 Auth event: $event');
 
       if (event == AuthChangeEvent.passwordRecovery && session != null) {
-
         navigatorKey.currentState?.pushNamed('/nova-senha');
+      }
+
+      if (event == AuthChangeEvent.signedOut) {
+        navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          '/login',
+          (route) => false,
+        );
       }
     });
   }
@@ -285,5 +291,5 @@ class ErrorScreen extends StatelessWidget {
         ),
       ),
     );
-  } 
+  }
 }
