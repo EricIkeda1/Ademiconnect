@@ -171,10 +171,29 @@ class _CustomNavbarState extends State<CustomNavbar> {
       child: AppBar(
         automaticallyImplyLeading: false,
         backgroundColor: Colors.white,
-        elevation: 3,
-        shadowColor: Colors.black12,
+        elevation: 0,
+        shadowColor: Colors.transparent,
         toolbarHeight: toolbarHeight,
         titleSpacing: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(
+                color: Color(0x33000000), // linha mais marcada
+                width: 1.4,
+              ),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Color(0x33000000), // sombra mais forte
+                blurRadius: 14,
+                spreadRadius: 1,
+                offset: Offset(0, 6),
+              ),
+            ],
+          ),
+        ),
         title: Stack(
           alignment: Alignment.center,
           children: [
@@ -182,8 +201,10 @@ class _CustomNavbarState extends State<CustomNavbar> {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 height: logoHeight,
-                child:
-                    Image.asset('assets/Logo.png', fit: BoxFit.contain),
+                child: Image.asset(
+                  'assets/Logo.png',
+                  fit: BoxFit.contain,
+                ),
               ),
             ),
             Align(
@@ -207,13 +228,13 @@ class _CustomNavbarState extends State<CustomNavbar> {
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
-                            border:
-                                Border.all(color: corBorda, width: 1),
+                            border: Border.all(color: corBorda, width: 1),
                             boxShadow: const [
                               BoxShadow(
-                                  color: Color(0x14000000),
-                                  blurRadius: 3,
-                                  offset: Offset(0, 1)),
+                                color: Color(0x14000000),
+                                blurRadius: 3,
+                                offset: Offset(0, 1),
+                              ),
                             ],
                           ),
                           child: Stack(
@@ -274,7 +295,7 @@ class _CustomNavbarState extends State<CustomNavbar> {
                             style: TextStyle(
                               fontSize: cargoSize,
                               color: vermelho,
-                              fontWeight: FontWeight.w600,
+                              // sem fontWeight => sem negrito
                             ),
                           ),
                         ],
