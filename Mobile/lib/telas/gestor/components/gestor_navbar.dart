@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 class GestorNavbar extends StatefulWidget implements PreferredSizeWidget {
   const GestorNavbar({super.key});
@@ -27,10 +29,46 @@ class _GestorNavbarState extends State<GestorNavbar> {
   final String _tipoCargo = 'Gestor';
   bool _carregando = true;
 
+  final Connectivity _connectivity = Connectivity();
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  bool _isOnline = true;
+
   @override
   void initState() {
     super.initState();
     _carregarPerfil();
+    _initConnectivity();
+    _connectivitySub = _connectivity.onConnectivityChanged
+        .listen((List<ConnectivityResult> results) {
+      final bool online =
+          results.any((r) => r != ConnectivityResult.none);
+      if (mounted && online != _isOnline) {
+        setState(() {
+          _isOnline = online;
+        });
+      }
+    });
+  }
+
+  Future<void> _initConnectivity() async {
+    try {
+      final List<ConnectivityResult> results =
+          await _connectivity.checkConnectivity();
+      final bool online =
+          results.any((r) => r != ConnectivityResult.none);
+      if (mounted) {
+        setState(() {
+          _isOnline = online;
+        });
+      }
+    } catch (_) {
+    }
+  }
+
+  @override
+  void dispose() {
+    _connectivitySub?.cancel();
+    super.dispose();
   }
 
   String _nomeCurto(String completo) {
@@ -147,8 +185,8 @@ class _GestorNavbarState extends State<GestorNavbar> {
                     idUsuario: _idUsuario,
                     email: _email,
                     onSair: () async {
-                      Navigator.pop(context); 
-                      await _goLogin();      
+                      Navigator.pop(context);
+                      await _goLogin();
                     },
                   ),
                 ),
@@ -230,7 +268,9 @@ class _GestorNavbarState extends State<GestorNavbar> {
                                   width: 8,
                                   height: 8,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF2ECC71),
+                                    color: _isOnline
+                                        ? const Color(0xFF2ECC71)
+                                        : Colors.grey,
                                     shape: BoxShape.circle,
                                     border: Border.all(
                                       color: Colors.white,

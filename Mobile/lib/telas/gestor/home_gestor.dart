@@ -4,7 +4,7 @@ import '../widgets/lead_card.dart' as widgets;
 import 'components/gestor_navbar.dart';
 import 'components/gestor_header_row.dart';
 import 'components/menu_inferior.dart';
-import 'components/avisos.dart'; 
+import 'components/avisos.dart';
 import 'components/editar.dart' as comps;
 import 'components/transferir_lead_dialog.dart';
 import 'telas/lista_consultor.dart' as cons;
@@ -368,7 +368,7 @@ class _HomeGestorState extends State<HomeGestor> {
         ),
       ),
       child: Scaffold(
-        appBar: const GestorNavbar(),
+        appBar: GestorNavbar(), // <--- sem const
         body: Stack(
           children: [
             Positioned.fill(
@@ -389,9 +389,10 @@ class _HomeGestorState extends State<HomeGestor> {
                               isScrollControlled: true,
                               backgroundColor: Colors.white,
                               shape: const RoundedRectangleBorder(
-                                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                                borderRadius:
+                                    BorderRadius.vertical(top: Radius.circular(16)),
                               ),
-                              builder: (ctx) => const AvisosSheet(), 
+                              builder: (ctx) => const AvisosSheet(),
                             ),
                             query: _query,
                             onQueryChanged: (value) => setState(() {
@@ -417,12 +418,14 @@ class _HomeGestorState extends State<HomeGestor> {
                               idsCount: _leadsFiltrados.length,
                               hasMore: _hasMore,
                               loadingMore: _loadingMore,
-                              expandirTodos: _expandirTodos || _query.isNotEmpty,
+                              expandirTodos:
+                                  _expandirTodos || _query.isNotEmpty,
                               onRefresh: _refresh,
                               onCarregarMais: _carregarLeads,
                               onEditar: _abrirEditar,
                               onTransferir: _abrirTransferir,
-                              setExpandirTodos: (v) => setState(() => _expandirTodos = v),
+                              setExpandirTodos: (v) =>
+                                  setState(() => _expandirTodos = v),
                             ),
 
                             vendas.VendasPage(),
@@ -489,7 +492,8 @@ class _HomeGestorState extends State<HomeGestor> {
           maxChildSize: 0.95,
           builder: (_, scrollController) {
             return ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
               child: SingleChildScrollView(
                 controller: scrollController,
                 child: comps.EditarLeadSheet(

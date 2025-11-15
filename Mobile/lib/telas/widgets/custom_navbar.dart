@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 class CustomNavbar extends StatefulWidget implements PreferredSizeWidget {
   final String nomeCompleto;
@@ -45,6 +47,48 @@ class _CustomNavbarState extends State<CustomNavbar> {
   static const vermelhoB = Color(0xFFCC1F17);
   static const corBorda = Color(0xFF3A2E2E);
   static const corTexto = Color(0xFF2F2B2B);
+
+  final Connectivity _connectivity = Connectivity();
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  bool _isOnline = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _initConnectivity();
+
+    _connectivitySub = _connectivity.onConnectivityChanged
+        .listen((List<ConnectivityResult> results) {
+      final bool online =
+          results.any((r) => r != ConnectivityResult.none);
+      if (mounted && online != _isOnline) {
+        setState(() {
+          _isOnline = online;
+        });
+      }
+    });
+  }
+
+  Future<void> _initConnectivity() async {
+    try {
+      final List<ConnectivityResult> results =
+          await _connectivity.checkConnectivity();
+      final bool online =
+          results.any((r) => r != ConnectivityResult.none);
+      if (mounted) {
+        setState(() {
+          _isOnline = online;
+        });
+      }
+    } catch (_) {
+    }
+  }
+
+  @override
+  void dispose() {
+    _connectivitySub?.cancel();
+    super.dispose();
+  }
 
   String _nomeCurto(String completo) {
     final parts = completo
@@ -180,13 +224,13 @@ class _CustomNavbarState extends State<CustomNavbar> {
             color: Colors.white,
             border: Border(
               bottom: BorderSide(
-                color: Color(0x33000000), // linha mais marcada
+                color: Color(0x33000000),
                 width: 1.4,
               ),
             ),
             boxShadow: [
               BoxShadow(
-                color: Color(0x33000000), // sombra mais forte
+                color: Color(0x33000000),
                 blurRadius: 14,
                 spreadRadius: 1,
                 offset: Offset(0, 6),
@@ -256,7 +300,9 @@ class _CustomNavbarState extends State<CustomNavbar> {
                                   width: 8,
                                   height: 8,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF2ECC71),
+                                    color: _isOnline
+                                        ? const Color(0xFF2ECC71)
+                                        : Colors.grey,
                                     shape: BoxShape.circle,
                                     border: Border.all(
                                       color: Colors.white,
@@ -295,7 +341,6 @@ class _CustomNavbarState extends State<CustomNavbar> {
                             style: TextStyle(
                               fontSize: cargoSize,
                               color: vermelho,
-                              // sem fontWeight => sem negrito
                             ),
                           ),
                         ],
