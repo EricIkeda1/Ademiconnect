@@ -42,7 +42,7 @@ class _VendasPageState extends State<VendasPage>
   double totalVendas = 0;
   double mediaMensal = 0;
   double melhorMesValor = 0;
-  int periodoMeses = 6;
+  int periodoMeses = 6; // valor inicial, mas agora pode mudar
 
   double animTotal = 0;
   double animMedia = 0;
@@ -192,6 +192,7 @@ class _VendasPageState extends State<VendasPage>
     );
 
     if (novo != null && novo != periodoMeses && mounted) {
+      // respeita o valor escolhido
       setState(() => periodoMeses = novo);
       await _carregarDados(animarSeNecessario: false);
     }
@@ -303,34 +304,39 @@ class _VendasPageState extends State<VendasPage>
           return;
         }
 
-        final abrev = DateFormat('MMM', 'pt_BR');
+        // --------- semestre fixo de 6 meses ----------
         String fmtKey(DateTime d) =>
             '${d.year}-${d.month.toString().padLeft(2, '0')}';
 
         final DateTime start = DateTime(inicioSerie.year, inicioSerie.month, 1);
-        final DateTime end =
-            DateTime(start.year, start.month + (periodoMeses - 1), 1);
+        final int semestre = (start.month <= 6) ? 1 : 2;
+
+        const mesesPt = [
+          'jan', 'fev', 'mar', 'abr', 'mai', 'jun',
+          'jul', 'ago', 'set', 'out', 'nov', 'dez',
+        ];
 
         final List<String> ms = [];
         final List<double> rl = [];
-        DateTime cursor = start;
-        while (!cursor.isAfter(end)) {
-          final key = fmtKey(cursor);
-          ms.add(abrev.format(cursor));
-          rl.add(somaMes[key] ?? 0.0);
-          cursor = DateTime(cursor.year, cursor.month + 1, 1);
-        }
 
-        while (ms.length < periodoMeses) {
-          final next =
-              DateTime(end.year, end.month + (ms.length - (periodoMeses - 1)), 1);
-          ms.add(abrev.format(next));
-          rl.add(0.0);
+        if (semestre == 1) {
+          // jan a jun
+          for (int m = 1; m <= 6; m++) {
+            final d = DateTime(start.year, m, 1);
+            final key = fmtKey(d);
+            ms.add(mesesPt[m - 1]);
+            rl.add(somaMes[key] ?? 0.0);
+          }
+        } else {
+          // jul a dez
+          for (int m = 7; m <= 12; m++) {
+            final d = DateTime(start.year, m, 1);
+            final key = fmtKey(d);
+            ms.add(mesesPt[m - 1]);
+            rl.add(somaMes[key] ?? 0.0);
+          }
         }
-        if (ms.length > periodoMeses) {
-          ms.removeRange(0, ms.length - periodoMeses);
-          rl.removeRange(0, rl.length - periodoMeses);
-        }
+        // ---------------------------------------------------------
 
         if (mounted) {
           setState(() {
@@ -343,6 +349,7 @@ class _VendasPageState extends State<VendasPage>
           });
         }
       } else {
+        // --------- CASO INDIVIDUAL (CONSULTOR) ----------
         final bool temUid = (consultorUid != null && consultorUid!.isNotEmpty);
         final String filtroColuna = temUid ? 'consultor_uid_t' : 'consultor_id';
         final String? filtroValorOpt = temUid ? consultorUid : consultorId;
@@ -405,19 +412,31 @@ class _VendasPageState extends State<VendasPage>
         final DateTime inicioSerie =
             (primeiraVenda ?? DateTime(now.year, now.month - (periodoMeses - 1), 1));
 
-        final DateFormat abrev = DateFormat('MMM', 'pt_BR');
         final DateTime start = DateTime(inicioSerie.year, inicioSerie.month, 1);
-        final DateTime end =
-            DateTime(start.year, start.month + (periodoMeses - 1), 1);
+        final int semestre = (start.month <= 6) ? 1 : 2;
+
+        const mesesPt = [
+          'jan', 'fev', 'mar', 'abr', 'mai', 'jun',
+          'jul', 'ago', 'set', 'out', 'nov', 'dez',
+        ];
 
         final List<String> ms = [];
         final List<double> rl = [];
-        DateTime cursor = start;
-        while (!cursor.isAfter(end)) {
-          final key = fmtKey(cursor);
-          ms.add(abrev.format(cursor));
-          rl.add(somaMes[key] ?? 0.0);
-          cursor = DateTime(cursor.year, cursor.month + 1, 1);
+
+        if (semestre == 1) {
+          for (int m = 1; m <= 6; m++) {
+            final d = DateTime(start.year, m, 1);
+            final key = fmtKey(d);
+            ms.add(mesesPt[m - 1]);
+            rl.add(somaMes[key] ?? 0.0);
+          }
+        } else {
+          for (int m = 7; m <= 12; m++) {
+            final d = DateTime(start.year, m, 1);
+            final key = fmtKey(d);
+            ms.add(mesesPt[m - 1]);
+            rl.add(somaMes[key] ?? 0.0);
+          }
         }
 
         if (mounted) {
@@ -430,6 +449,7 @@ class _VendasPageState extends State<VendasPage>
             melhorMesValor = rl.isEmpty ? 0 : rl.reduce((a, b) => a > b ? a : b);
           });
         }
+        // ------------------------------------------------
       }
 
       final deveAnimar = animarSeNecessario && !_jaAnimouUmaVezGlobal;
@@ -583,14 +603,21 @@ class _VendasPageState extends State<VendasPage>
                     children: [
                       _BigKpiCard(
                         title: 'Total Vendas',
-                        valueWidget: DigitCurrency(
-                          value: animTotal,
-                          format: _moedaFmt,
-                          animate: false, 
-                          textStyleBuilder: (context) => Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+                        valueWidget: FittedBox(
+                          alignment: Alignment.centerLeft,
+                          child: DigitCurrency(
+                            value: animTotal,
+                            format: _moedaFmt,
+                            animate: false,
+                            textStyleBuilder: (context) => Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  fontSize: 18,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
                         ),
                         icon: Icons.attach_money_rounded,
                         gradient: LinearGradient(
@@ -598,45 +625,70 @@ class _VendasPageState extends State<VendasPage>
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                        rolling: !_jaAnimouUmaVezGlobal ? RollBehavior.rollOnce : RollBehavior.noRoll,
+                        rolling: !_jaAnimouUmaVezGlobal
+                            ? RollBehavior.rollOnce
+                            : RollBehavior.noRoll,
                       ),
                       _KpiCard(
                         title: 'Média Mensal',
-                        valueWidget: DigitCurrency(
-                          value: animMedia,
-                          format: _moedaFmt,
-                          animate: false,
-                          textStyleBuilder: (context) => Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(color: const Color(0xFF222222), fontWeight: FontWeight.w800),
+                        valueWidget: FittedBox(
+                          alignment: Alignment.centerLeft,
+                          child: DigitCurrency(
+                            value: animMedia,
+                            format: _moedaFmt,
+                            animate: false,
+                            textStyleBuilder: (context) => Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  fontSize: 16,
+                                  color: const Color(0xFF222222),
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
                         ),
                         icon: Icons.track_changes_rounded,
-                        rolling: !_jaAnimouUmaVezGlobal ? RollBehavior.rollOnce : RollBehavior.noRoll,
+                        rolling: !_jaAnimouUmaVezGlobal
+                            ? RollBehavior.rollOnce
+                            : RollBehavior.noRoll,
                       ),
                       _KpiCard(
                         title: 'Melhor Mês',
-                        valueWidget: DigitCurrency(
-                          value: animMelhor,
-                          format: _moedaFmt,
-                          animate: false,
-                          textStyleBuilder: (context) => Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(color: const Color(0xFF222222), fontWeight: FontWeight.w800),
+                        valueWidget: FittedBox(
+                          alignment: Alignment.centerLeft,
+                          child: DigitCurrency(
+                            value: animMelhor,
+                            format: _moedaFmt,
+                            animate: false,
+                            textStyleBuilder: (context) => Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  fontSize: 16,
+                                  color: const Color(0xFF222222),
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
                         ),
                         icon: Icons.emoji_events_outlined,
-                        rolling: !_jaAnimouUmaVezGlobal ? RollBehavior.rollOnce : RollBehavior.noRoll,
+                        rolling: !_jaAnimouUmaVezGlobal
+                            ? RollBehavior.rollOnce
+                            : RollBehavior.noRoll,
                       ),
                       _KpiPeriodCard(
                         title: 'Período',
                         valueWidget: DigitRoller(
                           text: '${animPeriodo.toStringAsFixed(0)}',
-                          rollBehavior: !_jaAnimouUmaVezGlobal ? RollBehavior.rollOnce : RollBehavior.noRoll,
+                          rollBehavior: !_jaAnimouUmaVezGlobal
+                              ? RollBehavior.rollOnce
+                              : RollBehavior.noRoll,
                           style: Theme.of(context)
                               .textTheme
                               .titleMedium
-                              ?.copyWith(color: const Color(0xFF222222), fontWeight: FontWeight.w800),
+                              ?.copyWith(
+                                  fontSize: 16,
+                                  color: const Color(0xFF222222),
+                                  fontWeight: FontWeight.w800),
                         ),
                         suffix: ' meses',
                         icon: Icons.event_note_outlined,
@@ -721,11 +773,12 @@ class _HeaderRow extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.person_pin_circle_rounded, size: 16, color: Colors.black45),
+                    const Icon(Icons.person_pin_circle_rounded,
+                        size: 16, color: Colors.black45),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        consultorText, 
+                        consultorText,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.labelMedium
@@ -752,7 +805,7 @@ class _CardsGrid extends StatelessWidget {
     final w = MediaQuery.of(context).size.width;
     final isWide = w >= 1000;
     final cross = isWide ? 4 : 2;
-    final childAspect = isWide ? 1.55 : 1.15;
+    final childAspect = isWide ? 1.9 : 1.4;
 
     return GridView.builder(
       itemCount: children.length,
@@ -769,7 +822,7 @@ class _CardsGrid extends StatelessWidget {
   }
 }
 
-const double _cardH = 136;
+const double _cardH = 110;
 const double _r = 14;
 const double _iconTop = 10;
 const double _iconLeft = 12;
@@ -878,7 +931,8 @@ class _BigKpiCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(_r),
       child: Container(
         height: _cardH,
-        decoration: BoxDecoration(gradient: gradient, borderRadius: BorderRadius.circular(_r)),
+        decoration:
+            BoxDecoration(gradient: gradient, borderRadius: BorderRadius.circular(_r)),
         child: _KpiLayoutFixed(
           icon: Icon(icon, color: Colors.white, size: 26),
           title: title,
@@ -918,7 +972,11 @@ class _KpiPeriodCard extends StatelessWidget {
             Positioned(
               top: _iconTop,
               left: _iconLeft,
-              child: SizedBox(height: 24, width: 24, child: FittedBox(child: Icon(icon, color: const Color(0xFFDD3A3A), size: 26))),
+              child: SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: FittedBox(
+                      child: Icon(icon, color: const Color(0xFFDD3A3A), size: 26))),
             ),
             Positioned(
               top: _titleTop,
@@ -928,7 +986,8 @@ class _KpiPeriodCard extends StatelessWidget {
                 title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: t.textTheme.labelLarge?.copyWith(color: Colors.black54, fontWeight: FontWeight.w600),
+                style: t.textTheme.labelLarge
+                    ?.copyWith(color: Colors.black54, fontWeight: FontWeight.w600),
               ),
             ),
             Positioned(
@@ -943,6 +1002,7 @@ class _KpiPeriodCard extends StatelessWidget {
                   Text(
                     suffix,
                     style: t.textTheme.titleMedium?.copyWith(
+                      fontSize: 16,
                       color: const Color(0xFF222222),
                       fontWeight: FontWeight.w800,
                     ),
@@ -978,12 +1038,20 @@ class _ChartCard extends StatelessWidget {
             Row(children: [
               const Icon(Icons.trending_up, color: Color(0xFFDD3A3A)),
               const SizedBox(width: 8),
-              Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+              Text(title,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w800)),
             ]),
             const SizedBox(height: 4),
-            Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54, fontWeight: FontWeight.w500)),
+            Text(subtitle,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: Colors.black54, fontWeight: FontWeight.w500)),
             const SizedBox(height: 16),
-            SizedBox(height: 260, child: child),
+            SizedBox(height: 220, child: child),
           ],
         ),
       ),
@@ -995,17 +1063,22 @@ class _BarrasVendasChart extends StatelessWidget {
   final List<String> meses;
   final List<double> realizado;
   final Color primary;
-  const _BarrasVendasChart({required this.meses, required this.realizado, required this.primary});
+  const _BarrasVendasChart({
+    required this.meses,
+    required this.realizado,
+    required this.primary,
+  });
 
   @override
   Widget build(BuildContext context) {
+    // trabalha em MILHÕES
     final barGroups = List.generate(meses.length, (i) {
       return BarChartGroupData(
         x: i,
         barsSpace: 10,
         barRods: [
           BarChartRodData(
-            toY: (realizado[i] / 1000).clamp(0, double.infinity),
+            toY: (realizado[i] / 1000000).clamp(0, double.infinity),
             width: 20,
             borderRadius: BorderRadius.circular(4),
             gradient: LinearGradient(
@@ -1019,9 +1092,11 @@ class _BarrasVendasChart extends StatelessWidget {
     });
 
     final maxY = [
-      ...realizado.map((e) => e / 1000),
-      10,
+      ...realizado.map((e) => e / 1000000),
+      1,
     ].reduce((a, b) => a > b ? a : b) * 1.1;
+
+    final step = _escolherStep(maxY);
 
     return BarChart(
       BarChartData(
@@ -1029,7 +1104,8 @@ class _BarrasVendasChart extends StatelessWidget {
         gridData: FlGridData(
           show: true,
           drawVerticalLine: false,
-          getDrawingHorizontalLine: (v) => FlLine(color: Colors.grey.shade200, strokeWidth: 1),
+          getDrawingHorizontalLine: (v) =>
+              FlLine(color: Colors.grey.shade200, strokeWidth: 1),
         ),
         borderData: FlBorderData(show: false),
         alignment: BarChartAlignment.spaceAround,
@@ -1038,11 +1114,38 @@ class _BarrasVendasChart extends StatelessWidget {
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              reservedSize: 48,
-              getTitlesWidget: (value, meta) => Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: Text('R\$ ${value.toInt()}k', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.black54)),
-              ),
+              reservedSize: 70,
+              interval: step,
+              getTitlesWidget: (value, meta) {
+                if (value < 0) return const SizedBox.shrink();
+
+                final double rounded =
+                    (value / step).roundToDouble() * step;
+                if ((value - rounded).abs() > 0.0001) {
+                  return const SizedBox.shrink();
+                }
+
+                final intVal = value.round();
+                String label;
+                if (intVal == 0) {
+                  label = 'R\$ 0';
+                } else {
+                  label = 'R\$ ${intVal}M';
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.clip,
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelSmall
+                        ?.copyWith(color: Colors.black54),
+                  ),
+                );
+              },
             ),
           ),
           bottomTitles: AxisTitles(
@@ -1053,7 +1156,15 @@ class _BarrasVendasChart extends StatelessWidget {
                 if (i < 0 || i >= meses.length) return const SizedBox();
                 return Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: Text(meses[i], style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.black87)),
+                  child: Text(
+                    meses[i],
+                    maxLines: 1,
+                    overflow: TextOverflow.clip,
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelSmall
+                        ?.copyWith(color: Colors.black87),
+                  ),
                 );
               },
             ),
@@ -1067,6 +1178,15 @@ class _BarrasVendasChart extends StatelessWidget {
       swapAnimationCurve: Curves.linear,
     );
   }
+}
+
+// helper para os steps do eixo Y em milhões
+double _escolherStep(double maxY) {
+  if (maxY <= 2) return 0.5;   // 0, 0.5M, 1M, 1.5M, 2M
+  if (maxY <= 5) return 1;     // 0,1,2,3,4,5M
+  if (maxY <= 20) return 5;    // 0,5,10,15,20M
+  if (maxY <= 50) return 10;   // 0,10,20,30,40,50M
+  return 20;                   // 0,20,40,60,...
 }
 
 enum RollBehavior { noRoll, rollOnce }
@@ -1150,7 +1270,7 @@ class _DigitRollerState extends State<DigitRoller> with SingleTickerProviderStat
               return Text(ch, style: style);
             }
             final digit = int.tryParse(ch) ?? 0;
-            final loops = 1; 
+            final loops = 1;
             final progress = _anim.value;
             final value = ((progress * (10 * loops + digit)) % 10).round() % 10;
             return SizedBox(
@@ -1185,6 +1305,7 @@ class DigitCurrency extends StatelessWidget {
     final txt = format.format(value);
     final style = textStyleBuilder(context);
     if (!animate) {
+      // sem animação extra aqui, usando apenas DigitRoller se habilitado
     }
     final parts = txt.characters.toList();
     return Wrap(
@@ -1197,7 +1318,7 @@ class DigitCurrency extends StatelessWidget {
           );
         }
         return Text(ch, style: style);
-    }).toList(),
+      }).toList(),
     );
   }
 }

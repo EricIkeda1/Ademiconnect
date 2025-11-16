@@ -34,13 +34,21 @@ class EditarPeriodoSheet extends StatelessWidget {
                 color: active ? vermelhoBrand : const Color(0xFFE6E6E6),
                 width: 1.2,
               ),
-              boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 6, offset: Offset(0, 2))],
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0F000000),
+                  blurRadius: 6,
+                  offset: Offset(0, 2),
+                ),
+              ],
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.event_note_outlined,
-                    color: active ? vermelhoBrand : Colors.black54),
+                Icon(
+                  Icons.event_note_outlined,
+                  color: active ? vermelhoBrand : Colors.black54,
+                ),
                 const SizedBox(height: 6),
                 Text(
                   '$m',
@@ -110,9 +118,21 @@ class EditarPeriodoSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
-            Row(children: [tile(opcoes[0]), const SizedBox(width: 12), tile(opcoes[1])]),
+            Row(
+              children: [
+                tile(opcoes[0]),
+                const SizedBox(width: 12),
+                tile(opcoes[1]),
+              ],
+            ),
             const SizedBox(height: 12),
-            Row(children: [tile(opcoes[2]), const SizedBox(width: 12), tile(opcoes[3])]),
+            Row(
+              children: [
+                tile(opcoes[2]),
+                const SizedBox(width: 12),
+                tile(opcoes[3]),
+              ],
+            ),
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
@@ -120,9 +140,11 @@ class EditarPeriodoSheet extends StatelessWidget {
               child: OutlinedButton(
                 onPressed: () => Navigator.pop(context),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: vermelhoBrand,                    
-                  side: const BorderSide(color: vermelhoBrand),   
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  foregroundColor: vermelhoBrand,
+                  side: const BorderSide(color: vermelhoBrand),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 child: const Text('Cancelar'),
               ),
