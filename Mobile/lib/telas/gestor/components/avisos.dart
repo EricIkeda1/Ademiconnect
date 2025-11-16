@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AvisosSheet extends StatefulWidget {
+
   final List<Map<String, dynamic>>? leads;
+
   const AvisosSheet({super.key, this.leads});
 
   @override
@@ -39,6 +41,7 @@ class _AvisosSheetState extends State<AvisosSheet> {
       final id = c['id']?.toString() ?? '';
       final nome = (c['nome'] ?? '').toString();
       final dias = (c['dias'] as int?) ?? -1;
+
       final dvRaw = c['data_visita'];
       DateTime dataV;
       if (dvRaw is DateTime) {
@@ -46,30 +49,35 @@ class _AvisosSheetState extends State<AvisosSheet> {
       } else {
         dataV = DateTime.tryParse((dvRaw ?? '').toString()) ?? now;
       }
+
       if (dias < 84) continue;
 
       if (dias >= 90) {
-        out.add(_Aviso(
-          id: 'synthetic:urgente:$id',
-          tipo: _TipoAviso.urgente,
-          titulo: 'PAP - Retorno Urgente',
-          mensagem:
-              'O lead $nome está com $dias dias sem retorno. Providencie contato imediato.',
-          data: dataV,
-          lido: false,
-          ref: 'lead:$id',
-        ));
+        out.add(
+          _Aviso(
+            id: 'synthetic:urgente:$id',
+            tipo: _TipoAviso.urgente,
+            titulo: 'PAP - Retorno Urgente',
+            mensagem:
+                'O lead $nome está com $dias dias sem retorno. Providencie contato imediato.',
+            data: dataV,
+            lido: false,
+            ref: 'lead:$id',
+          ),
+        );
       } else {
-        out.add(_Aviso(
-          id: 'synthetic:programado:$id',
-          tipo: _TipoAviso.programado,
-          titulo: 'PAP - Retorno Programado',
-          mensagem:
-              'O lead $nome atinge 84+ dias ($dias dias). Programe o retorno.',
-          data: dataV,
-          lido: false,
-          ref: 'lead:$id',
-        ));
+        out.add(
+          _Aviso(
+            id: 'synthetic:programado:$id',
+            tipo: _TipoAviso.programado,
+            titulo: 'PAP - Retorno Programado',
+            mensagem:
+                'O lead $nome atinge 84+ dias ($dias dias). Programe o retorno.',
+            data: dataV,
+            lido: false,
+            ref: 'lead:$id',
+          ),
+        );
       }
     }
     return out;
@@ -103,23 +111,27 @@ class _AvisosSheetState extends State<AvisosSheet> {
             .order('data', ascending: false)
             .range(start, end) as List;
       }
+
       final reais = <_Aviso>[];
       for (final r in realRows) {
-        reais.add(_Aviso(
-          id: r['id'].toString(),
-          tipo: _TipoAvisoX.parse((r['tipo'] ?? '').toString()),
-          titulo: (r['titulo'] ?? '').toString(),
-          mensagem: (r['mensagem'] ?? '').toString(),
-          data: DateTime.tryParse((r['data'] ?? '').toString()) ?? DateTime.now(),
-          lido: (r['lido'] ?? false) == true,
-          ref: (r['ref'] ?? '').toString(),
-        ));
+        reais.add(
+          _Aviso(
+            id: r['id'].toString(),
+            tipo: _TipoAvisoX.parse((r['tipo'] ?? '').toString()),
+            titulo: (r['titulo'] ?? '').toString(),
+            mensagem: (r['mensagem'] ?? '').toString(),
+            data:
+                DateTime.tryParse((r['data'] ?? '').toString()) ?? DateTime.now(),
+            lido: (r['lido'] ?? false) == true,
+            ref: (r['ref'] ?? '').toString(),
+          ),
+        );
       }
 
       final leads = widget.leads ?? [];
       final sinteticos = leads.isEmpty ? <_Aviso>[] : _buildAtrasos(leads);
 
-      final seen = <String>{ for (final a in reais) a.dedupeKey };
+      final seen = <String>{for (final a in reais) a.dedupeKey};
       final merged = <_Aviso>[];
       merged.addAll(reais);
       for (final s in sinteticos) {
@@ -131,7 +143,7 @@ class _AvisosSheetState extends State<AvisosSheet> {
       setState(() {
         _itens.addAll(merged);
         _page += 1;
-        _hasMore = realRows.length == _pageSize; 
+        _hasMore = realRows.length == _pageSize;
         _loading = false;
         _loadingMore = false;
       });
@@ -150,7 +162,9 @@ class _AvisosSheetState extends State<AvisosSheet> {
       } catch (_) {}
     }
     final i = _itens.indexWhere((e) => e.id == id);
-    if (i >= 0) setState(() => _itens[i] = _itens[i].copyWith(lido: lido));
+    if (i >= 0) {
+      setState(() => _itens[i] = _itens[i].copyWith(lido: lido));
+    }
   }
 
   Future<void> _marcarTodasComoLidas() async {
@@ -181,7 +195,10 @@ class _AvisosSheetState extends State<AvisosSheet> {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Row(
                 children: [
-                  const Icon(Icons.notifications_none_rounded, color: Color(0xFFEA3124)),
+                  const Icon(
+                    Icons.notifications_none_rounded,
+                    color: Color(0xFFEA3124),
+                  ),
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
@@ -195,7 +212,8 @@ class _AvisosSheetState extends State<AvisosSheet> {
                   ),
                   if (_novas > 0)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 7),
                       decoration: BoxDecoration(
                         color: const Color(0xFFED1C24),
                         borderRadius: BorderRadius.circular(10),
@@ -224,7 +242,9 @@ class _AvisosSheetState extends State<AvisosSheet> {
             ),
             const Divider(height: 1),
             if (_loading && _itens.isEmpty)
-              const Expanded(child: Center(child: CircularProgressIndicator()))
+              const Expanded(
+                child: Center(child: CircularProgressIndicator()),
+              )
             else
               Expanded(
                 child: RefreshIndicator(
@@ -252,7 +272,8 @@ class _AvisosSheetState extends State<AvisosSheet> {
                           borderRadius: BorderRadius.circular(12),
                           onTap: () => _marcarComoLido(a.id, !a.lido),
                           child: Padding(
-                            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                            padding:
+                                const EdgeInsets.fromLTRB(14, 12, 14, 12),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -266,7 +287,8 @@ class _AvisosSheetState extends State<AvisosSheet> {
                                         style: TextStyle(
                                           fontSize: 14.5,
                                           fontWeight: FontWeight.w700,
-                                          color: texto.withOpacity(a.lido ? 0.6 : 1.0),
+                                          color: texto.withOpacity(
+                                              a.lido ? 0.6 : 1.0),
                                         ),
                                       ),
                                     ),
@@ -278,7 +300,8 @@ class _AvisosSheetState extends State<AvisosSheet> {
                                         ),
                                         decoration: BoxDecoration(
                                           color: const Color(0xFFEA3124),
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
                                         ),
                                         child: const Text(
                                           'Urgente',
@@ -349,13 +372,13 @@ class _TipoAvisoX {
 }
 
 class _Aviso {
-  final String id;      
+  final String id;
   final _TipoAviso tipo;
   final String titulo;
   final String mensagem;
   final DateTime data;
   final bool lido;
-  final String ref;    
+  final String ref; 
 
   const _Aviso({
     required this.id,
@@ -367,9 +390,11 @@ class _Aviso {
     this.ref = '',
   });
 
-  bool get isRedBorder => tipo == _TipoAviso.urgente || tipo == _TipoAviso.programado;
+  bool get isRedBorder =>
+      tipo == _TipoAviso.urgente || tipo == _TipoAviso.programado;
 
-  String get dedupeKey => ref.isNotEmpty ? '${tipo.name}|$ref' : '${tipo.name}|$titulo';
+  String get dedupeKey =>
+      ref.isNotEmpty ? '${tipo.name}|$ref' : '${tipo.name}|$titulo';
 
   IconData get iconData {
     switch (tipo) {

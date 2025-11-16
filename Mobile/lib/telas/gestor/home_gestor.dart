@@ -11,6 +11,7 @@ import 'telas/lista_consultor.dart' as cons;
 import 'telas/enderecos.dart' as end;
 import 'telas/exportar.dart' as exp;
 import 'telas/vendas.dart' as vendas;
+import '../../services/notification_service.dart';
 
 class HomeGestor extends StatefulWidget {
   const HomeGestor({super.key});
@@ -71,8 +72,10 @@ class _HomeGestorState extends State<HomeGestor> {
     }).toList();
   }
 
-  String _cleanTail(String s) => s.replaceFirst(RegExp(r',\s*$'), '').trimRight();
-  String _cleanHead(String s) => s.replaceFirst(RegExp(r'^\s*,\s*'), '').trimLeft();
+  String _cleanTail(String s) =>
+      s.replaceFirst(RegExp(r',\s*$'), '').trimRight();
+  String _cleanHead(String s) =>
+      s.replaceFirst(RegExp(r'^\s*,\s*'), '').trimLeft();
 
   String _removeCommaAfterTypeAtStart(String s) {
     if (s.isEmpty) return s;
@@ -185,6 +188,31 @@ class _HomeGestorState extends State<HomeGestor> {
         .toList();
   }
 
+  Future<void> _notificarAlertas() async {
+    final urgentes =
+        _leads.where((l) => (l['urgente'] as bool?) ?? false).toList();
+    final alertas =
+        _leads.where((l) => (l['alerta'] as bool?) ?? false).toList();
+
+    if (urgentes.isNotEmpty) {
+      final qtd = urgentes.length;
+      await NotificationService.showAlertNotification(
+        title: 'Visitas para hoje',
+        body:
+            'Você tem $qtd visita${qtd > 1 ? 's' : ''} marcada${qtd > 1 ? 's' : ''} para hoje.',
+      );
+    }
+
+    if (alertas.isNotEmpty) {
+      final qtd = alertas.length;
+      await NotificationService.showAlertNotification(
+        title: 'Visitas atrasadas',
+        body:
+            'Você tem $qtd cliente${qtd > 1 ? 's' : ''} com visita há mais de 60 dias.',
+      );
+    }
+  }
+
   Future<void> _carregarLeads({bool initial = false}) async {
     if (initial) {
       setState(() {
@@ -295,6 +323,10 @@ class _HomeGestorState extends State<HomeGestor> {
         _loading = false;
         _loadingMore = false;
       });
+
+      if (initial) {
+        await _notificarAlertas();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -368,7 +400,7 @@ class _HomeGestorState extends State<HomeGestor> {
         ),
       ),
       child: Scaffold(
-        appBar: GestorNavbar(), // <--- sem const
+        appBar: GestorNavbar(),
         body: Stack(
           children: [
             Positioned.fill(
@@ -384,16 +416,19 @@ class _HomeGestorState extends State<HomeGestor> {
                           child: GestorHeaderRow(
                             totalGeral: totalGeral,
                             totalFiltro: totalFiltro,
-                            onAvisos: () => showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.white,
-                              shape: const RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.vertical(top: Radius.circular(16)),
-                              ),
-                              builder: (ctx) => const AvisosSheet(),
-                            ),
+                            onAvisos: () async {
+                              await _notificarAlertas();
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.white,
+                                shape: const RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.vertical(
+                                      top: Radius.circular(16)),
+                                ),
+                                builder: (ctx) => const AvisosSheet(),
+                              );
+                            },
                             query: _query,
                             onQueryChanged: (value) => setState(() {
                               _query = value;
@@ -582,8 +617,9 @@ class _HomeGestorState extends State<HomeGestor> {
       ),
     );
     if (ok == true && mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Lead transferido com sucesso')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lead transferido com sucesso')),
+      );
     }
   }
 }
@@ -628,7 +664,10 @@ class _LeadsTab extends StatelessWidget {
           children: [
             Text(erro!, style: const TextStyle(color: Colors.red)),
             const SizedBox(height: 12),
-            ElevatedButton(onPressed: onRefresh, child: const Text('Tentar novamente')),
+            ElevatedButton(
+              onPressed: onRefresh,
+              child: const Text('Tentar novamente'),
+            ),
           ],
         ),
       );
@@ -683,7 +722,10 @@ class _LeadsTab extends StatelessWidget {
                 return renderCard(c);
               }
               if (idx == 10) {
-                return _CardVerMais(restante: total - 10, onTap: () => setExpandirTodos(true));
+                return _CardVerMais(
+                  restante: total - 10,
+                  onTap: () => setExpandirTodos(true),
+                );
               }
             }
 

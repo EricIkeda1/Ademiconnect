@@ -73,6 +73,9 @@ void main() async {
     try {
       flutterLocalNotificationsPlugin = await NotificationService.initialize();
       debugPrint('✅ Notificações locais inicializadas.');
+
+      await NotificationService.requestAndroid13Permission();
+      debugPrint('✅ Permissão de notificação solicitada (Android 13+).');
     } on Exception catch (e) {
       debugPrint('⚠️ Falha ao inicializar notificações: $e');
     }
@@ -215,7 +218,7 @@ class UserTypeRedirector extends StatelessWidget {
     try {
       final gestor = await client
           .from('gestor')
-          .select('id, nome') 
+          .select('id, nome')
           .eq('id', userId)
           .maybeSingle();
 
@@ -226,8 +229,8 @@ class UserTypeRedirector extends StatelessWidget {
       }
 
       final consultor = await client
-          .from('consultor') 
-          .select('id, nome') 
+          .from('consultor')
+          .select('id, nome')
           .eq('id', userId)
           .maybeSingle();
 
