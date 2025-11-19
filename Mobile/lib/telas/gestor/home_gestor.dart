@@ -213,6 +213,37 @@ class _HomeGestorState extends State<HomeGestor> {
     }
   }
 
+  int _calcDias(dynamic dataVisita) {
+    if (dataVisita == null) return -1;
+    try {
+      final dt = DateTime.parse(dataVisita.toString());
+      final hoje = DateTime.now();
+
+      final dHoje = DateTime(hoje.year, hoje.month, hoje.day);
+      final dVisita = DateTime(dt.year, dt.month, dt.day);
+
+      final diff = dHoje.difference(dVisita).inDays;
+
+      if (diff <= 0) {
+        return 0;
+      }
+      return diff;
+    } catch (_) {
+      return -1;
+    }
+  }
+
+  bool _isUrgente(dynamic dataVisita) {
+    final dias = _calcDias(dataVisita);
+    if (dias < 0) return false;
+    return dias <= 3;
+  }
+
+  bool _isAlerta(dynamic dataVisita) {
+    final dias = _calcDias(dataVisita);
+    return dias > 60;
+  }
+
   Future<void> _carregarLeads({bool initial = false}) async {
     if (initial) {
       setState(() {
@@ -310,12 +341,11 @@ class _HomeGestorState extends State<HomeGestor> {
       setState(() {
         _leads.addAll(batch);
 
-        // Ordena pelos dias de atraso (maior primeiro, -1 e 0 no fim)
         _leads.sort((a, b) {
           final da = (a['dias'] as int?) ?? -1;
           final db = (b['dias'] as int?) ?? -1;
           if (da == db) return 0;
-          if (da <= 0 && db > 0) return 1; // datas futuras/hoje vão para o fim
+          if (da <= 0 && db > 0) return 1; 
           if (db <= 0 && da > 0) return -1;
           return db.compareTo(da);
         });
@@ -337,44 +367,6 @@ class _HomeGestorState extends State<HomeGestor> {
         _loadingMore = false;
       });
     }
-  }
-
-  /// Só conta atraso depois que passar da data:
-  /// - Futuro ou hoje => 0
-  /// - Passado        => dias de atraso (> 0)
-  int _calcDias(dynamic dataVisita) {
-    if (dataVisita == null) return -1;
-    try {
-      final dt = DateTime.parse(dataVisita.toString());
-      final hoje = DateTime.now();
-
-      final dHoje = DateTime(hoje.year, hoje.month, hoje.day);
-      final dVisita = DateTime(dt.year, dt.month, dt.day);
-
-      final diff = dHoje.difference(dVisita).inDays;
-
-      if (diff <= 0) {
-        // ainda falta ou é hoje -> não atrasado
-        return 0;
-      }
-      return diff;
-    } catch (_) {
-      return -1;
-    }
-  }
-
-  /// Aqui você pode definir a regra de "urgente".
-  /// Exemplo: hoje ou até 3 dias de atraso.
-  bool _isUrgente(dynamic dataVisita) {
-    final dias = _calcDias(dataVisita);
-    if (dias < 0) return false;
-    return dias <= 3;
-  }
-
-  /// Alerta só quando estiver bem atrasado (ex: > 60 dias)
-  bool _isAlerta(dynamic dataVisita) {
-    final dias = _calcDias(dataVisita);
-    return dias > 60;
   }
 
   Future<void> _refresh() async => _carregarLeads(initial: true);
@@ -610,6 +602,17 @@ class _HomeGestorState extends State<HomeGestor> {
   }
 
   Future<void> _abrirTransferir(Map<String, dynamic> c) async {
+    final dias = (c['dias'] as int?) ?? -1;
+
+    if (dias >= 0 && dias < 90) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Só é possível transferir leads com 90 dias ou mais.'),
+        ),
+      );
+      return;
+    }
+
     final ok = await showDialog<bool>(
       context: context,
       barrierDismissible: true,
