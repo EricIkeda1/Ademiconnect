@@ -309,12 +309,14 @@ class _HomeGestorState extends State<HomeGestor> {
       if (!mounted) return;
       setState(() {
         _leads.addAll(batch);
+
+        // Ordena pelos dias de atraso (maior primeiro, -1 e 0 no fim)
         _leads.sort((a, b) {
           final da = (a['dias'] as int?) ?? -1;
           final db = (b['dias'] as int?) ?? -1;
-          if (da == -1 && db == -1) return 0;
-          if (da == -1) return 1;
-          if (db == -1) return -1;
+          if (da == db) return 0;
+          if (da <= 0 && db > 0) return 1; // datas futuras/hoje vão para o fim
+          if (db <= 0 && da > 0) return -1;
           return db.compareTo(da);
         });
 
@@ -337,28 +339,43 @@ class _HomeGestorState extends State<HomeGestor> {
     }
   }
 
+  /// Só conta atraso depois que passar da data:
+  /// - Futuro ou hoje => 0
+  /// - Passado        => dias de atraso (> 0)
   int _calcDias(dynamic dataVisita) {
     if (dataVisita == null) return -1;
     try {
       final dt = DateTime.parse(dataVisita.toString());
-      return DateTime.now().difference(dt).inDays.abs();
+      final hoje = DateTime.now();
+
+      final dHoje = DateTime(hoje.year, hoje.month, hoje.day);
+      final dVisita = DateTime(dt.year, dt.month, dt.day);
+
+      final diff = dHoje.difference(dVisita).inDays;
+
+      if (diff <= 0) {
+        // ainda falta ou é hoje -> não atrasado
+        return 0;
+      }
+      return diff;
     } catch (_) {
       return -1;
     }
   }
 
+  /// Aqui você pode definir a regra de "urgente".
+  /// Exemplo: hoje ou até 3 dias de atraso.
   bool _isUrgente(dynamic dataVisita) {
-    if (dataVisita == null) return false;
-    try {
-      final dt = DateTime.parse(dataVisita.toString());
-      final now = DateTime.now();
-      return dt.year == now.year && dt.month == now.month && dt.day == now.day;
-    } catch (_) {
-      return false;
-    }
+    final dias = _calcDias(dataVisita);
+    if (dias < 0) return false;
+    return dias <= 3;
   }
 
-  bool _isAlerta(dynamic dataVisita) => _calcDias(dataVisita) > 60;
+  /// Alerta só quando estiver bem atrasado (ex: > 60 dias)
+  bool _isAlerta(dynamic dataVisita) {
+    final dias = _calcDias(dataVisita);
+    return dias > 60;
+  }
 
   Future<void> _refresh() async => _carregarLeads(initial: true);
 
@@ -462,9 +479,7 @@ class _HomeGestorState extends State<HomeGestor> {
                               setExpandirTodos: (v) =>
                                   setState(() => _expandirTodos = v),
                             ),
-
                             vendas.VendasPage(),
-
                             Navigator(
                               onGenerateRoute: (_) => MaterialPageRoute(
                                 builder: (_) => cons.ConsultoresRoot(
@@ -472,13 +487,11 @@ class _HomeGestorState extends State<HomeGestor> {
                                 ),
                               ),
                             ),
-
                             Navigator(
                               onGenerateRoute: (_) => MaterialPageRoute(
                                 builder: (_) => const end.EnderecosPage(),
                               ),
                             ),
-
                             Navigator(
                               onGenerateRoute: (_) => MaterialPageRoute(
                                 builder: (_) => const exp.ExportarPage(),
@@ -567,12 +580,13 @@ class _HomeGestorState extends State<HomeGestor> {
               ? _fmtStatus(result['status_negociacao'])
               : _leads[index]['status'],
         };
+
         _leads.sort((a, b) {
           final da = (a['dias'] as int?) ?? -1;
           final db = (b['dias'] as int?) ?? -1;
-          if (da == -1 && db == -1) return 0;
-          if (da == -1) return 1;
-          if (db == -1) return -1;
+          if (da == db) return 0;
+          if (da <= 0 && db > 0) return 1;
+          if (db <= 0 && da > 0) return -1;
           return db.compareTo(da);
         });
       });
