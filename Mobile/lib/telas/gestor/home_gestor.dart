@@ -41,6 +41,8 @@ class _HomeGestorState extends State<HomeGestor> {
 
   String _query = '';
 
+  int _qtdAvisos = 0;
+
   List<Map<String, dynamic>> get _leadsFiltrados {
     final q = _query.trim().toLowerCase();
     if (q.isEmpty) return _leads;
@@ -424,6 +426,7 @@ class _HomeGestorState extends State<HomeGestor> {
                           child: GestorHeaderRow(
                             totalGeral: totalGeral,
                             totalFiltro: totalFiltro,
+                            avisosNaoLidos: _qtdAvisos, 
                             onAvisos: () async {
                               await _notificarAlertas();
                               showModalBottomSheet(
@@ -437,6 +440,10 @@ class _HomeGestorState extends State<HomeGestor> {
                                 ),
                                 builder: (ctx) => AvisosSheet(
                                   leads: _leads,
+                                  onChanged: (totalNaoLidas) {
+                                    if (!mounted) return;
+                                    setState(() => _qtdAvisos = totalNaoLidas);
+                                  },
                                 ),
                               );
                             },
