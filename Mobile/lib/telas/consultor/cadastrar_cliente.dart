@@ -217,7 +217,6 @@ class CadastrarClienteState extends State<CadastrarCliente> {
 
     dataNegociacaoCtrl.clear();
     horaNegociacaoCtrl.clear();
-
     dataVisitaCtrl.clear();
     horaVisitaCtrl.clear();
 
@@ -572,32 +571,20 @@ class CadastrarClienteState extends State<CadastrarCliente> {
             'data_visita': agora.toIso8601String(),
             'hora_visita': DateFormat('HH:mm:ss').format(agora),
           }).eq('id', cliente.id);
-
-          await NotificationService.showSuccessNotification();
-          widget.onClienteCadastrado?.call();
-
-          limparCampos();
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Cliente cadastrado com sucesso! '
-                'Negociação (próx. visita): $dataNegStr $horaNegStr | '
-                'Visita realizada agora: $dataVisitaAtual $horaVisitaAtual',
-              ),
-              duration: const Duration(seconds: 4),
-            ),
-          );
         } catch (e) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Cliente salvo, mas erro ao salvar datas/horas: $e',
-              ),
-              backgroundColor: kDanger,
-            ),
-          );
+          debugPrint('Erro ao atualizar datas/horas extras: $e');
         }
+
+        await NotificationService.showSuccessNotification();
+        widget.onClienteCadastrado?.call();
+        limparCampos();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Enviado com sucesso!'),
+            duration: Duration(seconds: 4),
+          ),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1428,8 +1415,7 @@ class CampoNumero extends StatelessWidget {
             : null,
       ),
       validator: (v) => v == null || v.trim().isEmpty
-          ? 'Número obrigatório'
-          : null,
+          ? 'Número obrigatório' : null,
     );
   }
 }
