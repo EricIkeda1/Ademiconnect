@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AvisosSheet extends StatefulWidget {
-
   final List<Map<String, dynamic>>? leads;
 
   const AvisosSheet({super.key, this.leads});
@@ -105,11 +104,12 @@ class _AvisosSheetState extends State<AvisosSheet> {
       List realRows = [];
       if (uid != null) {
         realRows = await _sb
-            .from('notificacoes')
-            .select('id, user_id, ref, tipo, titulo, mensagem, data, lido')
-            .eq('user_id', uid)
-            .order('data', ascending: false)
-            .range(start, end) as List;
+                .from('notificacoes')
+                .select('id, user_id, ref, tipo, titulo, mensagem, data, lido')
+                .eq('user_id', uid)
+                .order('data', ascending: false)
+                .range(start, end)
+            as List;
       }
 
       final reais = <_Aviso>[];
@@ -120,8 +120,8 @@ class _AvisosSheetState extends State<AvisosSheet> {
             tipo: _TipoAvisoX.parse((r['tipo'] ?? '').toString()),
             titulo: (r['titulo'] ?? '').toString(),
             mensagem: (r['mensagem'] ?? '').toString(),
-            data:
-                DateTime.tryParse((r['data'] ?? '').toString()) ?? DateTime.now(),
+            data: DateTime.tryParse((r['data'] ?? '').toString()) ??
+                DateTime.now(),
             lido: (r['lido'] ?? false) == true,
             ref: (r['ref'] ?? '').toString(),
           ),
@@ -287,8 +287,8 @@ class _AvisosSheetState extends State<AvisosSheet> {
                                         style: TextStyle(
                                           fontSize: 14.5,
                                           fontWeight: FontWeight.w700,
-                                          color: texto.withOpacity(
-                                              a.lido ? 0.6 : 1.0),
+                                          color: texto
+                                              .withOpacity(a.lido ? 0.6 : 1.0),
                                         ),
                                       ),
                                     ),
@@ -378,7 +378,7 @@ class _Aviso {
   final String mensagem;
   final DateTime data;
   final bool lido;
-  final String ref; 
+  final String ref;
 
   const _Aviso({
     required this.id,

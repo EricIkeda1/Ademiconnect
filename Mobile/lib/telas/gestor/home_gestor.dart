@@ -34,7 +34,7 @@ class _HomeGestorState extends State<HomeGestor> {
   final List<Map<String, dynamic>> _leads = [];
   final Set<dynamic> _ids = {};
   int _page = 0;
-  final int _pageSize = 100000; // carrega tudo de uma vez
+  final int _pageSize = 100000;
   bool _hasMore = false;
   bool _loadingMore = false;
   bool _expandirTodos = false;
@@ -80,12 +80,14 @@ class _HomeGestorState extends State<HomeGestor> {
   String _removeCommaAfterTypeAtStart(String s) {
     if (s.isEmpty) return s;
     s = s.replaceFirstMapped(
-        RegExp(r'^\s*(Av|R|Rod|Al|Trav)\.\s*,\s*', caseSensitive: false),
-        (m) => '${m.group(1)}. ');
+      RegExp(r'^\s*(Av|R|Rod|Al|Trav)\.\s*,\s*', caseSensitive: false),
+      (m) => '${m.group(1)}. ',
+    );
     s = s.replaceFirstMapped(
-        RegExp(r'^\s*(Avenida|Rua|Rodovia|Alameda|Travessa)\s*,\s*',
-            caseSensitive: false),
-        (m) => '${m.group(1)} ');
+      RegExp(r'^\s*(Avenida|Rua|Rodovia|Alameda|Travessa)\s*,\s*',
+          caseSensitive: false),
+      (m) => '${m.group(1)} ',
+    );
     return s.replaceAll(RegExp(r'\s{2,}'), ' ').trimLeft();
   }
 
@@ -430,9 +432,12 @@ class _HomeGestorState extends State<HomeGestor> {
                                 backgroundColor: Colors.white,
                                 shape: const RoundedRectangleBorder(
                                   borderRadius: BorderRadius.vertical(
-                                      top: Radius.circular(16)),
+                                    top: Radius.circular(16),
+                                  ),
                                 ),
-                                builder: (ctx) => const AvisosSheet(),
+                                builder: (ctx) => AvisosSheet(
+                                  leads: _leads,
+                                ),
                               );
                             },
                             query: _query,
@@ -599,8 +604,6 @@ class _HomeGestorState extends State<HomeGestor> {
   }
 
   Future<void> _abrirTransferir(Map<String, dynamic> c) async {
-    final dias = (c['dias'] as int?) ?? -1;
-
     final ok = await showDialog<bool>(
       context: context,
       barrierDismissible: true,
@@ -616,11 +619,32 @@ class _HomeGestorState extends State<HomeGestor> {
           if (res == null || res is! List || res.isEmpty) {
             throw Exception('Sem permissão para transferir este lead (RLS/escopo).');
           }
+
           if (!mounted) return;
           setState(() => c['consUid'] = novoUid);
+
+          final novoCons = await _sb
+              .from('consultores')
+              .select('uid, nome')
+              .eq('uid', novoUid)
+              .maybeSingle();
+          final nomeNovoCons = (novoCons?['nome'] ?? '').toString();
+          final userIdDestino = novoUid;
+
+          await _sb.from('notificacoes').insert({
+            'user_id': userIdDestino,
+            'tipo': 'transferido',
+            'titulo': 'Lead transferido para você',
+            'mensagem':
+                'O lead ${c['nome']} foi transferido para o consultor $nomeNovoCons.',
+            'ref': 'lead:${c['id']}',
+            'data': DateTime.now().toIso8601String(),
+            'lido': false,
+          });
         },
       ),
     );
+
     if (ok == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Lead transferido com sucesso')),
