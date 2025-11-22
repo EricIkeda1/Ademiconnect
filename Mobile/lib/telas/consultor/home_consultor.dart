@@ -13,19 +13,19 @@ import '../../models/cliente.dart';
 import '../../services/cliente_service.dart';
 
 class AdaptiveValueText extends StatelessWidget {
-  final String valueText;      
-  final String? compactFallback;  
+  final String valueText;
+  final String? compactFallback;
   final double fontSize;
   final FontWeight fontWeight;
   final TextAlign textAlign;
-  final bool preferCompactAboveThousand; 
+  final bool preferCompactAboveThousand;
 
   const AdaptiveValueText({
     super.key,
     required this.valueText,
     this.compactFallback,
     this.fontSize = 20,
-    this.fontWeight = FontWeight.w700,
+    this.fontWeight = FontWeight.w800,
     this.textAlign = TextAlign.right,
     this.preferCompactAboveThousand = false,
   });
@@ -95,7 +95,8 @@ class _HomeConsultorState extends State<HomeConsultor> {
   List<Cliente> _clientes = [];
 
   double _valorMes = 0.0;
-  final NumberFormat _brl = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+  final NumberFormat _brl =
+      NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
 
   String _userName = 'Consultor';
   String _matricula = '';
@@ -134,8 +135,9 @@ class _HomeConsultorState extends State<HomeConsultor> {
 
       final nomeTabela = (doc?['nome'] as String?)?.trim() ?? '';
       final nomeAuth = (user.userMetadata?['name'] as String?)?.trim() ?? '';
-      final nomeEscolhido =
-          nomeTabela.isNotEmpty ? nomeTabela : (nomeAuth.isNotEmpty ? nomeAuth : 'Consultor');
+      final nomeEscolhido = nomeTabela.isNotEmpty
+          ? nomeTabela
+          : (nomeAuth.isNotEmpty ? nomeAuth : 'Consultor');
 
       final matricula = (doc?['matricula'] as String?)?.trim() ?? '';
       final dataCadastroIso = doc?['data_cadastro']?.toString();
@@ -167,16 +169,22 @@ class _HomeConsultorState extends State<HomeConsultor> {
     if (user == null || !mounted) return;
     final uid = user.id;
 
-    final rows = await _client.from('clientes').select('*').eq('consultor_uid_t', uid) as List;
+    final rows = await _client
+        .from('clientes')
+        .select('*')
+        .eq('consultor_uid_t', uid) as List;
 
-    final clientes = rows.map((m) => Cliente.fromMap(m as Map<String, dynamic>)).toList();
+    final clientes =
+        rows.map((m) => Cliente.fromMap(m as Map<String, dynamic>)).toList();
 
     final agora = DateTime.now();
     final hoje = DateTime(agora.year, agora.month, agora.day);
 
     final visitasHoje = clientes.where((c) {
       final d = c.dataVisita;
-      return d.year == hoje.year && d.month == hoje.month && d.day == hoje.day;
+      return d.year == hoje.year &&
+          d.month == hoje.month &&
+          d.day == hoje.day;
     }).length;
 
     final inicioMes = DateTime(agora.year, agora.month, 1);
@@ -200,13 +208,17 @@ class _HomeConsultorState extends State<HomeConsultor> {
 
       final raw = map['valor_proposta'];
       double v = 0.0;
-      if (raw is num) v = raw.toDouble();
-      else if (raw != null) v = double.tryParse(raw.toString()) ?? 0.0;
+      if (raw is num) {
+        v = raw.toDouble();
+      } else if (raw != null) {
+        v = double.tryParse(raw.toString()) ?? 0.0;
+      }
       somaMes += v;
     }
 
     final finalizados = rows.where((row) {
-      final status = (row as Map<String, dynamic>)['status_negociacao'] as String?;
+      final status =
+          (row as Map<String, dynamic>)['status_negociacao'] as String?;
       return status != null && status.toLowerCase() == 'fechada';
     }).length;
 
@@ -265,24 +277,32 @@ class _HomeConsultorState extends State<HomeConsultor> {
         }
       }
 
-      final web = Uri.parse('https://www.google.com/maps/search/?api=1&query=$q');
-      final ok = await launchUrl(web, mode: LaunchMode.externalApplication);
+      final web = Uri.parse(
+          'https://www.google.com/maps/search/?api=1&query=$q');
+      final ok =
+          await launchUrl(web, mode: LaunchMode.externalApplication);
       if (!ok && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Não foi possível abrir o Maps'), backgroundColor: Colors.red),
+          const SnackBar(
+              content: Text('Não foi possível abrir o Maps'),
+              backgroundColor: Colors.red),
         );
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao abrir o Maps: $e'), backgroundColor: Colors.red),
+        SnackBar(
+            content: Text('Erro ao abrir o Maps: $e'),
+            backgroundColor: Colors.red),
       );
     }
   }
 
   Stream<List<Map<String, dynamic>>> _streamClientes() {
     final user = _client.auth.currentSession?.user;
-    if (user == null) return const Stream<List<Map<String, dynamic>>>.empty();
+    if (user == null) {
+      return const Stream<List<Map<String, dynamic>>>.empty();
+    }
 
     return _client
         .from('clientes')
@@ -293,11 +313,21 @@ class _HomeConsultorState extends State<HomeConsultor> {
         .asStream();
   }
 
+  // ==== CARD RUA DE TRABALHO, ESTILO UNIFORME ====
+
   Widget _buildRuaTrabalhoCard() {
     return Card(
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       elevation: 1,
+      color: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: const BorderSide(
+          color: Color(0xFFE5E7EB),
+          width: 1,
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(6),
         child: Column(
@@ -311,11 +341,15 @@ class _HomeConsultorState extends State<HomeConsultor> {
                   height: 18,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEFFAF1),
+                    color: const Color(0xFFF3F4F6),
                     borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: const Color(0xFFDCEFE1)),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
                   ),
-                  child: const Icon(Icons.flag, size: 12, color: Color(0xFF3CB371)),
+                  child: const Icon(
+                    Icons.flag,
+                    size: 12,
+                    color: Color(0xFF10B981),
+                  ),
                 ),
                 const SizedBox(width: 4),
                 const Expanded(
@@ -323,7 +357,8 @@ class _HomeConsultorState extends State<HomeConsultor> {
                     'Rua de Trabalho - Hoje',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    style:
+                        TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                 ),
               ],
@@ -347,8 +382,10 @@ class _HomeConsultorState extends State<HomeConsultor> {
       DateTime data = DateTime.parse(dataStr);
       if (horaStr != null && horaStr.isNotEmpty) {
         final parts = horaStr.split(':');
-        int parsePart(int idx) => (idx < parts.length) ? int.tryParse(parts[idx]) ?? 0 : 0;
-        data = DateTime(data.year, data.month, data.day, parsePart(0), parsePart(1), parsePart(2));
+        int parsePart(int idx) =>
+            (idx < parts.length) ? int.tryParse(parts[idx]) ?? 0 : 0;
+        data = DateTime(data.year, data.month, data.day, parsePart(0),
+            parsePart(1), parsePart(2));
         return DateFormat('HH:mm').format(data);
       }
       final embutida = DateFormat('HH:mm').format(data);
@@ -363,7 +400,8 @@ class _HomeConsultorState extends State<HomeConsultor> {
       return DateTime(data.year, data.month, data.day);
     }
     final parts = hora.split(':');
-    int parsePart(int idx) => (idx < parts.length) ? int.tryParse(parts[idx]) ?? 0 : 0;
+    int parsePart(int idx) =>
+        (idx < parts.length) ? int.tryParse(parts[idx]) ?? 0 : 0;
     final h = parsePart(0);
     final m = parsePart(1);
     final s = parsePart(2);
@@ -399,12 +437,15 @@ class _HomeConsultorState extends State<HomeConsultor> {
       stream: _streamClientes(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildRuaTrabalhoPlaceholder(cs, 'Carregando...', 'Buscando dados do banco');
+          return _buildRuaTrabalhoPlaceholder(
+              cs, 'Carregando...', 'Buscando dados do banco');
         }
 
-        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-          return _buildRuaTrabalhoPlaceholder(
-              cs, 'Nenhuma visita hoje', 'Cadastre clientes para ver as visitas aqui');
+        if (snapshot.hasError ||
+            !snapshot.hasData ||
+            snapshot.data!.isEmpty) {
+          return _buildRuaTrabalhoPlaceholder(cs, 'Nenhuma visita hoje',
+              'Cadastre clientes para ver as visitas aqui');
         }
 
         final lista = snapshot.data!;
@@ -423,57 +464,75 @@ class _HomeConsultorState extends State<HomeConsultor> {
         }
 
         if (deHoje.isEmpty) {
-          return _buildRuaTrabalhoPlaceholder(cs, 'Nenhuma visita para hoje', 'As visitas de hoje aparecerão aqui');
+          return _buildRuaTrabalhoPlaceholder(cs, 'Nenhuma visita para hoje',
+              'As visitas de hoje aparecerão aqui');
         }
 
         deHoje.sort(_safeCompare);
         final clienteHoje = deHoje.first;
 
         final estabelecimento =
-            (clienteHoje['estabelecimento'] as String?)?.trim() ?? 'Estabelecimento';
-        final tipoAbrev = (clienteHoje['logradouro'] as String?)?.trim() ?? '';
-        final nomeVia = (clienteHoje['endereco'] as String?)?.trim() ?? '';
-        final numero = (clienteHoje['numero']?.toString() ?? '').trim();
-        final cidade = (clienteHoje['cidade'] as String?)?.trim() ?? '';
-        final estado = (clienteHoje['estado'] as String?)?.trim() ?? '';
+            (clienteHoje['estabelecimento'] as String?)?.trim() ??
+                'Estabelecimento';
+        final tipoAbrev =
+            (clienteHoje['logradouro'] as String?)?.trim() ?? '';
+        final nomeVia =
+            (clienteHoje['endereco'] as String?)?.trim() ?? '';
+        final numero =
+            (clienteHoje['numero']?.toString() ?? '').trim();
+        final cidade =
+            (clienteHoje['cidade'] as String?)?.trim() ?? '';
+        final estado =
+            (clienteHoje['estado'] as String?)?.trim() ?? '';
         final horaHHmm = _formatHoraHoje(clienteHoje);
 
         final enderecoCompleto = [
-          [if (tipoAbrev.isNotEmpty) tipoAbrev, if (nomeVia.isNotEmpty) nomeVia]
-              .where((e) => e.isNotEmpty)
-              .join(' '),
+          [
+            if (tipoAbrev.isNotEmpty) tipoAbrev,
+            if (nomeVia.isNotEmpty) nomeVia
+          ].where((e) => e.isNotEmpty).join(' '),
           if (numero.isNotEmpty) numero,
-          if (cidade.isNotEmpty || estado.isNotEmpty) '$cidade - $estado',
+          if (cidade.isNotEmpty || estado.isNotEmpty)
+            '$cidade - $estado',
         ].where((e) => e.isNotEmpty).join(', ');
 
-        final tituloLinha =
-            horaHHmm.isNotEmpty ? 'HOJE $horaHHmm - $estabelecimento' : 'HOJE - $estabelecimento';
+        final tituloLinha = horaHHmm.isNotEmpty
+            ? 'HOJE $horaHHmm - $estabelecimento'
+            : 'HOJE - $estabelecimento';
 
         return GestureDetector(
           onTap: () => _abrirNoGoogleMaps(enderecoCompleto),
           onLongPress: () => _copiarEndereco(enderecoCompleto),
-          child: _buildRuaTrabalhoReal(cs, tituloLinha, enderecoCompleto),
+          child: _buildRuaTrabalhoReal(
+              cs, tituloLinha, enderecoCompleto),
         );
       },
     );
   }
 
-  Widget _buildRuaTrabalhoPlaceholder(ColorScheme cs, String titulo, String subtitulo) {
+  Widget _buildRuaTrabalhoPlaceholder(
+      ColorScheme cs, String titulo, String subtitulo) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: cs.surfaceVariant.withOpacity(0.08),
+        color: Colors.grey.shade100,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: cs.outline.withOpacity(0.18)),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Row(
         children: [
           Container(
             width: 32,
             height: 32,
-            decoration:
-                BoxDecoration(color: cs.surfaceVariant, borderRadius: BorderRadius.circular(8)),
-            child: Icon(Icons.info_outline, color: cs.onSurfaceVariant, size: 18),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.info_outline,
+              color: cs.onSurfaceVariant,
+              size: 18,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -485,7 +544,10 @@ class _HomeConsultorState extends State<HomeConsultor> {
                   titulo,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(
                         fontWeight: FontWeight.w600,
                         color: cs.onSurface,
                       ),
@@ -495,7 +557,10 @@ class _HomeConsultorState extends State<HomeConsultor> {
                   subtitulo,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: cs.onSurfaceVariant),
                 ),
               ],
             ),
@@ -505,35 +570,47 @@ class _HomeConsultorState extends State<HomeConsultor> {
     );
   }
 
-  Widget _buildRuaTrabalhoReal(ColorScheme cs, String tituloLinha, String localizacao) {
+  Widget _buildRuaTrabalhoReal(
+      ColorScheme cs, String tituloLinha, String localizacao) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: cs.primaryContainer.withOpacity(0.08),
+          color: Colors.grey.shade100,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: cs.primaryContainer.withOpacity(0.25)),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
         ),
         child: Row(
           children: [
             Container(
               width: 32,
               height: 32,
-              decoration: BoxDecoration(color: cs.primary, borderRadius: BorderRadius.circular(8)),
-              child: Icon(Icons.flag_rounded, color: cs.onPrimary, size: 18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.flag_rounded,
+                color: cs.primary,
+                size: 18,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
                   Text(
                     tituloLinha,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: cs.onSurface,
                         ),
@@ -542,13 +619,21 @@ class _HomeConsultorState extends State<HomeConsultor> {
                     localizacao,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
                   ),
                   Text(
                     'Toque para abrir no Maps',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelSmall
+                        ?.copyWith(
                           color: cs.primary,
                           fontWeight: FontWeight.w600,
                         ),
@@ -558,17 +643,21 @@ class _HomeConsultorState extends State<HomeConsultor> {
             ),
             const SizedBox(width: 8),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: cs.primary.withOpacity(0.08),
+                color: Colors.grey.shade200,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: cs.primary.withOpacity(0.25)),
+                border: Border.all(color: Colors.grey.shade400),
               ),
               child: Text(
                 'PRIORIDADE',
                 maxLines: 1,
                 overflow: TextOverflow.fade,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                style: Theme.of(context)
+                    .textTheme
+                    .labelSmall
+                    ?.copyWith(
                       color: cs.primary,
                       fontWeight: FontWeight.w700,
                     ),
@@ -582,19 +671,14 @@ class _HomeConsultorState extends State<HomeConsultor> {
 
   String abreviarBRL(num v) {
     final abs = v.abs();
-    String s;
-    if (abs >= 1e12) {
-      s = 'R\$ ${(v / 1e12).toStringAsFixed(2)} tri';
-    } else if (abs >= 1e9) {
-      s = 'R\$ ${(v / 1e9).toStringAsFixed(2)} bi';
+    if (abs >= 1e9) {
+      return 'R\$ ${(v / 1e9).toStringAsFixed(1)} bi';
     } else if (abs >= 1e6) {
-      s = 'R\$ ${(v / 1e6).toStringAsFixed(2)} mi';
+      return 'R\$ ${(v / 1e6).toStringAsFixed(1)} mi';
     } else if (abs >= 1e3) {
-      s = 'R\$ ${(v / 1e3).toStringAsFixed(2)} mil';
-    } else {
-      s = _brl.format(v);
+      return 'R\$ ${(v / 1e3).toStringAsFixed(0)} mil';
     }
-    return s.replaceAll('.', '#').replaceAll(',', '.').replaceAll('#', ',');
+    return _brl.format(v);
   }
 
   String formatBRLSeguro(num v) => _brl.format(v);
@@ -634,11 +718,14 @@ class _HomeConsultorState extends State<HomeConsultor> {
               const SizedBox(height: 10),
               LayoutBuilder(
                 builder: (context, cst) {
-                  const gutter = 10.0;
-                  final itemWidth = (cst.maxWidth - gutter) / 2;
+                  final isSmall =
+                      MediaQuery.of(context).size.width < 400;
+                  final gutter = isSmall ? 8.0 : 12.0;
+                  final itemWidth = (cst.maxWidth - 3 * gutter) / 2;
+
                   return Wrap(
                     spacing: gutter,
-                    runSpacing: gutter,
+                    runSpacing: gutter + 4,
                     children: [
                       SizedBox(
                         width: itemWidth,
@@ -649,7 +736,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
                           color: Colors.blue,
                           subtitle: 'Total cadastrados',
                           dense: true,
-                          alignRightValue: true,
                         ),
                       ),
                       SizedBox(
@@ -661,19 +747,17 @@ class _HomeConsultorState extends State<HomeConsultor> {
                           color: Colors.green,
                           subtitle: 'Agendadas para hoje',
                           dense: true,
-                          alignRightValue: true,
                         ),
                       ),
                       SizedBox(
                         width: itemWidth,
                         child: _metricCard(
                           title: 'Valor no mês',
-                          value: _valorMes, 
+                          value: _valorMes,
                           icon: Icons.account_balance_wallet_rounded,
                           color: Colors.orange,
                           subtitle: 'Propostas',
                           dense: true,
-                          alignRightValue: true,
                           isCurrency: true,
                         ),
                       ),
@@ -686,7 +770,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
                           color: Colors.black,
                           subtitle: 'Visitas concluídas',
                           dense: true,
-                          alignRightValue: true,
                         ),
                       ),
                     ],
@@ -704,7 +787,8 @@ class _HomeConsultorState extends State<HomeConsultor> {
                   labelColor: Colors.black,
                   unselectedLabelColor: Colors.black54,
                   indicatorSize: TabBarIndicatorSize.tab,
-                  labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                  labelStyle:
+                      TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
                   indicator: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.all(Radius.circular(20)),
@@ -736,6 +820,8 @@ class _HomeConsultorState extends State<HomeConsultor> {
     );
   }
 
+  // ==== CARDS DE MÉTRICAS, UNIFORMES COM A RUA ====
+
   Widget _metricCard({
     required String title,
     required dynamic value,
@@ -743,87 +829,102 @@ class _HomeConsultorState extends State<HomeConsultor> {
     required Color color,
     String? subtitle,
     bool dense = false,
-    bool alignRightValue = true,
     bool isCurrency = false,
   }) {
-    final double h = dense ? 56 : 72;
-    final EdgeInsets pad =
-        dense ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8) : const EdgeInsets.symmetric(horizontal: 12, vertical: 10);
-    final double iconSize = dense ? 16 : 18;
-    final double avatarRadius = dense ? 13 : 16;
-    final double titleSize = dense ? 11 : 12.5;
-    final double valueSize = dense ? 18 : 20;
-    final double subtitleSize = dense ? 10 : 11;
+    final EdgeInsets pad = EdgeInsets.symmetric(
+      horizontal: dense ? 10 : 12,
+      vertical: dense ? 8 : 9,
+    );
+
+    final double iconSize = dense ? 18 : 20;
+    final double iconBoxSize = dense ? 26 : 28;
+    final double valueSize = dense ? 17 : 18;
+    final double titleSize = dense ? 12 : 13;
+    final double subtitleSize = dense ? 11 : 12;
 
     String fullText;
     String? fallbackText;
 
     if (isCurrency && value is num) {
       fullText = formatBRLSeguro(value);
-      fallbackText = abreviarBRL(value); 
+      fallbackText = abreviarBRL(value);
     } else {
       fullText = value.toString();
       fallbackText = null;
     }
 
+    const Color borderColor = Color(0xFFE5E7EB);
+
     return Card(
+      margin: EdgeInsets.zero,
       elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: SizedBox(
-        height: h,
-        child: Padding(
-          padding: pad,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              CircleAvatar(
-                radius: avatarRadius,
-                backgroundColor: color.withOpacity(0.12),
-                child: Icon(icon, color: color, size: iconSize),
+      color: Colors.white,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: const BorderSide(color: borderColor, width: 1),
+      ),
+      child: Padding(
+        padding: pad,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: iconBoxSize,
+              height: iconBoxSize,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: borderColor),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: titleSize),
-                    ),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: subtitleSize,
-                          color: Colors.black.withOpacity(0.6),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+              child: Icon(
+                icon,
+                color: color,
+                size: iconSize,
               ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minWidth: 24),
-                  child: AdaptiveValueText(
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AdaptiveValueText(
                     valueText: fullText,
                     compactFallback: fallbackText,
                     fontSize: valueSize,
-                    fontWeight: FontWeight.w700,
-                    textAlign: TextAlign.right,
-                    preferCompactAboveThousand: isCurrency, 
+                    fontWeight: FontWeight.w800,
+                    textAlign: TextAlign.left,
+                    preferCompactAboveThousand: isCurrency,
                   ),
-                ),
+                  const SizedBox(height: 1),
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: titleSize,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black.withOpacity(0.85),
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 1),
+                    Text(
+                      subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: subtitleSize,
+                        fontWeight: FontWeight.w400,
+                        color: Colors.black.withOpacity(0.6),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

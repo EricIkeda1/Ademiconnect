@@ -91,17 +91,24 @@ class CorreiosCepService {
     final Map<String, dynamic> map;
     if (data is Map<String, dynamic>) {
       map = data;
-    } else if (data is List && data.isNotEmpty && data.first is Map<String, dynamic>) {
+    } else if (data is List &&
+        data.isNotEmpty &&
+        data.first is Map<String, dynamic>) {
       map = data.first as Map<String, dynamic>;
     } else {
       return null;
     }
 
-    String? uf = _readString(map, ['uf', 'estado', 'siglaUf']);
-    String? cidade = _readString(map, ['localidade', 'cidade', 'municipio', 'nomeMunicipio']);
-    String? bairro = _readString(map, ['bairro', 'distrito']);
-    String? logradouro = _readString(map, ['logradouro', 'endereco', 'nomeLogradouro']);
-    String? complemento = _readString(map, ['complemento']);
+    String? uf =
+        _readString(map, ['uf', 'estado', 'siglaUf']);
+    String? cidade =
+        _readString(map, ['localidade', 'cidade', 'municipio', 'nomeMunicipio']);
+    String? bairro =
+        _readString(map, ['bairro', 'distrito']);
+    String? logradouro =
+        _readString(map, ['logradouro', 'endereco', 'nomeLogradouro']);
+    String? complemento =
+        _readString(map, ['complemento']);
 
     return EnderecoCep(
       uf: (uf ?? '').toUpperCase(),
@@ -440,8 +447,7 @@ class CadastrarClienteState extends State<CadastrarCliente> {
           complementoCtrl.text = complemento;
         }
       });
-    } catch (_) {
-    }
+    } catch (_) {}
   }
 
   Future<void> salvarCliente() async {
@@ -459,7 +465,9 @@ class CadastrarClienteState extends State<CadastrarCliente> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Data e hora da negociação (próxima visita) são obrigatórias'),
+            content: Text(
+              'Data e hora da negociação (próxima visita) são obrigatórias',
+            ),
           ),
         );
         return;
@@ -536,16 +544,14 @@ class CadastrarClienteState extends State<CadastrarCliente> {
         cidade: norm(cidadeCtrl.text),
         endereco: enderecoNome,
         logradouro: logradouroTipo,
-        numero: numeroInt,
+        numero: numeroInt, // opcional
         complemento: complementoCtrl.text.trim().isNotEmpty
             ? norm(complementoCtrl.text)
             : null,
         bairro: norm(bairroCtrl.text),
         cep: cepDigits,
-
         dataVisita: agora,
         horaVisita: horaVisitaAtual,
-
         observacoes: observacoesCtrl.text.trim().isNotEmpty
             ? norm(observacoesCtrl.text)
             : null,
@@ -553,7 +559,6 @@ class CadastrarClienteState extends State<CadastrarCliente> {
         consultorUid: userId,
         statusNegociacao: statusNegociacao,
         valorProposta: valorProposta,
-
         dataNegociacao: dataHoraNegociacao,
         horaNegociacao: horaNegStr,
       );
@@ -567,7 +572,8 @@ class CadastrarClienteState extends State<CadastrarCliente> {
         try {
           await client.from('clientes').update({
             'data_negociacao': dataHoraNegociacao.toIso8601String(),
-            'hora_negociacao': DateFormat('HH:mm:ss').format(dataHoraNegociacao),
+            'hora_negociacao':
+                DateFormat('HH:mm:ss').format(dataHoraNegociacao),
             'data_visita': agora.toIso8601String(),
             'hora_visita': DateFormat('HH:mm:ss').format(agora),
           }).eq('id', cliente.id);
@@ -1066,11 +1072,11 @@ class CadastrarClienteState extends State<CadastrarCliente> {
                                           const Icon(Icons
                                               .timeline_outlined),
                                     ),
-                                    validator: (v) => v ==
-                                                null ||
-                                            v.isEmpty
-                                        ? 'Status obrigatório'
-                                        : null,
+                                    validator: (v) =>
+                                        v == null ||
+                                                v.isEmpty
+                                            ? 'Status obrigatório'
+                                            : null,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -1218,7 +1224,7 @@ class CadastrarClienteState extends State<CadastrarCliente> {
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
-'A data da visita e a hora da visita serão definidas automaticamente com a data e hora atuais do dispositivo no momento em que você salvar o cliente.',
+                                      'A data da visita e a hora da visita serão definidas automaticamente com a data e hora atuais do dispositivo no momento em que você salvar o cliente.',
                                       style: Theme.of(
                                               context)
                                           .textTheme
@@ -1346,7 +1352,6 @@ class CampoTipo extends StatelessWidget {
       decoration: const InputDecoration(
         labelText: 'Logradouro *',
         prefixIcon: Icon(Icons.map_outlined),
-        icon: Icon(Icons.keyboard_arrow_down_rounded),
       ),
       menuMaxHeight: menuMaxHeight,
       validator: (v) =>
@@ -1403,7 +1408,7 @@ class CampoNumero extends StatelessWidget {
       controller: controller,
       keyboardType: TextInputType.number,
       decoration: InputDecoration(
-        labelText: 'Número *',
+        labelText: 'Número',      
         hintText: '123',
         prefixIcon: const Icon(Icons.pin_outlined),
         contentPadding: isNarrow
@@ -1413,8 +1418,7 @@ class CampoNumero extends StatelessWidget {
               )
             : null,
       ),
-      validator: (v) => v == null || v.trim().isEmpty
-          ? 'Número obrigatório' : null,
+      validator: (v) => null,
     );
   }
 }
