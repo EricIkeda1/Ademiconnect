@@ -350,8 +350,8 @@ class CadastrarClienteState extends State<CadastrarCliente> {
     final raw = (v ?? '').trim();
     if (raw.isEmpty) return null;
 
-    final norm = raw.replaceAll('.', '').replaceAll(',', '.');
-    final parsed = num.tryParse(norm);
+    final normVal = raw.replaceAll('.', '').replaceAll(',', '.');
+    final parsed = num.tryParse(normVal);
     if (parsed == null) return 'Valor inválido';
     if (parsed < 0) return 'Valor não pode ser negativo';
     return null;
@@ -468,6 +468,7 @@ class CadastrarClienteState extends State<CadastrarCliente> {
             content: Text(
               'Data e hora da negociação (próxima visita) são obrigatórias',
             ),
+            behavior: SnackBarBehavior.floating,
           ),
         );
         return;
@@ -487,6 +488,7 @@ class CadastrarClienteState extends State<CadastrarCliente> {
             content: Text(
               'Data ou hora da negociação inválida. Use o formato correto.',
             ),
+            behavior: SnackBarBehavior.floating,
           ),
         );
         return;
@@ -505,6 +507,7 @@ class CadastrarClienteState extends State<CadastrarCliente> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Erro: sessão expirada. Faça login novamente.'),
+            behavior: SnackBarBehavior.floating,
           ),
         );
         return;
@@ -578,7 +581,14 @@ class CadastrarClienteState extends State<CadastrarCliente> {
 
       if (!mounted) return;
 
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+
       if (persistedNow) {
+        final nomeParaMostrar = cliente.nomeCliente.isNotEmpty
+            ? cliente.nomeCliente
+            : cliente.estabelecimento;
+
         if (isOnline) {
           try {
             await client.from('clientes').update({
@@ -592,64 +602,38 @@ class CadastrarClienteState extends State<CadastrarCliente> {
             debugPrint('Erro ao atualizar datas/horas extras: $e');
           }
 
-          final nomeParaMostrar = cliente.nomeCliente.isNotEmpty
-              ? cliente.nomeCliente
-              : cliente.estabelecimento;
-
-          await showDialog<void>(
-            context: context,
-            barrierDismissible: false,
-            builder: (ctx) {
-              return AlertDialog(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                title: const Text('Cliente cadastrado'),
-                content: Text(
-                  'O cliente "$nomeParaMostrar" foi cadastrado com sucesso.',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(ctx).pop(),
-                    child: const Text('OK'),
-                  ),
-                ],
-              );
-            },
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                'Cliente "$nomeParaMostrar" cadastrado e enviado ao servidor.',
+              ),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+            ),
           );
         } else {
-          await showDialog<void>(
-            context: context,
-            barrierDismissible: false,
-            builder: (ctx) {
-              return AlertDialog(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                title: const Text('Cliente salvo offline'),
-                content: const Text(
-                  'Cliente salvo com sucesso! Portanto ficará salvo no cache '
-                  'e ao voltar à rede será enviado automaticamente!',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(ctx).pop(),
-                    child: const Text('OK'),
-                  ),
-                ],
-              );
-            },
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Sem conexão. Cliente salvo no dispositivo e será enviado '
+                'automaticamente quando você voltar a ficar online.',
+              ),
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 4),
+            ),
           );
         }
 
         widget.onClienteCadastrado?.call();
         limparCampos();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           const SnackBar(
             content: Text(
               'Endereço já cadastrado (logradouro + número).',
             ),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 3),
           ),
         );
       }

@@ -15,6 +15,9 @@ import '../../services/cliente_service.dart';
 const Color kDashboardCardBackground = Color(0xFFE0E0E0);
 const Color kDashboardBorder = Color(0xFFE5E7EB);
 
+const double kDashboardElevation = 8;
+const Color kDashboardShadow = Colors.black26;
+
 class AdaptiveValueText extends StatelessWidget {
   final String valueText;
   final String? compactFallback;
@@ -280,8 +283,8 @@ class _HomeConsultorState extends State<HomeConsultor> {
         }
       }
 
-      final web = Uri.parse(
-          'https://www.google.com/maps/search/?api=1&query=$q');
+      final web =
+          Uri.parse('https://www.google.com/maps/search/?api=1&query=$q');
       final ok =
           await launchUrl(web, mode: LaunchMode.externalApplication);
       if (!ok && mounted) {
@@ -316,13 +319,11 @@ class _HomeConsultorState extends State<HomeConsultor> {
         .asStream();
   }
 
-  // ==== CARD RUA DE TRABALHO (COM DESTAQUE) ====
-
   Widget _buildRuaTrabalhoCard() {
     return Card(
       margin: EdgeInsets.zero,
-      elevation: 6,
-      shadowColor: Colors.black26,
+      elevation: kDashboardElevation,
+      shadowColor: kDashboardShadow,
       color: kDashboardCardBackground,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
@@ -579,8 +580,8 @@ class _HomeConsultorState extends State<HomeConsultor> {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: Card(
-        elevation: 2,
-        shadowColor: Colors.black12,
+        elevation: 4,
+        shadowColor: Colors.black26,
         color: Colors.white,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
@@ -863,8 +864,8 @@ class _HomeConsultorState extends State<HomeConsultor> {
 
     return Card(
       margin: EdgeInsets.zero,
-      elevation: 6,
-      shadowColor: Colors.black26,
+      elevation: kDashboardElevation,
+      shadowColor: kDashboardShadow,
       color: kDashboardCardBackground,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
