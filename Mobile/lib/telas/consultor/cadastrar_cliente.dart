@@ -544,7 +544,7 @@ class CadastrarClienteState extends State<CadastrarCliente> {
         cidade: norm(cidadeCtrl.text),
         endereco: enderecoNome,
         logradouro: logradouroTipo,
-        numero: numeroInt, // opcional
+        numero: numeroInt,
         complemento: complementoCtrl.text.trim().isNotEmpty
             ? norm(complementoCtrl.text)
             : null,
@@ -563,34 +563,87 @@ class CadastrarClienteState extends State<CadastrarCliente> {
         horaNegociacao: horaNegStr,
       );
 
-      final persistedNow =
-          await ClienteService.instance.saveCliente(cliente);
+      final connectivityResult = await Connectivity().checkConnectivity();
+      final bool isOnline =
+          connectivityResult.contains(ConnectivityResult.mobile) ||
+              connectivityResult.contains(ConnectivityResult.wifi);
+
+      bool persistedNow;
+      if (isOnline) {
+        persistedNow = await ClienteService.instance.saveCliente(cliente);
+      } else {
+        persistedNow =
+            await ClienteService.instance.saveClienteOffline(cliente);
+      }
 
       if (!mounted) return;
 
       if (persistedNow) {
-        try {
-          await client.from('clientes').update({
-            'data_negociacao': dataHoraNegociacao.toIso8601String(),
-            'hora_negociacao':
-                DateFormat('HH:mm:ss').format(dataHoraNegociacao),
-            'data_visita': agora.toIso8601String(),
-            'hora_visita': DateFormat('HH:mm:ss').format(agora),
-          }).eq('id', cliente.id);
-        } catch (e) {
-          debugPrint('Erro ao atualizar datas/horas extras: $e');
+        if (isOnline) {
+          try {
+            await client.from('clientes').update({
+              'data_negociacao': dataHoraNegociacao.toIso8601String(),
+              'hora_negociacao':
+                  DateFormat('HH:mm:ss').format(dataHoraNegociacao),
+              'data_visita': agora.toIso8601String(),
+              'hora_visita': DateFormat('HH:mm:ss').format(agora),
+            }).eq('id', cliente.id);
+          } catch (e) {
+            debugPrint('Erro ao atualizar datas/horas extras: $e');
+          }
+
+          final nomeParaMostrar = cliente.nomeCliente.isNotEmpty
+              ? cliente.nomeCliente
+              : cliente.estabelecimento;
+
+          await showDialog<void>(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) {
+              return AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                title: const Text('Cliente cadastrado'),
+                content: Text(
+                  'O cliente "$nomeParaMostrar" foi cadastrado com sucesso.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('OK'),
+                  ),
+                ],
+              );
+            },
+          );
+        } else {
+          await showDialog<void>(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) {
+              return AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                title: const Text('Cliente salvo offline'),
+                content: const Text(
+                  'Cliente salvo com sucesso! Portanto ficará salvo no cache '
+                  'e ao voltar à rede será enviado automaticamente!',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('OK'),
+                  ),
+                ],
+              );
+            },
+          );
         }
 
-        await NotificationService.showSuccessNotification();
         widget.onClienteCadastrado?.call();
         limparCampos();
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Enviado com sucesso!'),
-            duration: Duration(seconds: 4),
-          ),
-        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1408,7 +1461,7 @@ class CampoNumero extends StatelessWidget {
       controller: controller,
       keyboardType: TextInputType.number,
       decoration: InputDecoration(
-        labelText: 'Número',      
+        labelText: 'Número',
         hintText: '123',
         prefixIcon: const Icon(Icons.pin_outlined),
         contentPadding: isNarrow

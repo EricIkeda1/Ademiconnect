@@ -1,15 +1,20 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';             
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/cliente.dart';
 
+
 class ClienteService {
   ClienteService._internal();
+
   static final ClienteService _singleton = ClienteService._internal();
+
   factory ClienteService() => _singleton;
+
   static ClienteService get instance => _singleton;
 
   final SupabaseClient _client = Supabase.instance.client;
@@ -25,7 +30,9 @@ class ClienteService {
   bool _initialized = false;
   bool _syncRunning = false;
 
-  final StreamController<int> _syncedCountController = StreamController<int>.broadcast();
+  final StreamController<int> _syncedCountController =
+      StreamController<int>.broadcast();
+
   Stream<int> get onSyncedCount => _syncedCountController.stream;
 
   Future<void> initialize() async {
@@ -39,7 +46,8 @@ class ClienteService {
     }
 
     await _connectivitySub?.cancel();
-    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) async {
+    _connectivitySub =
+        Connectivity().onConnectivityChanged.listen((results) async {
       final isNone = results.contains(ConnectivityResult.none);
       final current = isNone
           ? ConnectivityResult.none
@@ -49,7 +57,8 @@ class ClienteService {
                   ? ConnectivityResult.mobile
                   : ConnectivityResult.other));
 
-      final wasOffline = _lastState == null || _lastState == ConnectivityResult.none;
+      final wasOffline =
+          _lastState == null || _lastState == ConnectivityResult.none;
       _lastState = current;
 
       final becameOnline = wasOffline && current != ConnectivityResult.none;
@@ -75,7 +84,8 @@ class ClienteService {
     final results = await Connectivity().checkConnectivity();
     if (results.contains(ConnectivityResult.none)) return false;
     try {
-      final lookup = await InternetAddress.lookup('one.one.one.one').timeout(const Duration(seconds: 3));
+      final lookup = await InternetAddress.lookup('one.one.one.one')
+          .timeout(const Duration(seconds: 3));
       return lookup.isNotEmpty;
     } catch (_) {
       return false;
@@ -90,7 +100,11 @@ class ClienteService {
       final List list = jsonDecode(raw);
       _clientes
         ..clear()
-        ..addAll(list.map((e) => Cliente.fromJson(e as Map<String, dynamic>)));
+        ..addAll(
+          list.map(
+            (e) => Cliente.fromJson(e as Map<String, dynamic>),
+          ),
+        );
     } catch (_) {}
   }
 
@@ -108,24 +122,32 @@ class ClienteService {
     await prefs.setString(_pendingKey, jsonEncode(ops));
   }
 
+  /// Fluxo padrão ONLINE: tenta enviar para o Supabase; se der erro, enfileira.
   Future<bool> saveCliente(Cliente c) async {
     final uid = _client.auth.currentSession?.user.id;
-    final payload = (uid != null && uid.isNotEmpty) ? c.copyWith(consultorUid: uid) : c;
+    final payload =
+        (uid != null && uid.isNotEmpty) ? c.copyWith(consultorUid: uid) : c;
 
     _clientes.removeWhere((x) => x.id == payload.id);
     _clientes.add(payload);
     await _saveToCache();
 
     try {
-      final data = await _client
+      await _client
           .from('clientes')
-          .upsert(payload.toSupabaseMap(), onConflict: 'logradouro, numero', ignoreDuplicates: true)
-          .select();
-      return !(data is List && data.isEmpty);
+          .upsert(
+            payload.toSupabaseMap(),
+            onConflict: 'id',         
+            ignoreDuplicates: false,
+          )
+          .select();               
+      return true;                   
     } on PostgrestException catch (e) {
+      debugPrint('saveCliente PostgrestException: ${e.message}');
       await _enqueue('save', payload);
       return false;
     } catch (e) {
+      debugPrint('saveCliente erro genérico: $e');
       await _enqueue('save', payload);
       return false;
     }
@@ -136,7 +158,7 @@ class ClienteService {
     await _saveToCache();
     try {
       await _client.from('clientes').delete().eq('id', id);
-    } catch (e) {
+    } catch (_) {
       final stub = Cliente(
         id: id,
         nomeCliente: '',
@@ -183,7 +205,7 @@ class ClienteService {
     final List ops;
     try {
       ops = jsonDecode(raw);
-    } catch (e) {
+    } catch (_) {
       await prefs.remove(_pendingKey);
       return true;
     }
@@ -197,19 +219,24 @@ class ClienteService {
         final tipo = op['tipo'] as String;
         final c = Cliente.fromJson(op['cliente'] as Map<String, dynamic>);
         final uid = _client.auth.currentSession?.user.id;
-        final payload = (uid != null && uid.isNotEmpty) ? c.copyWith(consultorUid: uid) : c;
+        final payload =
+            (uid != null && uid.isNotEmpty) ? c.copyWith(consultorUid: uid) : c;
 
         if (tipo == 'save') {
           await _client
               .from('clientes')
-              .upsert(payload.toSupabaseMap(), onConflict: 'logradouro, numero', ignoreDuplicates: true)
+              .upsert(
+                payload.toSupabaseMap(),
+                onConflict: 'id',
+                ignoreDuplicates: false,
+              )
               .select();
           enviadosAgora++;
         } else if (tipo == 'remove') {
           await _client.from('clientes').delete().eq('id', payload.id);
           enviadosAgora++;
         }
-      } catch (e) {
+      } catch (_) {
         remain.add(op);
       }
     }
@@ -228,4 +255,19 @@ class ClienteService {
   }
 
   Future<void> syncPendingOperations() => _syncWithRetry();
+
+  /// Fluxo OFFLINE explícito: salva somente em cache + fila, sem tentar enviar agora.
+  Future<bool> saveClienteOffline(Cliente c) async {
+    final uid = _client.auth.currentSession?.user.id;
+    final payload =
+        (uid != null && uid.isNotEmpty) ? c.copyWith(consultorUid: uid) : c;
+
+    _clientes.removeWhere((x) => x.id == payload.id);
+    _clientes.add(payload);
+    await _saveToCache();
+
+    await _enqueue('save', payload);
+
+    return true;
+  }
 }

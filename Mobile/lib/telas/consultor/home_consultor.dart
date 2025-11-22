@@ -12,6 +12,9 @@ import 'cadastrar_cliente.dart';
 import '../../models/cliente.dart';
 import '../../services/cliente_service.dart';
 
+const Color kDashboardCardBackground = Color(0xFFE0E0E0);
+const Color kDashboardBorder = Color(0xFFE5E7EB);
+
 class AdaptiveValueText extends StatelessWidget {
   final String valueText;
   final String? compactFallback;
@@ -313,18 +316,19 @@ class _HomeConsultorState extends State<HomeConsultor> {
         .asStream();
   }
 
-  // ==== CARD RUA DE TRABALHO, ESTILO UNIFORME ====
+  // ==== CARD RUA DE TRABALHO (COM DESTAQUE) ====
 
   Widget _buildRuaTrabalhoCard() {
     return Card(
       margin: EdgeInsets.zero,
-      elevation: 1,
-      color: Colors.white,
+      elevation: 6,
+      shadowColor: Colors.black26,
+      color: kDashboardCardBackground,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         side: const BorderSide(
-          color: Color(0xFFE5E7EB),
+          color: kDashboardBorder,
           width: 1,
         ),
       ),
@@ -343,7 +347,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
                   decoration: BoxDecoration(
                     color: const Color(0xFFF3F4F6),
                     borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    border: Border.all(color: kDashboardBorder),
                   ),
                   child: const Icon(
                     Icons.flag,
@@ -574,96 +578,101 @@ class _HomeConsultorState extends State<HomeConsultor> {
       ColorScheme cs, String tituloLinha, String localizacao) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade100,
+      child: Card(
+        elevation: 2,
+        shadowColor: Colors.black12,
+        color: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          side: const BorderSide(color: kDashboardBorder, width: 1),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.flag_rounded,
+                  color: cs.primary,
+                  size: 18,
+                ),
               ),
-              child: Icon(
-                Icons.flag_rounded,
-                color: cs.primary,
-                size: 18,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    tituloLinha,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: cs.onSurface,
-                        ),
-                  ),
-                  Text(
-                    localizacao,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(
-                          color: cs.onSurfaceVariant,
-                        ),
-                  ),
-                  Text(
-                    'Toque para abrir no Maps',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context)
-                        .textTheme
-                        .labelSmall
-                        ?.copyWith(
-                          color: cs.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.grey.shade400),
-              ),
-              child: Text(
-                'PRIORIDADE',
-                maxLines: 1,
-                overflow: TextOverflow.fade,
-                style: Theme.of(context)
-                    .textTheme
-                    .labelSmall
-                    ?.copyWith(
-                      color: cs.primary,
-                      fontWeight: FontWeight.w700,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tituloLinha,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurface,
+                          ),
                     ),
+                    Text(
+                      localizacao,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                    ),
+                    Text(
+                      'Toque para abrir no Maps',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context)
+                          .textTheme
+                          .labelSmall
+                          ?.copyWith(
+                            color: cs.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.grey.shade400),
+                ),
+                child: Text(
+                  'PRIORIDADE',
+                  maxLines: 1,
+                  overflow: TextOverflow.fade,
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelSmall
+                      ?.copyWith(
+                        color: cs.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -721,7 +730,8 @@ class _HomeConsultorState extends State<HomeConsultor> {
                   final isSmall =
                       MediaQuery.of(context).size.width < 400;
                   final gutter = isSmall ? 8.0 : 12.0;
-                  final itemWidth = (cst.maxWidth - 3 * gutter) / 2;
+                  final itemWidth =
+                      (cst.maxWidth - 3 * gutter) / 2;
 
                   return Wrap(
                     spacing: gutter,
@@ -820,8 +830,6 @@ class _HomeConsultorState extends State<HomeConsultor> {
     );
   }
 
-  // ==== CARDS DE MÉTRICAS, UNIFORMES COM A RUA ====
-
   Widget _metricCard({
     required String title,
     required dynamic value,
@@ -853,16 +861,15 @@ class _HomeConsultorState extends State<HomeConsultor> {
       fallbackText = null;
     }
 
-    const Color borderColor = Color(0xFFE5E7EB);
-
     return Card(
       margin: EdgeInsets.zero,
-      elevation: 1,
-      color: Colors.white,
+      elevation: 6,
+      shadowColor: Colors.black26,
+      color: kDashboardCardBackground,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: const BorderSide(color: borderColor, width: 1),
+        side: const BorderSide(color: kDashboardBorder, width: 1),
       ),
       child: Padding(
         padding: pad,
@@ -875,7 +882,7 @@ class _HomeConsultorState extends State<HomeConsultor> {
               decoration: BoxDecoration(
                 color: const Color(0xFFF3F4F6),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: borderColor),
+                border: Border.all(color: kDashboardBorder),
               ),
               child: Icon(
                 icon,
