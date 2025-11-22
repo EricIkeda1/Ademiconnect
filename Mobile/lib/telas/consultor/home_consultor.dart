@@ -474,13 +474,31 @@ class _HomeConsultorState extends State<HomeConsultor> {
         }
 
         deHoje.sort(_safeCompare);
-        final clienteHoje = deHoje.first;
+        final clienteHoje = deHoje.last;
 
         final estabelecimento =
             (clienteHoje['estabelecimento'] as String?)?.trim() ??
                 'Estabelecimento';
-        final tipoAbrev =
+
+        final rawLogradouro =
             (clienteHoje['logradouro'] as String?)?.trim() ?? '';
+        String tipoAbrev = rawLogradouro;
+
+        if (tipoAbrev.isNotEmpty) {
+          final t = tipoAbrev.toLowerCase().replaceAll('.', '').trim();
+          if (t == 'r' || t == 'rua') {
+            tipoAbrev = 'Rua';
+          } else if (t == 'av' || t == 'avenida') {
+            tipoAbrev = 'Av.';
+          } else if (t == 'rodovia') {
+            tipoAbrev = 'Rod.';
+          } else if (t == 'travessa' || t == 'tv') {
+            tipoAbrev = 'Tv.';
+          } else {
+            tipoAbrev = tipoAbrev.replaceAll('.', '');
+          }
+        }
+
         final nomeVia =
             (clienteHoje['endereco'] as String?)?.trim() ?? '';
         final numero =
@@ -491,25 +509,35 @@ class _HomeConsultorState extends State<HomeConsultor> {
             (clienteHoje['estado'] as String?)?.trim() ?? '';
         final horaHHmm = _formatHoraHoje(clienteHoje);
 
+        final linha1 = [
+          if (tipoAbrev.isNotEmpty) tipoAbrev,
+          if (nomeVia.isNotEmpty) nomeVia,
+        ].join(' ');
+
         final enderecoCompleto = [
-          [
-            if (tipoAbrev.isNotEmpty) tipoAbrev,
-            if (nomeVia.isNotEmpty) nomeVia
-          ].where((e) => e.isNotEmpty).join(' '),
+          if (linha1.isNotEmpty) linha1,
           if (numero.isNotEmpty) numero,
           if (cidade.isNotEmpty || estado.isNotEmpty)
             '$cidade - $estado',
         ].where((e) => e.isNotEmpty).join(', ');
 
+        final localComEstabelecimento = [
+          estabelecimento,
+          if (enderecoCompleto.isNotEmpty) enderecoCompleto,
+        ].where((e) => e.isNotEmpty).join(' • ');
+
         final tituloLinha = horaHHmm.isNotEmpty
-            ? 'HOJE $horaHHmm - $estabelecimento'
-            : 'HOJE - $estabelecimento';
+            ? 'HOJE $horaHHmm'
+            : 'HOJE';
 
         return GestureDetector(
-          onTap: () => _abrirNoGoogleMaps(enderecoCompleto),
-          onLongPress: () => _copiarEndereco(enderecoCompleto),
+          onTap: () => _abrirNoGoogleMaps(localComEstabelecimento),
+          onLongPress: () => _copiarEndereco(localComEstabelecimento),
           child: _buildRuaTrabalhoReal(
-              cs, tituloLinha, enderecoCompleto),
+            cs,
+            tituloLinha,
+            localComEstabelecimento,
+          ),
         );
       },
     );

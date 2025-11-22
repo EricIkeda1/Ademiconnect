@@ -260,8 +260,11 @@ class MinhasVisitasTabState extends State<MinhasVisitasTab>
         .asStream();
   }
 
-  Future<void> abrirNoGoogleMaps(String endereco) async {
-    final q = Uri.encodeComponent(endereco.trim());
+  Future<void> abrirNoGoogleMaps(String endereco, {String? nome}) async {
+    final destino = nome != null && nome.trim().isNotEmpty
+        ? '$nome - $endereco'
+        : endereco;
+    final q = Uri.encodeComponent(destino.trim());
     final platform = Theme.of(context).platform;
 
     final androidGeo = Uri.parse('geo:0,0?q=$q');
@@ -314,7 +317,8 @@ class MinhasVisitasTabState extends State<MinhasVisitasTab>
     }
   }
 
-  Map<String, dynamic> determinarStatus(String? dataVisitaStr, {String? horaVisitaStr}) {
+  Map<String, dynamic> determinarStatus(String? dataVisitaStr,
+      {String? horaVisitaStr}) {
     if (dataVisitaStr == null || dataVisitaStr.isEmpty) {
       return {
         'icone': Icons.schedule_outlined,
@@ -813,7 +817,13 @@ class MinhasVisitasTabState extends State<MinhasVisitasTab>
           if (vm.enderecoCompleto.isNotEmpty) ...[
             const SizedBox(height: 8),
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              padIcon(icon: Icons.location_on_outlined, color: kMuted, size: 16, box: 28, background: kBg, borderColor: kBorder),
+              padIcon(
+                  icon: Icons.location_on_outlined,
+                  color: kMuted,
+                  size: 16,
+                  box: 28,
+                  background: kBg,
+                  borderColor: kBorder),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -827,28 +837,49 @@ class MinhasVisitasTabState extends State<MinhasVisitasTab>
           ],
           const SizedBox(height: 10),
           Row(children: [
-            padIcon(icon: Icons.access_time, color: kMuted, size: 16, box: 28, background: kBg, borderColor: kBorder),
+            padIcon(
+                icon: Icons.access_time,
+                color: kMuted,
+                size: 16,
+                box: 28,
+                background: kBg,
+                borderColor: kBorder),
             const SizedBox(width: 8),
-            Text(vm.dataFmt, style: const TextStyle(fontSize: 13, color: kTitle, fontWeight: FontWeight.w500)),
+            Text(vm.dataFmt,
+                style: const TextStyle(
+                    fontSize: 13, color: kTitle, fontWeight: FontWeight.w500)),
             const Spacer(),
             if (mostrarRota)
               TextButton.icon(
                 style: TextButton.styleFrom(
                   foregroundColor: kPrimary,
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: const BorderSide(color: kBorder)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: const BorderSide(color: kBorder)),
                 ),
-                onPressed: () => abrirNoGoogleMaps(vm.enderecoCompleto),
+                onPressed: () => abrirNoGoogleMaps(
+                  vm.enderecoCompleto,
+                  nome: vm.estabelecimento,
+                ),
                 icon: const Icon(Icons.map_outlined, size: 18),
-                label: const Text('Rota', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                label: const Text('Rota',
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
               ),
           ]),
           if (mostrarProposta && (vm.valorPropostaFmt ?? '').isNotEmpty) ...[
             const SizedBox(height: 8),
             Row(children: [
-              padIcon(icon: Icons.attach_money, color: kMuted, size: 16, box: 28, background: kBg, borderColor: kBorder),
+              padIcon(
+                  icon: Icons.attach_money,
+                  color: kMuted,
+                  size: 16,
+                  box: 28,
+                  background: kBg,
+                  borderColor: kBorder),
               const SizedBox(width: 8),
-              Text('Proposta: ${vm.valorPropostaFmt}', style: const TextStyle(fontSize: 13, color: kTitle)),
+              Text('Proposta: ${vm.valorPropostaFmt}',
+                  style: const TextStyle(fontSize: 13, color: kTitle)),
             ]),
           ],
         ],
@@ -881,7 +912,9 @@ class MinhasVisitasTabState extends State<MinhasVisitasTab>
       stream: todasVisitasStream,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return Column(children: List.generate(3, (i) => skeletonVisitaItem(key: ValueKey('sk_all_$i'))));
+          return Column(
+              children:
+                  List.generate(3, (i) => skeletonVisitaItem(key: ValueKey('sk_all_$i'))));
         }
         if (snap.hasError) return errorBox('Erro: ${snap.error}');
         cacheProximas = null;
@@ -933,7 +966,9 @@ class MinhasVisitasTabState extends State<MinhasVisitasTab>
           iconColor: kAccent,
           expanded: todosExpanded,
           onChanged: (v) => setState(() => todosExpanded = v),
-          placeholderChild: Column(children: List.generate(2, (i) => skeletonVisitaItem(key: ValueKey('ph_all_$i')))),
+          placeholderChild: Column(
+              children:
+                  List.generate(2, (i) => skeletonVisitaItem(key: ValueKey('ph_all_$i')))),
           child: todosExpanded
               ? (count == 0
                   ? emptyBox(
@@ -957,16 +992,23 @@ class MinhasVisitasTabState extends State<MinhasVisitasTab>
     );
   }
 
-  Widget emptyBox({required IconData icon, required String title, required String subtitle}) {
+  Widget emptyBox(
+      {required IconData icon,
+      required String title,
+      required String subtitle}) {
     return Container(
       padding: const EdgeInsets.all(32),
       child: Column(
         children: [
           padIcon(icon: icon, color: kMuted, size: 28, box: 56, background: kBg),
           const SizedBox(height: 16),
-          Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: kTitle)),
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.w600, color: kTitle)),
           const SizedBox(height: 6),
-          Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: kText, height: 1.5)),
+          Text(subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: kText, height: 1.5)),
         ],
       ),
     );
@@ -985,7 +1027,10 @@ class MinhasVisitasTabState extends State<MinhasVisitasTab>
         children: [
           const Icon(Icons.error_outline, color: Color(0xFFD32F2F), size: 18),
           const SizedBox(width: 8),
-          Expanded(child: Text(msg, style: const TextStyle(color: Color(0xFFD32F2F), fontSize: 13))),
+          Expanded(
+              child: Text(msg,
+                  style: const TextStyle(
+                      color: Color(0xFFD32F2F), fontSize: 13))),
         ],
       ),
     );
@@ -1039,12 +1084,16 @@ class MinhasVisitasTabState extends State<MinhasVisitasTab>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text('Pesquisar',
-                        style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: kTitle)),
+                        style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                            color: kTitle)),
                     const SizedBox(height: 10),
                     TextField(
                       controller: searchCtrl,
                       textInputAction: TextInputAction.search,
-                      decoration: obterDecoracaoCampo('Nome da rua', hint: 'Digite para filtrar...'),
+                      decoration: obterDecoracaoCampo('Nome da rua',
+                          hint: 'Digite para filtrar...'),
                       onTap: () => setState(() => showChips = true),
                       onSubmitted: (_) {
                         setState(() => showChips = false);
@@ -1071,8 +1120,11 @@ class MinhasVisitasTabState extends State<MinhasVisitasTab>
                           expanded: proxExpanded,
                           onChanged: (v) => setState(() => proxExpanded = v),
                           isLoading: proxExpanded,
-                          placeholderChild:
-                              Column(children: List.generate(3, (i) => skeletonVisitaItem(key: ValueKey('sk_prox_$i')))),
+                          placeholderChild: Column(
+                              children: List.generate(
+                                  3,
+                                  (i) => skeletonVisitaItem(
+                                      key: ValueKey('sk_prox_$i')))),
                           child: const SizedBox.shrink(),
                         ),
                         animatedExpansionCard(
@@ -1083,8 +1135,11 @@ class MinhasVisitasTabState extends State<MinhasVisitasTab>
                           expanded: todosExpanded,
                           onChanged: (v) => setState(() => todosExpanded = v),
                           isLoading: todosExpanded,
-                          placeholderChild:
-                              Column(children: List.generate(3, (i) => skeletonVisitaItem(key: ValueKey('sk_all_$i')))),
+                          placeholderChild: Column(
+                              children: List.generate(
+                                  3,
+                                  (i) => skeletonVisitaItem(
+                                      key: ValueKey('sk_all_$i')))),
                           child: const SizedBox.shrink(),
                         ),
                         animatedExpansionCard(
@@ -1095,14 +1150,16 @@ class MinhasVisitasTabState extends State<MinhasVisitasTab>
                           expanded: finExpanded,
                           onChanged: (v) => setState(() => finExpanded = v),
                           isLoading: finExpanded,
-                          placeholderChild:
-                              Column(children: List.generate(3, (i) => skeletonVisitaItem(key: ValueKey('sk_fin_$i')))),
+                          placeholderChild: Column(
+                              children: List.generate(
+                                  3,
+                                  (i) => skeletonVisitaItem(
+                                      key: ValueKey('sk_fin_$i')))),
                           child: const SizedBox.shrink(),
                         ),
                       ],
                     );
                   }
-
                   if (snapshot.hasError) return errorBox('Erro: ${snapshot.error}');
                   cacheProximas = null;
                   cacheFinalizados = null;
@@ -1116,11 +1173,14 @@ class MinhasVisitasTabState extends State<MinhasVisitasTab>
                     return rua.toLowerCase().contains(query.toLowerCase());
                   }
 
-                  final base = all.where((c) => matchesTextoRua(c) && matchChipsRua(c)).toList();
+                  final base =
+                      all.where((c) => matchesTextoRua(c) && matchChipsRua(c)).toList();
 
                   ruasTodas
                     ..clear()
-                    ..addAll(base.map((c) => (c['endereco'] ?? '').toString().trim()).where((s) => s.isNotEmpty));
+                    ..addAll(base
+                        .map((c) => (c['endereco'] ?? '').toString().trim())
+                        .where((s) => s.isNotEmpty));
 
                   cacheProximas ??= base.where(matchProximas).toList();
                   cacheFinalizados ??= base.where(matchFinalizadas).toList();
@@ -1141,15 +1201,19 @@ class MinhasVisitasTabState extends State<MinhasVisitasTab>
                         iconColor: kSuccess,
                         expanded: proxExpanded,
                         onChanged: (v) => setState(() => proxExpanded = v),
-                        placeholderChild:
-                            Column(children: List.generate(2, (i) => skeletonVisitaItem(key: ValueKey('ph_prox_$i')))),
+                        placeholderChild: Column(
+                            children: List.generate(
+                                2,
+                                (i) => skeletonVisitaItem(
+                                    key: ValueKey('ph_prox_$i')))),
                         child: proxExpanded
                             ? (countProx == 0
                                 ? emptyBox(
                                     icon: Icons.calendar_today_outlined,
                                     title: 'Nenhuma visita agendada',
                                     subtitle: query.isEmpty
-                                        ? (ruaSelecionada == null || ruaSelecionada!.isEmpty
+                                        ? (ruaSelecionada == null ||
+                                                ruaSelecionada!.isEmpty
                                             ? 'Cadastre clientes para agendar visitas'
                                             : 'Nenhum resultado encontrado')
                                         : 'Nenhum resultado encontrado',
@@ -1166,20 +1230,27 @@ class MinhasVisitasTabState extends State<MinhasVisitasTab>
                         iconColor: kText,
                         expanded: finExpanded,
                         onChanged: (v) => setState(() => finExpanded = v),
-                        placeholderChild:
-                            Column(children: List.generate(2, (i) => skeletonVisitaItem(key: ValueKey('ph_fin_$i')))),
+                        placeholderChild: Column(
+                            children: List.generate(
+                                2,
+                                (i) => skeletonVisitaItem(
+                                    key: ValueKey('ph_fin_$i')))),
                         child: finExpanded
                             ? (countFin == 0
                                 ? emptyBox(
                                     icon: Icons.check_circle_outline,
                                     title: 'Nenhuma visita finalizada',
                                     subtitle: query.isEmpty
-                                        ? (ruaSelecionada == null || ruaSelecionada!.isEmpty
+                                        ? (ruaSelecionada == null ||
+                                                ruaSelecionada!.isEmpty
                                             ? 'Visitas concluídas aparecerão aqui'
                                             : 'Nenhum resultado encontrado')
                                         : 'Nenhum resultado encontrado',
                                   )
-                                : buildVisitasVMList(vmsFin, mostrarRota: false))
+                                : buildVisitasVMList(
+                                    vmsFin,
+                                    mostrarRota: false,
+                                  ))
                             : const SizedBox.shrink(),
                       ),
                     ],
@@ -1241,12 +1312,16 @@ class AnimatedSizeExpansionCardState extends State<AnimatedSizeExpansionCard>
   void initState() {
     super.initState();
     expandedLocal = widget.expanded;
-    ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
-    turns = Tween<double>(begin: 0.0, end: 0.5).animate(CurvedAnimation(parent: ctrl, curve: Curves.easeInOut));
+    ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 200));
+    turns = Tween<double>(begin: 0.0, end: 0.5)
+        .animate(CurvedAnimation(parent: ctrl, curve: Curves.easeInOut));
     if (expandedLocal) ctrl.value = 1.0;
 
-    fadeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
-    fadeAnim = CurvedAnimation(parent: fadeCtrl, curve: Curves.easeInOut);
+    fadeCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 200));
+    fadeAnim =
+        CurvedAnimation(parent: fadeCtrl, curve: Curves.easeInOut);
     if (expandedLocal) {
       fadeCtrl.value = 1.0;
       showRealChild = true;
@@ -1263,7 +1338,10 @@ class AnimatedSizeExpansionCardState extends State<AnimatedSizeExpansionCard>
 
   void toggle({bool? explicit}) {
     final now = DateTime.now();
-    if (lastTap != null && now.difference(lastTap!) < const Duration(milliseconds: 350)) return;
+    if (lastTap != null &&
+        now.difference(lastTap!) < const Duration(milliseconds: 350)) {
+      return;
+    }
     lastTap = now;
 
     setState(() {
@@ -1293,7 +1371,8 @@ class AnimatedSizeExpansionCardState extends State<AnimatedSizeExpansionCard>
 
   @override
   Widget build(BuildContext context) {
-    final child = showRealChild ? widget.child : (widget.placeholderChild ?? const SizedBox(height: 80));
+    final child =
+        showRealChild ? widget.child : (widget.placeholderChild ?? const SizedBox(height: 80));
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -1319,7 +1398,8 @@ class AnimatedSizeExpansionCardState extends State<AnimatedSizeExpansionCard>
                         color: widget.iconColor ?? kPrimary,
                         size: 18,
                         box: 36,
-                        background: (widget.iconColor ?? kPrimary).withOpacity(.10),
+                        background:
+                            (widget.iconColor ?? kPrimary).withOpacity(.10),
                       ),
                       const SizedBox(width: 12),
                     ],
@@ -1329,23 +1409,30 @@ class AnimatedSizeExpansionCardState extends State<AnimatedSizeExpansionCard>
                         children: [
                           Text(widget.title,
                               style: const TextStyle(
-                                  fontSize: 15, fontWeight: FontWeight.w600, color: kTitle)),
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: kTitle)),
                           if (widget.subtitle != null) ...[
                             const SizedBox(height: 2),
                             Text(widget.subtitle!,
-                                style:
-                                    const TextStyle(fontSize: 12.5, color: kText)),
+                                style: const TextStyle(
+                                    fontSize: 12.5, color: kText)),
                           ],
                         ],
                       ),
                     ),
                     if (widget.isLoading) ...[
-                      const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: kMuted)),
+                      const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: kMuted)),
                       const SizedBox(width: 8),
                     ],
                     RotationTransition(
                       turns: turns,
-                      child: const Icon(Icons.keyboard_arrow_down, color: kMuted, size: 22),
+                      child: const Icon(Icons.keyboard_arrow_down,
+                          color: kMuted, size: 22),
                     ),
                   ],
                 ),
@@ -1357,8 +1444,13 @@ class AnimatedSizeExpansionCardState extends State<AnimatedSizeExpansionCard>
             curve: Curves.easeInOut,
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
-              constraints: expandedLocal ? const BoxConstraints() : const BoxConstraints(maxHeight: 0.0),
-              child: child,
+              constraints: expandedLocal
+                  ? const BoxConstraints()
+                  : const BoxConstraints(maxHeight: 0.0),
+              child: FadeTransition(
+                opacity: fadeAnim,
+                child: child,
+              ),
             ),
           ),
         ],

@@ -66,9 +66,7 @@ class _LoginPageState extends State<LoginPage> {
             .select('tipo')
             .eq('id', user.id)
             .maybeSingle();
-        if (gestor != null) {
-        }
-      } catch (e) {
+      } catch (_) {
         gestor = null;
       }
 
@@ -79,9 +77,7 @@ class _LoginPageState extends State<LoginPage> {
               .select('tipo')
               .eq('uid', user.id)
               .maybeSingle();
-          if (consultor != null) {
-          }
-        } catch (e) {
+        } catch (_) {
           consultor = null;
         }
       }
@@ -91,11 +87,11 @@ class _LoginPageState extends State<LoginPage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Usuário não encontrado no sistema. Contate o administrador.'),
+              content: Text(
+                'Usuário não encontrado no sistema. Contate o administrador.',
+              ),
             ),
           );
-        }
-        if (mounted) {
           setState(() => _loading = false);
         }
         return;
@@ -104,7 +100,8 @@ class _LoginPageState extends State<LoginPage> {
       String route = '/consultor';
       if (gestor != null) {
         final tipo = (gestor['tipo'] as String?) ?? 'gestor';
-        route = (tipo == 'gestor' || tipo == 'supervisor') ? '/gestor' : '/consultor';
+        route =
+            (tipo == 'gestor' || tipo == 'supervisor') ? '/gestor' : '/consultor';
       }
 
       if (mounted) {
@@ -120,13 +117,15 @@ class _LoginPageState extends State<LoginPage> {
           mensagem = 'Usuário não encontrado';
           break;
         case 'email_not_confirmed':
-          mensagem = 'E-mail não confirmado. Verifique sua caixa de entrada.';
+          mensagem =
+              'E-mail não confirmado. Verifique sua caixa de entrada.';
           break;
         default:
           mensagem = e.message;
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensagem)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(mensagem)));
       }
     } catch (e) {
       if (mounted) {
@@ -141,6 +140,31 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  InputDecoration _inputDecoration({
+    required String label,
+    Widget? suffixIcon,
+  }) {
+    const borderColor = Color(0xFF1E3A8A);
+
+    return InputDecoration(
+      labelText: label,
+      filled: true,
+      fillColor: Colors.white.withOpacity(0.9), 
+      suffixIcon: suffixIcon,
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: borderColor, width: 1.4),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: borderColor, width: 2),
+      ),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -152,11 +176,14 @@ class _LoginPageState extends State<LoginPage> {
             right: 0,
             top: 0,
             bottom: 0,
-            child: Image.asset("assets/Linha_Lateral.png", fit: BoxFit.cover),
+            child: Image.asset(
+              "assets/Linha_Lateral.png",
+              fit: BoxFit.cover,
+            ),
           ),
           Center(
             child: SingleChildScrollView(
-              reverse: true, 
+              reverse: true,
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               child: Form(
@@ -168,49 +195,63 @@ class _LoginPageState extends State<LoginPage> {
                     children: [
                       Image.asset("assets/Logo.png", height: 120),
                       const SizedBox(height: 40),
+
                       TextFormField(
                         controller: _emailCtrl,
-                        decoration: InputDecoration(
-                          labelText: "E-mail",
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
+                        decoration: _inputDecoration(label: "E-mail"),
+                        style: const TextStyle(color: Colors.black87),
+                        cursorColor: const Color(0xFF1E3A8A),
                         keyboardType: TextInputType.emailAddress,
                         autocorrect: false,
                         enableSuggestions: false,
                         textCapitalization: TextCapitalization.none,
                         validator: (value) {
-                          if (value == null || value.isEmpty) return 'Informe o e-mail';
-                          final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
-                          if (!emailRegex.hasMatch(value)) return 'Email inválido';
+                          if (value == null || value.isEmpty) {
+                            return 'Informe o e-mail';
+                          }
+                          final emailRegex =
+                              RegExp(r'^[^@]+@[^@]+\.[^@]+');
+                          if (!emailRegex.hasMatch(value)) {
+                            return 'Email inválido';
+                          }
                           return null;
                         },
                       ),
+
                       const SizedBox(height: 16),
+
+                      // Campo Senha (sem BackdropFilter, fundo firme)
                       TextFormField(
                         controller: _passCtrl,
                         obscureText: _obscure,
-                        decoration: InputDecoration(
-                          labelText: "Senha",
+                        decoration: _inputDecoration(
+                          label: "Senha",
                           suffixIcon: IconButton(
-                            icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
-                            onPressed: () => setState(() => _obscure = !_obscure),
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            icon: Icon(
+                              _obscure
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                            ),
+                            onPressed: () =>
+                                setState(() => _obscure = !_obscure),
                           ),
                         ),
-                        validator: (v) => (v?.isEmpty ?? true) ? 'Informe a senha' : null,
+                        style: const TextStyle(color: Colors.black87),
+                        cursorColor: const Color(0xFF1E3A8A),
+                        validator: (v) =>
+                            (v?.isEmpty ?? true) ? 'Informe a senha' : null,
                         onFieldSubmitted: (_) => _login(),
                       ),
+
                       const SizedBox(height: 8),
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 38.0, right: 7.6),
+                        padding:
+                            const EdgeInsets.only(bottom: 38.0, right: 7.6),
                         child: Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
-                            onPressed: () => Navigator.pushNamed(context, '/recuperar'),
+                            onPressed: () =>
+                                Navigator.pushNamed(context, '/recuperar'),
                             child: const Text('Esqueceu a senha?'),
                           ),
                         ),
@@ -231,10 +272,15 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                             onPressed: _loading ? null : _login,
                             child: _loading
-                                ? const CircularProgressIndicator(color: Colors.white)
+                                ? const CircularProgressIndicator(
+                                    color: Colors.white,
+                                  )
                                 : const Text(
                                     "Entrar",
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                           ),
                         ),

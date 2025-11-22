@@ -112,7 +112,7 @@ class _ConsultoresRootState extends State<ConsultoresRoot> {
         .select('id')
         .eq('gestor_id', uidGestor)
         .eq('ativo', _filtroAtivo)
-        .count(); 
+        .count();
 
     setState(() => _totalCount = res.count ?? 0);
   }
@@ -132,9 +132,8 @@ class _ConsultoresRootState extends State<ConsultoresRoot> {
         .order('nome', ascending: true)
         .range(start, end);
 
-    final rows = (result as List)
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
+    final rows =
+        (result as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
 
     final mapped = rows.map(
       (r) => _ConsultorView(
@@ -1003,255 +1002,249 @@ class _EditarConsultorDialogState extends State<_EditarConsultorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final keyboard = MediaQuery.of(context).viewInsets.bottom;
     return WillPopScope(
       onWillPop: () async => !_saving,
       child: Dialog(
         backgroundColor: Colors.transparent,
         insetPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        child: AnimatedPadding(
-          duration: const Duration(milliseconds: 150),
-          padding: EdgeInsets.only(bottom: keyboard),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: Material(
-              color: const Color(0xFFFDFDFE),
-              borderRadius: BorderRadius.circular(16),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                child: Form(
-                  key: _formKey,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment:
-                          CrossAxisAlignment.stretch,
-                      children: [
-                        Row(children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFECEA),
-                              borderRadius:
-                                  BorderRadius.circular(10),
-                            ),
-                            child: const Icon(
-                              Icons.edit,
-                              color: _brandRed,
-                            ),
+        // não reage ao teclado -> dialog fica fixo, só o conteúdo rola
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Material(
+            color: const Color(0xFFFDFDFE),
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+              child: Form(
+                key: _formKey,
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment:
+                        CrossAxisAlignment.stretch,
+                    children: [
+                      Row(children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFECEA),
+                            borderRadius:
+                                BorderRadius.circular(10),
                           ),
-                          const SizedBox(width: 10),
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Editar Consultor',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                SizedBox(height: 2),
-                                Text(
-                                  'Atualize as informações do consultor abaixo',
-                                  style: TextStyle(
-                                    color: Colors.black54,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
+                          child: const Icon(
+                            Icons.edit,
+                            color: _brandRed,
                           ),
-                          IconButton(
-                            tooltip: 'Fechar',
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Editar Consultor',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Atualize as informações do consultor abaixo',
+                                style: TextStyle(
+                                  color: Colors.black54,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Fechar',
+                          onPressed: _saving
+                              ? null
+                              : () =>
+                                  Navigator.of(context).pop(false),
+                          icon: const Icon(
+                            Icons.close,
+                            color: Colors.black54,
+                          ),
+                        ),
+                      ]),
+                      const SizedBox(height: 12),
+                      _FieldLabel(
+                        icon: Icons.person_outline,
+                        text: 'Nome Completo',
+                        requiredMark: true,
+                      ),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _nomeCtrl,
+                        textInputAction: TextInputAction.next,
+                        decoration:
+                            _dec('Ex: João da Silva Santos'),
+                        validator: (v) =>
+                            (v == null || v.trim().isEmpty)
+                                ? 'Nome é obrigatório'
+                                : null,
+                      ),
+                      const SizedBox(height: 10),
+                      _FieldLabel(
+                        icon: Icons.phone_outlined,
+                        text: 'Telefone',
+                        requiredMark: true,
+                      ),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _telCtrl,
+                        keyboardType: TextInputType.phone,
+                        textInputAction: TextInputAction.next,
+                        decoration: _dec('(11) 98765-4321'),
+                        inputFormatters: [widget.phoneFmt],
+                        validator: (v) {
+                          final raw =
+                              v?.replaceAll(RegExp(r'\D'), '') ?? '';
+                          if (raw.isEmpty) {
+                            return 'Telefone é obrigatório';
+                          }
+                          if (raw.length != 10 && raw.length != 11) {
+                            return 'Telefone inválido';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      _FieldLabel(
+                        icon: Icons.alternate_email,
+                        text: 'Email',
+                        requiredMark: true,
+                      ),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _emailCtrl,
+                        keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.next,
+                        decoration:
+                            _dec('consultor@ademicon.com.br'),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) {
+                            return 'Email é obrigatório';
+                          }
+                          final ok = RegExp(
+                                  r'^[^@]+@[^@]+\.[^@]+$')
+                              .hasMatch(v.trim());
+                          return ok ? null : 'Email inválido';
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      _FieldLabel(
+                        icon: Icons.tag,
+                        text: 'Matrícula',
+                        requiredMark: false,
+                        hintExtra: '(opcional)',
+                      ),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: _matCtrl,
+                        textInputAction: TextInputAction.done,
+                        decoration: _dec('Ex: 001'),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Row(children: [
+                        Expanded(
+                          child: OutlinedButton(
                             onPressed: _saving
                                 ? null
                                 : () =>
                                     Navigator.of(context).pop(false),
-                            icon: const Icon(
-                              Icons.close,
-                              color: Colors.black54,
-                            ),
-                          ),
-                        ]),
-                        const SizedBox(height: 12),
-                        _FieldLabel(
-                          icon: Icons.person_outline,
-                          text: 'Nome Completo',
-                          requiredMark: true,
-                        ),
-                        const SizedBox(height: 6),
-                        TextFormField(
-                          controller: _nomeCtrl,
-                          textInputAction: TextInputAction.next,
-                          decoration:
-                              _dec('Ex: João da Silva Santos'),
-                          validator: (v) =>
-                              (v == null || v.trim().isEmpty)
-                                  ? 'Nome é obrigatório'
-                                  : null,
-                        ),
-                        const SizedBox(height: 10),
-                        _FieldLabel(
-                          icon: Icons.phone_outlined,
-                          text: 'Telefone',
-                          requiredMark: true,
-                        ),
-                        const SizedBox(height: 6),
-                        TextFormField(
-                          controller: _telCtrl,
-                          keyboardType: TextInputType.phone,
-                          textInputAction: TextInputAction.next,
-                          decoration: _dec('(11) 98765-4321'),
-                          inputFormatters: [widget.phoneFmt],
-                          validator: (v) {
-                            final raw =
-                                v?.replaceAll(RegExp(r'\D'), '') ?? '';
-                            if (raw.isEmpty) {
-                              return 'Telefone é obrigatório';
-                            }
-                            if (raw.length != 10 && raw.length != 11) {
-                              return 'Telefone inválido';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 10),
-                        _FieldLabel(
-                          icon: Icons.alternate_email,
-                          text: 'Email',
-                          requiredMark: true,
-                        ),
-                        const SizedBox(height: 6),
-                        TextFormField(
-                          controller: _emailCtrl,
-                          keyboardType: TextInputType.emailAddress,
-                          textInputAction: TextInputAction.next,
-                          decoration:
-                              _dec('consultor@ademicon.com.br'),
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) {
-                              return 'Email é obrigatório';
-                            }
-                            final ok = RegExp(
-                                    r'^[^@]+@[^@]+\.[^@]+$')
-                                .hasMatch(v.trim());
-                            return ok ? null : 'Email inválido';
-                          },
-                        ),
-                        const SizedBox(height: 10),
-                        _FieldLabel(
-                          icon: Icons.tag,
-                          text: 'Matrícula',
-                          requiredMark: false,
-                          hintExtra: '(opcional)',
-                        ),
-                        const SizedBox(height: 6),
-                        TextFormField(
-                          controller: _matCtrl,
-                          textInputAction: TextInputAction.done,
-                          decoration: _dec('Ex: 001'),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        Row(children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: _saving
-                                  ? null
-                                  : () =>
-                                      Navigator.of(context).pop(false),
-                              style: OutlinedButton.styleFrom(
-                                padding:
-                                    const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(12),
-                                ),
-                                side: const BorderSide(
-                                  color: Color(0xFFE3E3E6),
-                                ),
-                                backgroundColor: Colors.white,
+                            style: OutlinedButton.styleFrom(
+                              padding:
+                                  const EdgeInsets.symmetric(
+                                      vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.circular(12),
                               ),
-                              child: const Text('Cancelar'),
+                              side: const BorderSide(
+                                color: Color(0xFFE3E3E6),
+                              ),
+                              backgroundColor: Colors.white,
                             ),
+                            child: const Text('Cancelar'),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: SizedBox(
-                              height: 46,
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      _brandRed,
-                                      _brandRedDark
-                                    ],
-                                    begin: Alignment.centerLeft,
-                                    end: Alignment.centerRight,
-                                  ),
-                                  borderRadius:
-                                      BorderRadius.circular(12),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Color(0x33000000),
-                                      blurRadius: 6,
-                                      offset: Offset(0, 3),
-                                    ),
-                                  ],
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SizedBox(
+                            height: 46,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [_brandRed, _brandRedDark],
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
                                 ),
-                                child: ElevatedButton.icon(
-                                  onPressed:
-                                      _saving ? null : _save,
-                                  icon: const Icon(
-                                    Icons.save,
-                                    color: Colors.white,
+                                borderRadius:
+                                    BorderRadius.circular(12),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x33000000),
+                                    blurRadius: 6,
+                                    offset: Offset(0, 3),
                                   ),
-                                  label: _saving
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child:
-                                              CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.white,
-                                          ),
-                                        )
-                                      : const Text(
-                                          'Salvar Alterações',
-                                          style: TextStyle(
-                                            fontWeight:
-                                                FontWeight.w700,
-                                            color: Colors.white,
-                                          ),
+                                ],
+                              ),
+                              child: ElevatedButton.icon(
+                                onPressed:
+                                    _saving ? null : _save,
+                                icon: const Icon(
+                                  Icons.save,
+                                  color: Colors.white,
+                                ),
+                                label: _saving
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child:
+                                            CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
                                         ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor:
-                                        Colors.transparent,
-                                    shadowColor: Colors.transparent,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(12),
-                                    ),
-                                    padding:
-                                        const EdgeInsets.symmetric(
-                                      vertical: 12,
-                                    ),
+                                      )
+                                    : const Text(
+                                        'Salvar Alterações',
+                                        style: TextStyle(
+                                          fontWeight:
+                                              FontWeight.w700,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor:
+                                      Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(12),
+                                  ),
+                                  padding:
+                                      const EdgeInsets.symmetric(
+                                    vertical: 12,
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                        ]),
-                      ],
-                    ),
+                        ),
+                      ]),
+                    ],
                   ),
                 ),
               ),
