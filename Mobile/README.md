@@ -1,15 +1,15 @@
 # Tutorial completo: JornadaAppAdemicon (Flutter + GitHub)
 
-Este arquivo reúne o passo a passo para instalar, rodar o app Flutter localmente e usar o projeto como seu repositório no GitHub.
+Este arquivo reúne o passo a passo para instalar, rodar o app Flutter localmente e usar o projeto como seu repositório no GitHub. [web:1]
 
 ---
 
 ## 1. Pré‑requisitos
 
-- Flutter 3.x instalado e configurado no PATH.  
+- Flutter 3.x instalado e configurado no PATH.
 - Git instalado.  
 - VS Code (ou outro editor) instalado.  
-- Emulador Android/iOS ou navegador (para rodar como web).  
+- Emulador Android/iOS ou navegador (para rodar como web).
 - Conta no GitHub configurada com usuário e e‑mail.  
 - **Arquivo `.env` na pasta raiz do projeto mobile (obrigatório). Sem esse arquivo, o app não conseguirá acessar Supabase nem carregar dados.**  
 
@@ -27,7 +27,7 @@ No terminal, execute na ordem:
 2. `git clone https://github.com/EricIkeda1/JornadaAppAdemicon.git`  
 3. `cd JornadaAppAdemicon`  
 
-Depois de clonar, a pasta deve conter arquivos como `pubspec.yaml`, `lib`, `android`, `ios` etc.
+Depois de clonar, a pasta deve conter arquivos como `pubspec.yaml`, `lib`, `android`, `ios` etc. [web:25]
 
 ---
 
@@ -49,7 +49,7 @@ Certifique‑se de que ele está exatamente na raiz do app mobile, e não em sub
 2. Menu: `File -> Open Folder`.  
 3. Selecione a pasta do projeto, por exemplo:  
    `C:\Projetos\Mobile\JornadaAppAdemicon`  
-4. Aguarde o VS Code reconhecer o projeto Flutter.  
+4. Aguarde o VS Code reconhecer o projeto Flutter. [web:25]  
 
 ---
 
@@ -61,7 +61,7 @@ No terminal integrado do VS Code (Ctrl + `), execute, um por vez:
 2. `flutter pub get`  
 3. `flutter doctor`  
 
-Verifique se o `flutter doctor` não mostra erros críticos.
+Verifique se o `flutter doctor` não mostra erros críticos. [web:1]  
 
 ---
 
@@ -77,6 +77,8 @@ Na pasta do projeto (`C:\Projetos\Mobile\JornadaAppAdemicon`), com um dispositiv
 
 Se o `.env` não estiver presente na raiz ou estiver com chaves erradas, o app abre mas não consegue logar ou carregar dados do Supabase.
 
+---
+
 ## 7. Resumo da configuração do Supabase
 
 - O app lê as credenciais do Supabase a partir do `.env` na raiz do mobile.  
@@ -84,4 +86,16 @@ Se o `.env` não estiver presente na raiz ou estiver com chaves erradas, o app a
 - Garanta que o `.env` tenha, no mínimo:  
   - `SUPABASE_URL`  
   - `SUPABASE_ANON_KEY`  
-- Use as credenciais do projeto Supabase correto.  
+- Use as credenciais do projeto Supabase correto.
+
+---
+
+## 8. Gerar APK Android com [flutter build apk]
+
+Depois que o app estiver funcionando em modo de desenvolvimento, é possível gerar um arquivo APK para instalar em celulares Android.
+
+1. Na raiz do projeto (`C:\Projetos\Mobile\JornadaAppAdemicon`), execute no terminal:  
+   - `flutter build apk`  
+
+2. Esse comando gera um build em modo release (otimizado) e cria o arquivo APK na pasta:  
+   - `build/app/outputs/flutter-apk/app-release.apk` ou similar. 
