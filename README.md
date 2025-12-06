@@ -1,4 +1,4 @@
-# JornadaAppAdemicon - Flutter + Supabase (Offline‑First)
+# Ademiconnect - Flutter + Supabase (Offline‑First)
 
 Aplicativo móvel Flutter para gestão de Leads/Clientes e visitas com fluxo P.A.P., integração ao CRM Ademicon, cache local persistente e sincronização automática quando a internet volta. Desenvolvido em Londrina-PR para otimizar a produtividade de consultores em campo.
 
