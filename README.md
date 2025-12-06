@@ -4,7 +4,7 @@ Aplicativo móvel Flutter para gestão de Leads/Clientes e visitas com fluxo P.A
 
 ## Descrição
 
-O **JornadaAppAdemicon** é uma solução completa de gestão de clientes e visitas que funciona offline-first. O app permite:
+O **Ademiconnect** é uma solução completa de gestão de clientes e visitas que funciona offline-first. O app permite:
 
 - **Cadastro de clientes** com validações completas (nome, telefone, endereço, data de visita)
 - **Cache local em JSON** (SharedPreferences) para trabalhar sem internet
