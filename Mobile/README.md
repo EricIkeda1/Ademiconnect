@@ -1,4 +1,4 @@
-# Tutorial completo: JornadaAppAdemicon (Flutter + GitHub)
+# Tutorial completo: Ademiconnect (Flutter + GitHub)
 
 Este arquivo reúne o passo a passo para instalar, rodar o app Flutter localmente e usar o projeto como seu repositório no GitHub.
 
@@ -24,8 +24,8 @@ Escolha uma pasta onde você guarda seus projetos, por exemplo:
 No terminal, execute na ordem:
 
 1. `cd C:\Projetos\Mobile`  
-2. `git clone https://github.com/EricIkeda1/JornadaAppAdemicon.git`  
-3. `cd JornadaAppAdemicon`  
+2. `git clone https://github.com/EricIkeda1/Ademiconnect.git`  
+3. `cd Ademiconnect`  
 
 Depois de clonar, a pasta deve conter arquivos como `pubspec.yaml`, `lib`, `android`, `ios` etc. 
 
@@ -48,7 +48,7 @@ Certifique‑se de que ele está exatamente na raiz do app mobile, e não em sub
 1. Abra o VS Code.  
 2. Menu: `File -> Open Folder`.  
 3. Selecione a pasta do projeto, por exemplo:  
-   `C:\Projetos\Mobile\JornadaAppAdemicon`  
+   `C:\Projetos\Mobile\Ademiconnect`  
 4. Aguarde o VS Code reconhecer o projeto Flutter. 
 
 ---
@@ -67,7 +67,7 @@ Verifique se o `flutter doctor` não mostra erros críticos.
 
 ## 6. Rodar o app Flutter localmente
 
-Na pasta do projeto (`C:\Projetos\Mobile\JornadaAppAdemicon`), com um dispositivo ou emulador aberto (ou Chrome):
+Na pasta do projeto (`C:\Projetos\Mobile\Ademiconnect`), com um dispositivo ou emulador aberto (ou Chrome):
 
 - Para rodar normalmente:  
   `flutter run`  
@@ -94,7 +94,7 @@ Se o `.env` não estiver presente na raiz ou estiver com chaves erradas, o app a
 
 Depois que o app estiver funcionando em modo de desenvolvimento, é possível gerar um arquivo APK para instalar em celulares Android.
 
-1. Na raiz do projeto (`C:\Projetos\Mobile\JornadaAppAdemicon`), execute no terminal:  
+1. Na raiz do projeto (`C:\Projetos\Mobile\Ademiconnect`), execute no terminal:  
    - `flutter build apk`  
 
 2. Esse comando gera um build em modo release (otimizado) e cria o arquivo APK na pasta:  
