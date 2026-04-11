@@ -23,18 +23,15 @@ class _MapaPageState extends State<MapaPage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-
         systemOverlayStyle: const SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: Brightness.dark,
           statusBarBrightness: Brightness.light,
         ),
-
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: kRed),
           onPressed: () => Navigator.pop(context),
         ),
-
         title: const Text(
           'Mapa Interativo',
           style: TextStyle(
@@ -43,14 +40,13 @@ class _MapaPageState extends State<MapaPage> {
             fontSize: 18,
           ),
         ),
-
         centerTitle: true,
       ),
 
       body: Column(
         children: [
 
-          const SizedBox(height: 90), 
+          const SizedBox(height: 90),
 
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -110,15 +106,15 @@ class _MapaPageState extends State<MapaPage> {
                 child: FlutterMap(
                   options: MapOptions(
                     initialCenter: LatLng(-25.4284, -49.2733),
-                    initialZoom: 11,
+                    initialZoom: 13,
                   ),
                   children: [
 
-                    TileLayer(
-                      urlTemplate:
-                          "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-                      userAgentPackageName: 'com.example.app',
-                    ),
+                  TileLayer(
+                    urlTemplate: "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
+                    subdomains: ['a', 'b', 'c'],
+                    userAgentPackageName: 'com.example.leadmanager',
+                  ),
 
                     CircleLayer(
                       circles: [
