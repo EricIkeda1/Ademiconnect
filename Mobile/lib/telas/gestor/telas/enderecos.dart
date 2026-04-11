@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'mapa.dart';
 
 const Color kRed = Color(0xFFED3B2E);
 const Color kRedLight = Color(0xFFFFE5E3);
@@ -48,7 +49,7 @@ class BairroResumo {
 }
 
 class CidadeResumo {
-  final String nome; 
+  final String nome;
   final List<BairroResumo> bairros;
 
   CidadeResumo({
@@ -167,7 +168,7 @@ class _EnderecosPageState extends State<EnderecosPage> {
         .order('cidade')
         .order('bairro');
 
-    print('clientes filtrados: $data'); 
+    print('clientes filtrados: $data');
 
     final Map<String, Map<String, Map<String, List<String>>>> tmp = {};
 
@@ -243,17 +244,21 @@ class _EnderecosPageState extends State<EnderecosPage> {
     });
   }
 
+  void _verMapa() {
+    Navigator.push(
+      context,
+        MaterialPageRoute(builder: (context) => MapaPage()),  );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     Widget header() {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Row(
+          children: [
+            const Row(
               children: [
                 Icon(Icons.location_city_outlined, color: kRed),
                 SizedBox(width: 8),
@@ -262,6 +267,37 @@ class _EnderecosPageState extends State<EnderecosPage> {
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Visualize e gerencie as cidades, bairros e ruas do sistema',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  onPressed: _verMapa,
+                  icon: const Icon(Icons.map_outlined, size: 18),
+                  label: const Text('Ver Mapa'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: kRed,
+                    side: const BorderSide(color: kRed),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                   ),
                 ),
               ],
@@ -282,11 +318,11 @@ class _EnderecosPageState extends State<EnderecosPage> {
             Expanded(
               child: FutureBuilder<Map<String, List<CidadeResumo>>>(
                 future: _future,
-                builder: (context, snap) {
-                  if (snap.connectionState == ConnectionState.waiting) {
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
-                  if (snap.hasError) {
+                  if (snapshot.hasError) {
                     return Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -302,7 +338,7 @@ class _EnderecosPageState extends State<EnderecosPage> {
                     );
                   }
 
-                  final mapa = snap.data ?? {};
+                  final mapa = snapshot.data ?? {};
                   if (mapa.isEmpty) {
                     return const Center(
                       child:
@@ -349,7 +385,7 @@ class _EnderecosPageState extends State<EnderecosPage> {
                         final cidades = estados[i].value;
 
                         final estadoNomeCompleto =
-                            kEstadosBR[estadoSigla] ?? estadoSigla; 
+                            kEstadosBR[estadoSigla] ?? estadoSigla;
 
                         final totalCidades = cidades.length;
                         final totalBairros = cidades.fold<int>(
@@ -386,7 +422,7 @@ class _EnderecosPageState extends State<EnderecosPage> {
 }
 
 class _EstadoCard extends StatefulWidget {
-  final String estadoNome; 
+  final String estadoNome;
   final List<CidadeResumo> cidades;
   final int totalCidades;
   final int totalBairros;
