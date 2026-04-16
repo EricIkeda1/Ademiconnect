@@ -23,6 +23,7 @@ class _MapaPageState extends State<MapaPage> {
   int totalSemCep = 0;
   bool isLoading = true;
   String errorMessage = '';
+  LatLng? initialCenter;
   
   final Map<String, LatLng> _cacheCoordenadas = {};
 
@@ -38,6 +39,7 @@ class _MapaPageState extends State<MapaPage> {
         isLoading = true;
         errorMessage = '';
         totalSemCep = 0;
+        heatCircles = [];
       });
 
       final user = supabase.auth.currentUser;
@@ -58,6 +60,7 @@ class _MapaPageState extends State<MapaPage> {
           isLoading = false;
           heatCircles = [];
           totalClientes = 0;
+          errorMessage = 'Nenhum consultor encontrado';
         });
         return;
       }
@@ -78,6 +81,7 @@ class _MapaPageState extends State<MapaPage> {
         setState(() {
           isLoading = false;
           heatCircles = [];
+          errorMessage = 'Nenhum cliente encontrado';
         });
         return;
       }
@@ -113,12 +117,11 @@ class _MapaPageState extends State<MapaPage> {
       }
 
       List<CircleMarker> circles = [];
+      List<LatLng> coordenadasEncontradas = [];
       
       for (var entry in contagemPorCep.entries) {
         final cep = entry.key;
         final quantidade = entry.value;
-        final cidade = infoPorCep[cep]?['cidade'] ?? '';
-        final bairro = infoPorCep[cep]?['bairro'] ?? '';
         
         LatLng? coordenada = _cacheCoordenadas[cep];
         
@@ -134,38 +137,39 @@ class _MapaPageState extends State<MapaPage> {
           continue;
         }
         
-        double radius = 30 + (quantidade * 4);
-        radius = radius.clamp(25.0, 100.0);
+        coordenadasEncontradas.add(coordenada);
         
-        Color cor;
-        if (quantidade >= 10) {
-          cor = Colors.red;
-        } else if (quantidade >= 5) {
-          cor = Colors.deepOrange;
-        } else if (quantidade >= 3) {
-          cor = Colors.orange;
-        } else {
-          cor = Colors.yellow.shade700;
-        }
+        double radius = 30 + (quantidade * 5);
+        radius = radius.clamp(30.0, 120.0);
+        
+        Color cor = _getCorPorQuantidade(quantidade);
         
         circles.add(
           CircleMarker(
             point: coordenada,
             radius: radius,
-            color: cor.withOpacity(0.6),
+            color: cor.withOpacity(0.4),
             borderStrokeWidth: 2,
-            borderColor: cor.withOpacity(0.9),
+            borderColor: cor,
             useRadiusInMeter: false,
           ),
         );
         
-        print('📍 $cep → $quantidade clientes');
+        print('📍 $cep → $quantidade clientes, raio: $radius');
         
-        await Future.delayed(const Duration(milliseconds: 500));
+        await Future.delayed(const Duration(milliseconds: 150));
       }
 
+      print('✅ Total de círculos criados: ${circles.length}');
+      
+      LatLng center = const LatLng(-23.5505, -46.6333); 
+      if (coordenadasEncontradas.isNotEmpty) {
+        center = coordenadasEncontradas.first;
+      }
+      
       setState(() {
         heatCircles = circles;
+        initialCenter = center;
         isLoading = false;
       });
 
@@ -176,6 +180,13 @@ class _MapaPageState extends State<MapaPage> {
         isLoading = false;
       });
     }
+  }
+
+  Color _getCorPorQuantidade(int quantidade) {
+    if (quantidade >= 10) return Colors.red;
+    if (quantidade >= 5) return Colors.deepOrange;
+    if (quantidade >= 3) return Colors.orange;
+    return Colors.yellow.shade700;
   }
 
   Future<LatLng?> _geocodeCep(String cep) async {
@@ -195,16 +206,29 @@ class _MapaPageState extends State<MapaPage> {
         final logradouro = data['logradouro'] ?? '';
         final cidade = data['localidade'] ?? '';
         final uf = data['uf'] ?? '';
+        final bairro = data['bairro'] ?? '';
         
         if (cidade.isEmpty) return null;
         
-        String endereco = '$logradouro, $cidade, $uf, Brasil';
+        String endereco = '$cidade, $uf, Brasil';
+        
+        if (logradouro.isNotEmpty && bairro.isNotEmpty) {
+          endereco = '$logradouro, $bairro, $cidade, $uf, Brasil';
+        } else if (logradouro.isNotEmpty) {
+          endereco = '$logradouro, $cidade, $uf, Brasil';
+        } else if (bairro.isNotEmpty) {
+          endereco = '$bairro, $cidade, $uf, Brasil';
+        }
+        
         final encodedEndereco = Uri.encodeComponent(endereco);
-        final nominatimUrl = 'https://nominatim.openstreetmap.org/search?q=$encodedEndereco&format=json&limit=1';
+        final nominatimUrl = 'https://nominatim.openstreetmap.org/search?q=$encodedEndereco&format=json&limit=1&countrycodes=br';
         
         final geoResponse = await http.get(
           Uri.parse(nominatimUrl),
-          headers: {'User-Agent': 'MeuApp/1.0'},
+          headers: {
+            'User-Agent': 'AdemicomApp/1.0',
+            'Accept-Language': 'pt-BR'
+          },
         ).timeout(const Duration(seconds: 8));
         
         if (geoResponse.statusCode == 200) {
@@ -216,9 +240,33 @@ class _MapaPageState extends State<MapaPage> {
             return LatLng(lat, lon);
           }
         }
+        
+        // Fallback: tenta apenas com cidade e UF
+        final fallbackEndereco = '$cidade, $uf, Brasil';
+        final encodedFallback = Uri.encodeComponent(fallbackEndereco);
+        final fallbackUrl = 'https://nominatim.openstreetmap.org/search?q=$encodedFallback&format=json&limit=1&countrycodes=br';
+        
+        final fallbackResponse = await http.get(
+          Uri.parse(fallbackUrl),
+          headers: {
+            'User-Agent': 'AdemicomApp/1.0',
+            'Accept-Language': 'pt-BR'
+          },
+        ).timeout(const Duration(seconds: 5));
+        
+        if (fallbackResponse.statusCode == 200) {
+          final List fallbackData = jsonDecode(fallbackResponse.body);
+          if (fallbackData.isNotEmpty) {
+            final lat = double.parse(fallbackData[0]['lat'].toString());
+            final lon = double.parse(fallbackData[0]['lon'].toString());
+            print('✅ $cep (fallback) → $lat, $lon');
+            return LatLng(lat, lon);
+          }
+        }
       }
       return null;
     } catch (e) {
+      print('❌ Erro ao geocodificar $cep: $e');
       return null;
     }
   }
@@ -231,6 +279,10 @@ class _MapaPageState extends State<MapaPage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
+        systemOverlayStyle: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: kRed),
           onPressed: () => Navigator.pop(context),
@@ -261,11 +313,30 @@ class _MapaPageState extends State<MapaPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("Clientes por CEP", style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text(
-                        isLoading ? "Carregando..." : "$totalClientes clientes (${heatCircles.length} CEPs)",
-                        style: const TextStyle(fontSize: 12),
+                      const Text(
+                        "Clientes por CEP", 
+                        style: TextStyle(fontWeight: FontWeight.bold)
                       ),
+                      if (errorMessage.isNotEmpty && !isLoading)
+                        Text(
+                          errorMessage,
+                          style: const TextStyle(fontSize: 12, color: Colors.red),
+                        )
+                      else if (isLoading)
+                        const Text(
+                          "Carregando...",
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                        )
+                      else
+                        Text(
+                          "$totalClientes clientes (${heatCircles.length} CEPs)",
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                        ),
+                      if (totalSemCep > 0)
+                        Text(
+                          "$totalSemCep clientes sem CEP",
+                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
                     ],
                   ),
                 ),
@@ -273,7 +344,10 @@ class _MapaPageState extends State<MapaPage> {
                   onPressed: isLoading ? null : carregarClientes,
                   icon: const Icon(Icons.refresh, size: 18),
                   label: const Text("Atualizar"),
-                  style: OutlinedButton.styleFrom(foregroundColor: kRed, side: const BorderSide(color: kRed)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: kRed, 
+                    side: const BorderSide(color: kRed),
+                  ),
                 )
               ],
             ),
@@ -290,33 +364,22 @@ class _MapaPageState extends State<MapaPage> {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                child: isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : heatCircles.isEmpty
-                        ? const Center(child: Text("Nenhum cliente com CEP encontrado"))
-                        : FlutterMap(
-                            options: MapOptions(
-                              initialCenter: const LatLng(-23.3105, -51.1628),
-                              initialZoom: 10,
-                            ),
-                            children: [
-                              TileLayer(
-                                urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-                                subdomains: ['a', 'b', 'c'],
-                              ),
-                              CircleLayer(circles: heatCircles),
-                            ],
-                          ),
+                child: _buildMapa(),
               ),
             ),
           ),
           
           const SizedBox(height: 16),
           
+          // Legenda
           Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 4)],
+            ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
@@ -327,17 +390,88 @@ class _MapaPageState extends State<MapaPage> {
               ],
             ),
           ),
+          
+          const SizedBox(height: 16),
         ],
       ),
+    );
+  }
+  
+  Widget _buildMapa() {
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    
+    if (errorMessage.isNotEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: Colors.grey),
+            const SizedBox(height: 8),
+            Text(errorMessage, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: carregarClientes,
+              icon: const Icon(Icons.refresh),
+              label: const Text("Tentar Novamente"),
+              style: ElevatedButton.styleFrom(backgroundColor: kRed),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    if (heatCircles.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.location_off, size: 48, color: Colors.grey),
+            SizedBox(height: 8),
+            Text("Nenhum cliente com CEP encontrado"),
+          ],
+        ),
+      );
+    }
+    
+    return FlutterMap(
+      options: MapOptions(
+        center: initialCenter ?? const LatLng(-23.5505, -46.6333),
+        zoom: 10,
+        minZoom: 4,
+        maxZoom: 18,
+        interactionOptions: const InteractionOptions(
+        ),
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+          subdomains: const ['a', 'b', 'c'],
+          userAgentPackageName: 'com.ademicom.app',
+        ),
+        
+        CircleLayer(
+          circles: heatCircles,
+        ),
+      ],
     );
   }
   
   Widget _buildLegenda(Color cor, String texto) {
     return Row(
       children: [
-        Container(width: 16, height: 16, decoration: BoxDecoration(color: cor.withOpacity(0.6), shape: BoxShape.circle)),
-        const SizedBox(width: 4),
-        Text(texto, style: const TextStyle(fontSize: 10)),
+        Container(
+          width: 24, 
+          height: 24, 
+          decoration: BoxDecoration(
+            color: cor.withOpacity(0.4), 
+            shape: BoxShape.circle,
+            border: Border.all(color: cor, width: 2),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(texto, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
       ],
     );
   }
