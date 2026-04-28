@@ -8,6 +8,9 @@ import 'dart:convert';
 import 'dart:async';
 
 const Color kRed = Color(0xFFED3B2E);
+const Color kDarkGray = Color(0xFF231F20);
+const Color kLightGray = Color(0xFFF7F7F7);
+const Color kBorderGray = Color(0xFFE8E8E8);
 
 class MapaPage extends StatefulWidget {
   const MapaPage({super.key});
@@ -26,7 +29,20 @@ class _MapaPageState extends State<MapaPage> {
   String errorMessage = '';
   String statusMessage = '';
   
+  int clientesProcessados = 0;
+  int totalClientesParaProcessar = 0;
+  int cepsGeocodificados = 0;
+  int totalCepsParaGeocodificar = 0;
+  
   final Map<String, LatLng> _cacheCoordenadas = {};
+
+  // Estado dos filtros
+  final Map<String, bool> filtrosIntensidade = {
+    'Muito Alta': true,
+    'Alta': true,
+    'Média': true,
+    'Baixa': true,
+  };
 
   @override
   void initState() {
@@ -42,6 +58,10 @@ class _MapaPageState extends State<MapaPage> {
         statusMessage = 'Iniciando...';
         totalSemCep = 0;
         heatCircles = [];
+        clientesProcessados = 0;
+        totalClientesParaProcessar = 0;
+        cepsGeocodificados = 0;
+        totalCepsParaGeocodificar = 0;
       });
 
       final user = supabase.auth.currentUser;
@@ -86,6 +106,7 @@ class _MapaPageState extends State<MapaPage> {
 
       final data = response as List;
       totalClientes = data.length;
+      totalClientesParaProcessar = totalClientes;
 
       if (totalClientes == 0) {
         setState(() {
@@ -103,7 +124,14 @@ class _MapaPageState extends State<MapaPage> {
       Map<String, int> contagemPorCep = {};
       Map<String, Map<String, String>> infoPorCep = {};
 
+      int processados = 0;
       for (var cliente in data) {
+        processados++;
+        setState(() {
+          clientesProcessados = processados;
+          statusMessage = 'Processando clientes: $processados/${data.length}';
+        });
+        
         final cep = cliente['cep']?.toString() ?? '';
         
         if (cep.isEmpty) {
@@ -133,6 +161,8 @@ class _MapaPageState extends State<MapaPage> {
         return;
       }
 
+      totalCepsParaGeocodificar = contagemPorCep.length;
+      
       setState(() {
         statusMessage = 'Geocodificando ${contagemPorCep.length} CEPs...';
       });
@@ -140,22 +170,23 @@ class _MapaPageState extends State<MapaPage> {
       List<CircleMarker> circles = [];
       List<LatLng> coordenadasEncontradas = [];
       
-      int processados = 0;
+      int processadosCeps = 0;
       final total = contagemPorCep.length;
       
       for (var entry in contagemPorCep.entries) {
         final cep = entry.key;
         final quantidade = entry.value;
         
+        processadosCeps++;
         setState(() {
-          statusMessage = 'Processando ${processados + 1}/$total CEPs...\nCEP: $cep';
+          cepsGeocodificados = processadosCeps;
+          statusMessage = 'Processando ${processadosCeps}/$total CEPs...\nCEP: $cep ($quantidade clientes)';
         });
         
         LatLng? coordenada = _cacheCoordenadas[cep];
         
         if (coordenada == null) {
-          // Aguardar entre requisições para não ser bloqueado
-          if (processados > 0) {
+          if (processadosCeps > 1) {
             await Future.delayed(const Duration(milliseconds: 1000));
           }
           
@@ -197,8 +228,6 @@ class _MapaPageState extends State<MapaPage> {
         } else {
           print('⚠️ Não foi possível geocodificar: $cep');
         }
-        
-        processados++;
       }
 
       print('✅ Total de círculos criados: ${circles.length}');
@@ -219,6 +248,7 @@ class _MapaPageState extends State<MapaPage> {
     }
   }
 
+  // FUNÇÕES DE GEOCODIFICAÇÃO ORIGINAIS - SEM ALTERAÇÕES
   Future<LatLng?> _geocodeCep(String cep, Map<String, String>? info) async {
     try {
       final cepLimpo = cep.replaceAll('-', '');
@@ -243,7 +273,6 @@ class _MapaPageState extends State<MapaPage> {
           return await _geocodePorInfo(cep, info);
         }
         
-        // Construir query
         String query;
         if (logradouro.isNotEmpty && logradouro != 'null' && bairro.isNotEmpty && bairro != 'null') {
           query = '$logradouro, $bairro, $cidade, $uf, Brasil';
@@ -263,11 +292,9 @@ class _MapaPageState extends State<MapaPage> {
           return coordenada;
         }
         
-        // 3. Tentar Photon como fallback
         return await _buscarPhoton(query);
       }
       
-      // Fallback para informações do banco
       return await _geocodePorInfo(cep, info);
       
     } catch (e) {
@@ -296,11 +323,9 @@ class _MapaPageState extends State<MapaPage> {
     
     print('🔍 Buscando (info): "$query"');
     
-    // Tentar Nominatim
     final coordenada = await _buscarNominatim(query);
     if (coordenada != null) return coordenada;
     
-    // Tentar Photon
     return await _buscarPhoton(query);
   }
   
@@ -364,11 +389,180 @@ class _MapaPageState extends State<MapaPage> {
     return null;
   }
 
+  String _getIntensidadeByColor(Color cor) {
+    if (cor == Colors.red) return 'Muito Alta';
+    if (cor == Colors.deepOrange) return 'Alta';
+    if (cor == Colors.orange) return 'Média';
+    return 'Baixa';
+  }
+
+  int _getFiltrosAtivosCount() {
+    return filtrosIntensidade.values.where((v) => v == true).length;
+  }
+
+  void _mostrarFiltros() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateBottomSheet) {
+            return Container(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Filtrar por Intensidade',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  CheckboxListTile(
+                    title: Row(
+                      children: [
+                        Container(
+                          width: 16,
+                          height: 16,
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text('Muito Alta (10+ clientes)'),
+                      ],
+                    ),
+                    value: filtrosIntensidade['Muito Alta'],
+                    onChanged: (value) {
+                      setStateBottomSheet(() {
+                        filtrosIntensidade['Muito Alta'] = value ?? false;
+                      });
+                    },
+                    activeColor: kRed,
+                  ),
+                  CheckboxListTile(
+                    title: Row(
+                      children: [
+                        Container(
+                          width: 16,
+                          height: 16,
+                          decoration: const BoxDecoration(
+                            color: Colors.deepOrange,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text('Alta (5-9 clientes)'),
+                      ],
+                    ),
+                    value: filtrosIntensidade['Alta'],
+                    onChanged: (value) {
+                      setStateBottomSheet(() {
+                        filtrosIntensidade['Alta'] = value ?? false;
+                      });
+                    },
+                    activeColor: kRed,
+                  ),
+                  CheckboxListTile(
+                    title: Row(
+                      children: [
+                        Container(
+                          width: 16,
+                          height: 16,
+                          decoration: const BoxDecoration(
+                            color: Colors.orange,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text('Média (3-4 clientes)'),
+                      ],
+                    ),
+                    value: filtrosIntensidade['Média'],
+                    onChanged: (value) {
+                      setStateBottomSheet(() {
+                        filtrosIntensidade['Média'] = value ?? false;
+                      });
+                    },
+                    activeColor: kRed,
+                  ),
+                  CheckboxListTile(
+                    title: Row(
+                      children: [
+                        Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: Colors.yellow.shade700,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text('Baixa (1-2 clientes)'),
+                      ],
+                    ),
+                    value: filtrosIntensidade['Baixa'],
+                    onChanged: (value) {
+                      setStateBottomSheet(() {
+                        filtrosIntensidade['Baixa'] = value ?? false;
+                      });
+                    },
+                    activeColor: kRed,
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            setStateBottomSheet(() {
+                              for (var key in filtrosIntensidade.keys) {
+                                filtrosIntensidade[key] = true;
+                              }
+                            });
+                          },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: kRed,
+                            side: const BorderSide(color: kRed),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: const Text('Selecionar Todos'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            setState(() {});
+                            Navigator.pop(context);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: kRed,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: const Text('Aplicar Filtros'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    ).then((_) {
+      setState(() {});
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F7),
-      extendBodyBehindAppBar: true,
+      backgroundColor: kLightGray,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -381,76 +575,93 @@ class _MapaPageState extends State<MapaPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'Mapa de Calor - Clientes',
-          style: TextStyle(color: Color(0xFF231F20), fontWeight: FontWeight.w700),
+          'Voltar para Endereços',
+          style: TextStyle(color: kDarkGray, fontWeight: FontWeight.w600, fontSize: 16),
         ),
         centerTitle: true,
       ),
       body: Column(
         children: [
-          const SizedBox(height: 90),
+          const SizedBox(height: 12),
           
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 6)],
-            ),
+          // Título e contagem
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                const Icon(Icons.heat_pump, color: kRed),
+                const Icon(Icons.map, color: kRed, size: 28),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("Clientes por CEP", style: TextStyle(fontWeight: FontWeight.bold)),
-                      if (statusMessage.isNotEmpty)
-                        Text(
-                          statusMessage,
-                          style: const TextStyle(fontSize: 12, color: Colors.blue),
-                        )
-                      else if (errorMessage.isNotEmpty && !isLoading)
-                        Text(
-                          errorMessage,
-                          style: const TextStyle(fontSize: 12, color: Colors.red),
-                        )
-                      else if (!isLoading)
-                        Text(
-                          "$totalClientes clientes (${heatCircles.length} CEPs encontrados)",
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                        ),
-                      if (totalSemCep > 0 && !isLoading)
-                        Text(
-                          "$totalSemCep clientes sem CEP",
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
-                        ),
-                    ],
+                const Text(
+                  'Mapa de Calor - Leads',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kDarkGray),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: kRed,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    isLoading ? 'Carregando...' : '$totalClientes leads encontrados',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 12),
                   ),
                 ),
-                OutlinedButton.icon(
-                  onPressed: isLoading ? null : carregarClientes,
-                  icon: const Icon(Icons.refresh, size: 18),
-                  label: const Text("Atualizar"),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: kRed, 
-                    side: const BorderSide(color: kRed),
-                  ),
-                )
               ],
             ),
           ),
           
           const SizedBox(height: 12),
           
+          // Botão de Filtros
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: GestureDetector(
+              onTap: isLoading ? null : _mostrarFiltros,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: kBorderGray),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.filter_list, color: kRed, size: 20),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Filtros',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                    ),
+                    const Spacer(),
+                    if (!isLoading)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: kRed.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          _getFiltrosAtivosCount().toString(),
+                          style: const TextStyle(color: kRed, fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                      ),
+                    const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          
+          const SizedBox(height: 12),
+          
+          // Mapa
           Expanded(
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE8E8E8)),
+                border: Border.all(color: kBorderGray),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
@@ -459,29 +670,64 @@ class _MapaPageState extends State<MapaPage> {
             ),
           ),
           
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           
-          if (heatCircles.isNotEmpty)
+          // Indicador de Progresso (mostra quantidade de dados sendo carregados)
+          if (isLoading && statusMessage.isNotEmpty)
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 16),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 4)],
+                border: Border.all(color: kBorderGray),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              child: Column(
                 children: [
-                  _buildLegenda(Colors.yellow.shade700, '1-2'),
-                  _buildLegenda(Colors.orange, '3-4'),
-                  _buildLegenda(Colors.deepOrange, '5-9'),
-                  _buildLegenda(Colors.red, '10+'),
+                  Row(
+                    children: [
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          statusMessage,
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: totalClientesParaProcessar > 0 
+                        ? (cepsGeocodificados > 0 
+                            ? cepsGeocodificados / totalCepsParaGeocodificar 
+                            : clientesProcessados / totalClientesParaProcessar)
+                        : null,
+                    backgroundColor: kBorderGray,
+                    color: kRed,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Clientes: $clientesProcessados/$totalClientesParaProcessar',
+                        style: const TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                      if (totalCepsParaGeocodificar > 0)
+                        Text(
+                          'CEPs: $cepsGeocodificados/$totalCepsParaGeocodificar',
+                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                    ],
+                  ),
                 ],
               ),
             ),
-          
-          const SizedBox(height: 16),
         ],
       ),
     );
@@ -533,6 +779,15 @@ class _MapaPageState extends State<MapaPage> {
       );
     }
     
+    // Aplicar filtros nos círculos
+    List<CircleMarker> circlesFiltrados = [];
+    for (var circle in heatCircles) {
+      String intensidade = _getIntensidadeByColor(circle.borderColor);
+      if (filtrosIntensidade[intensidade] == true) {
+        circlesFiltrados.add(circle);
+      }
+    }
+    
     return FlutterMap(
       options: MapOptions(
         initialCenter: const LatLng(-23.3105, -51.1628),
@@ -547,26 +802,8 @@ class _MapaPageState extends State<MapaPage> {
           userAgentPackageName: 'com.ademicom.app',
         ),
         CircleLayer(
-          circles: heatCircles,
+          circles: circlesFiltrados,
         ),
-      ],
-    );
-  }
-  
-  Widget _buildLegenda(Color cor, String texto) {
-    return Row(
-      children: [
-        Container(
-          width: 20,
-          height: 20,
-          decoration: BoxDecoration(
-            color: cor.withOpacity(0.6),
-            shape: BoxShape.circle,
-            border: Border.all(color: cor, width: 2),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(texto, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
       ],
     );
   }
