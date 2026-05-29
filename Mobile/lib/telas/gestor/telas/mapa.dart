@@ -24,18 +24,10 @@ class _MapaPageState extends State<MapaPage> {
   
   List<CircleMarker> heatCircles = [];
   int totalClientes = 0;
-  int totalSemCep = 0;
   bool isLoading = true;
   String errorMessage = '';
-  String statusMessage = '';
+  String detalhesErro = '';
   
-  int clientesProcessados = 0;
-  int totalClientesParaProcessar = 0;
-  int cepsGeocodificados = 0;
-  int totalCepsParaGeocodificar = 0;
-  
-  final Map<String, LatLng> _cacheCoordenadas = {};
-
   // Estado dos filtros
   final Map<String, bool> filtrosIntensidade = {
     'Muito Alta': true,
@@ -51,54 +43,42 @@ class _MapaPageState extends State<MapaPage> {
   }
 
   Future<void> carregarClientes() async {
+    setState(() {
+      isLoading = true;
+      errorMessage = '';
+      detalhesErro = '';
+      heatCircles = [];
+    });
+
     try {
-      setState(() {
-        isLoading = true;
-        errorMessage = '';
-        statusMessage = 'Iniciando...';
-        totalSemCep = 0;
-        heatCircles = [];
-        clientesProcessados = 0;
-        totalClientesParaProcessar = 0;
-        cepsGeocodificados = 0;
-        totalCepsParaGeocodificar = 0;
-      });
-
       final user = supabase.auth.currentUser;
-      
       if (user == null) {
-        throw Exception('Usuário não está logado');
+        throw Exception('Usuário não está logado.');
       }
+      print('✅ Usuário logado: ${user.id}');
 
-      setState(() {
-        statusMessage = 'Buscando consultores...';
-      });
-
+      // Buscar consultores
+      print('🔍 Buscando consultores...');
       final consultoresResponse = await supabase
           .from('consultores')
           .select('uid')
           .eq('gestor_id', user.id);
 
       final List consultores = consultoresResponse as List;
-      
+      print('📊 Consultores encontrados: ${consultores.length}');
+
       if (consultores.isEmpty) {
-        setState(() {
-          isLoading = false;
-          heatCircles = [];
-          totalClientes = 0;
-          statusMessage = '';
-        });
-        return;
+        throw Exception('Nenhum consultor encontrado.');
       }
 
       final List<String> consultoresIds = consultores
           .map((c) => c['uid'].toString())
           .toList();
+      
+      print('📋 IDs dos consultores: $consultoresIds');
 
-      setState(() {
-        statusMessage = 'Buscando clientes...';
-      });
-
+      // Buscar clientes
+      print('🔍 Buscando clientes...');
       final response = await supabase
           .from('clientes')
           .select('cidade, bairro, cep, logradouro, numero')
@@ -106,36 +86,30 @@ class _MapaPageState extends State<MapaPage> {
 
       final data = response as List;
       totalClientes = data.length;
-      totalClientesParaProcessar = totalClientes;
+      print('✅ Total de clientes encontrados: $totalClientes');
 
       if (totalClientes == 0) {
-        setState(() {
-          isLoading = false;
-          heatCircles = [];
-          statusMessage = '';
-        });
-        return;
+        throw Exception('Nenhum cliente encontrado.');
       }
 
-      setState(() {
-        statusMessage = 'Processando ${data.length} clientes...';
-      });
-
+      // Processar clientes
+      print('📊 Processando clientes...');
       Map<String, int> contagemPorCep = {};
       Map<String, Map<String, String>> infoPorCep = {};
+      int clientesSemCep = 0;
 
-      int processados = 0;
       for (var cliente in data) {
-        processados++;
-        setState(() {
-          clientesProcessados = processados;
-          statusMessage = 'Processando clientes: $processados/${data.length}';
-        });
-        
-        final cep = cliente['cep']?.toString() ?? '';
+        String cep = cliente['cep']?.toString() ?? '';
         
         if (cep.isEmpty) {
-          totalSemCep++;
+          clientesSemCep++;
+          continue;
+        }
+        
+        cep = cep.replaceAll(RegExp(r'[^0-9]'), '');
+        
+        if (cep.length != 8) {
+          clientesSemCep++;
           continue;
         }
         
@@ -146,61 +120,37 @@ class _MapaPageState extends State<MapaPage> {
             'cidade': cliente['cidade']?.toString() ?? '',
             'bairro': cliente['bairro']?.toString() ?? '',
             'logradouro': cliente['logradouro']?.toString() ?? '',
-            'numero': cliente['numero']?.toString() ?? '',
           };
         }
       }
 
+      print('📊 CEPs únicos: ${contagemPorCep.length}');
+      print('📊 Clientes sem CEP: $clientesSemCep');
+
       if (contagemPorCep.isEmpty) {
-        setState(() {
-          isLoading = false;
-          heatCircles = [];
-          errorMessage = 'Nenhum cliente possui CEP cadastrado';
-          statusMessage = '';
-        });
-        return;
+        throw Exception('Nenhum cliente possui CEP válido.');
       }
 
-      totalCepsParaGeocodificar = contagemPorCep.length;
-      
-      setState(() {
-        statusMessage = 'Geocodificando ${contagemPorCep.length} CEPs...';
-      });
-
+      // Geocodificar CEPs
+      print('🌐 Iniciando geocodificação...');
       List<CircleMarker> circles = [];
-      List<LatLng> coordenadasEncontradas = [];
-      
-      int processadosCeps = 0;
-      final total = contagemPorCep.length;
-      
+      int processados = 0;
+      int totalCeps = contagemPorCep.length;
+
       for (var entry in contagemPorCep.entries) {
         final cep = entry.key;
         final quantidade = entry.value;
         
-        processadosCeps++;
+        processados++;
         setState(() {
-          cepsGeocodificados = processadosCeps;
-          statusMessage = 'Processando ${processadosCeps}/$total CEPs...\nCEP: $cep ($quantidade clientes)';
+          errorMessage = 'Geocodificando: $processados de $totalCeps\nCEP: $cep';
         });
         
-        LatLng? coordenada = _cacheCoordenadas[cep];
-        
-        if (coordenada == null) {
-          if (processadosCeps > 1) {
-            await Future.delayed(const Duration(milliseconds: 1000));
-          }
-          
-          coordenada = await _geocodeCep(cep, infoPorCep[cep]);
-          if (coordenada != null) {
-            _cacheCoordenadas[cep] = coordenada;
-          }
-        }
+        LatLng? coordenada = await geocodeCep(cep, infoPorCep[cep]);
         
         if (coordenada != null) {
-          coordenadasEncontradas.add(coordenada);
-          
-          double radius = 30 + (quantidade * 4);
-          radius = radius.clamp(25.0, 100.0);
+          double radius = 25.0 + (quantidade * 2);
+          radius = radius.clamp(20.0, 70.0);
           
           Color cor;
           if (quantidade >= 10) {
@@ -223,121 +173,116 @@ class _MapaPageState extends State<MapaPage> {
               useRadiusInMeter: false,
             ),
           );
-          
-          print('📍 $cep → $quantidade clientes | Coord: ${coordenada.latitude}, ${coordenada.longitude}');
+          print('✅ CEP $cep geocodificado!');
         } else {
-          print('⚠️ Não foi possível geocodificar: $cep');
+          print('❌ Falha ao geocodificar CEP $cep');
         }
+        
+        await Future.delayed(const Duration(milliseconds: 500));
       }
 
-      print('✅ Total de círculos criados: ${circles.length}');
-
+      print('✅ Círculos criados: ${circles.length}');
+      
       setState(() {
         heatCircles = circles;
         isLoading = false;
-        statusMessage = '';
+        errorMessage = '';
+        detalhesErro = '';
       });
 
+      if (circles.isEmpty) {
+        setState(() {
+          errorMessage = 'Não foi possível geocodificar nenhum CEP. Verifique sua conexão com a internet.';
+        });
+      }
+
     } catch (e) {
-      print('❌ Erro: $e');
+      print('❌ ERRO: $e');
       setState(() {
-        errorMessage = e.toString();
+        errorMessage = 'Erro ao carregar dados';
+        detalhesErro = e.toString();
         isLoading = false;
-        statusMessage = '';
+        heatCircles = [];
       });
     }
   }
 
-  // FUNÇÕES DE GEOCODIFICAÇÃO ORIGINAIS - SEM ALTERAÇÕES
-  Future<LatLng?> _geocodeCep(String cep, Map<String, String>? info) async {
+  Future<LatLng?> geocodeCep(String cep, Map<String, String>? info) async {
+    // Tentativa 1: ViaCEP + Nominatim
     try {
-      final cepLimpo = cep.replaceAll('-', '');
-      
-      // 1. Tentar ViaCEP primeiro
-      final viaCepUrl = 'https://viacep.com.br/ws/$cepLimpo/json/';
+      final viaCepUrl = 'https://viacep.com.br/ws/$cep/json/';
       final response = await http.get(Uri.parse(viaCepUrl)).timeout(const Duration(seconds: 5));
       
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         
-        if (data.containsKey('erro')) {
-          return await _geocodePorInfo(cep, info);
+        if (!data.containsKey('erro')) {
+          final cidade = data['localidade'] ?? '';
+          final uf = data['uf'] ?? '';
+          final bairro = data['bairro'] ?? '';
+          final logradouro = data['logradouro'] ?? '';
+          
+          if (cidade.isNotEmpty) {
+            // Tentar com endereço completo
+            if (logradouro.isNotEmpty && logradouro != 'null') {
+              String query = '$logradouro, $bairro, $cidade, $uf, Brasil';
+              LatLng? coord = await buscarNominatim(query);
+              if (coord != null) return coord;
+            }
+            
+            // Tentar com cidade e estado
+            String query = '$cidade, $uf, Brasil';
+            LatLng? coord = await buscarNominatim(query);
+            if (coord != null) return coord;
+          }
         }
-        
-        final logradouro = data['logradouro'] ?? '';
-        final cidade = data['localidade'] ?? '';
-        final uf = data['uf'] ?? '';
-        final bairro = data['bairro'] ?? '';
-        
-        if (cidade.isEmpty) {
-          return await _geocodePorInfo(cep, info);
-        }
-        
-        String query;
-        if (logradouro.isNotEmpty && logradouro != 'null' && bairro.isNotEmpty && bairro != 'null') {
-          query = '$logradouro, $bairro, $cidade, $uf, Brasil';
-        } else if (logradouro.isNotEmpty && logradouro != 'null') {
-          query = '$logradouro, $cidade, $uf, Brasil';
-        } else if (bairro.isNotEmpty && bairro != 'null') {
-          query = '$bairro, $cidade, $uf, Brasil';
-        } else {
-          query = '$cidade, $uf, Brasil';
-        }
-        
-        print('🔍 Buscando: "$query"');
-        
-        // 2. Tentar Nominatim (funciona em todas plataformas)
-        final coordenada = await _buscarNominatim(query);
-        if (coordenada != null) {
-          return coordenada;
-        }
-        
-        return await _buscarPhoton(query);
       }
-      
-      return await _geocodePorInfo(cep, info);
-      
     } catch (e) {
-      print('❌ Erro geocoding $cep: $e');
-      return await _geocodePorInfo(cep, info);
-    }
-  }
-  
-  Future<LatLng?> _geocodePorInfo(String cep, Map<String, String>? info) async {
-    if (info == null) return null;
-    
-    final cidade = info['cidade'] ?? '';
-    final bairro = info['bairro'] ?? '';
-    final logradouro = info['logradouro'] ?? '';
-    
-    if (cidade.isEmpty) return null;
-    
-    String query;
-    if (logradouro.isNotEmpty && logradouro != 'null' && bairro.isNotEmpty && bairro != 'null') {
-      query = '$logradouro, $bairro, $cidade, PR, Brasil';
-    } else if (bairro.isNotEmpty && bairro != 'null') {
-      query = '$bairro, $cidade, PR, Brasil';
-    } else {
-      query = '$cidade, PR, Brasil';
+      print('⚠️ ViaCEP erro: $e');
     }
     
-    print('🔍 Buscando (info): "$query"');
+    // Tentativa 2: Usar informações do banco
+    if (info != null) {
+      final cidade = info['cidade'] ?? '';
+      final bairro = info['bairro'] ?? '';
+      final logradouro = info['logradouro'] ?? '';
+      
+      if (cidade.isNotEmpty) {
+        // Tentar com endereço completo
+        if (logradouro.isNotEmpty && bairro.isNotEmpty) {
+          String query = '$logradouro, $bairro, $cidade, Brasil';
+          LatLng? coord = await buscarNominatim(query);
+          if (coord != null) return coord;
+        }
+        
+        // Tentar com cidade e bairro
+        if (bairro.isNotEmpty) {
+          String query = '$bairro, $cidade, Brasil';
+          LatLng? coord = await buscarNominatim(query);
+          if (coord != null) return coord;
+        }
+        
+        // Tentar só com a cidade
+        LatLng? coord = await buscarNominatim(cidade);
+        if (coord != null) return coord;
+      }
+    }
     
-    final coordenada = await _buscarNominatim(query);
-    if (coordenada != null) return coordenada;
-    
-    return await _buscarPhoton(query);
+    return null;
   }
   
-  Future<LatLng?> _buscarNominatim(String query) async {
+  Future<LatLng?> buscarNominatim(String query) async {
     try {
       final encodedQuery = Uri.encodeComponent(query);
-      final url = 'https://nominatim.openstreetmap.org/search?q=$encodedQuery&format=json&limit=1&countrycodes=br';
       
-      final response = await http.get(
+      // Tentativa 1: Nominatim principal
+      String url = 'https://nominatim.openstreetmap.org/search?q=$encodedQuery&format=json&limit=1&countrycodes=br';
+      
+      var response = await http.get(
         Uri.parse(url),
         headers: {
-          'User-Agent': 'AdemicomApp/2.0 (https://ademicom.com; contato@ademicom.com)',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json',
           'Accept-Language': 'pt-BR,pt;q=0.9',
         },
       ).timeout(const Duration(seconds: 8));
@@ -348,43 +293,37 @@ class _MapaPageState extends State<MapaPage> {
           final lat = double.tryParse(data[0]['lat'].toString());
           final lon = double.tryParse(data[0]['lon'].toString());
           if (lat != null && lon != null) {
-            print('✅ Nominatim: ($lat, $lon)');
+            print('✅ Nominatim: $query → ($lat, $lon)');
             return LatLng(lat, lon);
           }
         }
-      } else {
-        print('⚠️ Nominatim status: ${response.statusCode}');
       }
-    } catch (e) {
-      print('⚠️ Nominatim erro: $e');
-    }
-    return null;
-  }
-  
-  Future<LatLng?> _buscarPhoton(String query) async {
-    try {
-      final encodedQuery = Uri.encodeComponent(query);
-      final url = 'https://photon.komoot.io/api/?q=$encodedQuery&limit=1&lang=pt';
       
-      final response = await http.get(
+      // Tentativa 2: Nominatim europeu (fallback)
+      url = 'https://eu1.nominatim.openstreetmap.org/search?q=$encodedQuery&format=json&limit=1&countrycodes=br';
+      
+      response = await http.get(
         Uri.parse(url),
-        headers: {'User-Agent': 'AdemicomApp/2.0'},
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json',
+        },
       ).timeout(const Duration(seconds: 8));
       
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['features'] != null && data['features'].isNotEmpty) {
-          final coordinates = data['features'][0]['geometry']['coordinates'];
-          if (coordinates != null && coordinates.length >= 2) {
-            final lon = coordinates[0];
-            final lat = coordinates[1];
-            print('✅ Photon: ($lat, $lon)');
+        final List data = jsonDecode(response.body);
+        if (data.isNotEmpty) {
+          final lat = double.tryParse(data[0]['lat'].toString());
+          final lon = double.tryParse(data[0]['lon'].toString());
+          if (lat != null && lon != null) {
+            print('✅ Nominatim EU: $query → ($lat, $lon)');
             return LatLng(lat, lon);
           }
         }
       }
+      
     } catch (e) {
-      print('⚠️ Photon erro: $e');
+      print('⚠️ Nominatim erro: $e');
     }
     return null;
   }
@@ -527,7 +466,6 @@ class _MapaPageState extends State<MapaPage> {
                           style: OutlinedButton.styleFrom(
                             foregroundColor: kRed,
                             side: const BorderSide(color: kRed),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                           child: const Text('Selecionar Todos'),
                         ),
@@ -541,7 +479,6 @@ class _MapaPageState extends State<MapaPage> {
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: kRed,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                           child: const Text('Aplicar Filtros'),
                         ),
@@ -575,66 +512,47 @@ class _MapaPageState extends State<MapaPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'Voltar para Endereços',
+          'Mapa de Calor',
           style: TextStyle(color: kDarkGray, fontWeight: FontWeight.w600, fontSize: 16),
         ),
         centerTitle: true,
+        actions: [
+          if (!isLoading && totalClientes > 0)
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Text(
+                '$totalClientes leads',
+                style: const TextStyle(color: kRed, fontWeight: FontWeight.w500),
+              ),
+            ),
+        ],
       ),
       body: Column(
         children: [
           const SizedBox(height: 12),
           
-          // Título e contagem
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                const Icon(Icons.map, color: kRed, size: 28),
-                const SizedBox(width: 8),
-                const Text(
-                  'Mapa de Calor - Leads',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kDarkGray),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: kRed,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    isLoading ? 'Carregando...' : '$totalClientes leads encontrados',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 12),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          const SizedBox(height: 12),
-          
           // Botão de Filtros
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: GestureDetector(
-              onTap: isLoading ? null : _mostrarFiltros,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: kBorderGray),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.filter_list, color: kRed, size: 20),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Filtros',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                    ),
-                    const Spacer(),
-                    if (!isLoading)
+          if (!isLoading && heatCircles.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: GestureDetector(
+                onTap: _mostrarFiltros,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: kBorderGray),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.filter_list, color: kRed, size: 20),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Filtros',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                      ),
+                      const Spacer(),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
@@ -646,14 +564,15 @@ class _MapaPageState extends State<MapaPage> {
                           style: const TextStyle(color: kRed, fontWeight: FontWeight.bold, fontSize: 12),
                         ),
                       ),
-                    const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
-                  ],
+                      const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
           
-          const SizedBox(height: 12),
+          if (!isLoading && heatCircles.isNotEmpty) 
+            const SizedBox(height: 12),
           
           // Mapa
           Expanded(
@@ -672,62 +591,28 @@ class _MapaPageState extends State<MapaPage> {
           
           const SizedBox(height: 12),
           
-          // Indicador de Progresso (mostra quantidade de dados sendo carregados)
-          if (isLoading && statusMessage.isNotEmpty)
+          // Legenda
+          if (!isLoading && heatCircles.isNotEmpty)
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 16),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: kBorderGray),
+                boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 4)],
               ),
-              child: Column(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  Row(
-                    children: [
-                      const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          statusMessage,
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  LinearProgressIndicator(
-                    value: totalClientesParaProcessar > 0 
-                        ? (cepsGeocodificados > 0 
-                            ? cepsGeocodificados / totalCepsParaGeocodificar 
-                            : clientesProcessados / totalClientesParaProcessar)
-                        : null,
-                    backgroundColor: kBorderGray,
-                    color: kRed,
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Clientes: $clientesProcessados/$totalClientesParaProcessar',
-                        style: const TextStyle(fontSize: 11, color: Colors.grey),
-                      ),
-                      if (totalCepsParaGeocodificar > 0)
-                        Text(
-                          'CEPs: $cepsGeocodificados/$totalCepsParaGeocodificar',
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
-                        ),
-                    ],
-                  ),
+                  _buildLegendaItem(Colors.red, 'Muito Alta', '10+'),
+                  _buildLegendaItem(Colors.deepOrange, 'Alta', '5-9'),
+                  _buildLegendaItem(Colors.orange, 'Média', '3-4'),
+                  _buildLegendaItem(Colors.yellow.shade700, 'Baixa', '1-2'),
                 ],
               ),
             ),
+          
+          const SizedBox(height: 8),
         ],
       ),
     );
@@ -735,28 +620,67 @@ class _MapaPageState extends State<MapaPage> {
   
   Widget _buildMapa() {
     if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    
-    if (errorMessage.isNotEmpty && heatCircles.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.grey),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text(errorMessage, textAlign: TextAlign.center),
-            ),
+            const CircularProgressIndicator(),
             const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: carregarClientes,
-              icon: const Icon(Icons.refresh),
-              label: const Text("Tentar Novamente"),
-              style: ElevatedButton.styleFrom(backgroundColor: kRed),
-            ),
+            if (errorMessage.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  errorMessage,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
           ],
+        ),
+      );
+    }
+    
+    if (errorMessage.isNotEmpty && heatCircles.isEmpty) {
+      return Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+              const SizedBox(height: 16),
+              Text(
+                errorMessage,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              ),
+              if (detalhesErro.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    detalhesErro,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: carregarClientes,
+                icon: const Icon(Icons.refresh),
+                label: const Text("Tentar Novamente"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kRed,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -767,11 +691,11 @@ class _MapaPageState extends State<MapaPage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.location_off, size: 48, color: Colors.grey),
-            SizedBox(height: 8),
-            Text("Nenhum cliente com localização encontrada"),
+            SizedBox(height: 16),
+            Text("Nenhum ponto para exibir no mapa"),
             SizedBox(height: 8),
             Text(
-              "Verifique sua conexão com a internet",
+              "Tente novamente mais tarde",
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],
@@ -779,7 +703,7 @@ class _MapaPageState extends State<MapaPage> {
       );
     }
     
-    // Aplicar filtros nos círculos
+    // Aplicar filtros
     List<CircleMarker> circlesFiltrados = [];
     for (var circle in heatCircles) {
       String intensidade = _getIntensidadeByColor(circle.borderColor);
@@ -804,6 +728,25 @@ class _MapaPageState extends State<MapaPage> {
         CircleLayer(
           circles: circlesFiltrados,
         ),
+      ],
+    );
+  }
+  
+  Widget _buildLegendaItem(Color cor, String texto, String quantidade) {
+    return Column(
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: cor.withOpacity(0.6),
+            shape: BoxShape.circle,
+            border: Border.all(color: cor, width: 2),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(texto, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+        Text(quantidade, style: const TextStyle(fontSize: 10, color: Colors.grey)),
       ],
     );
   }
